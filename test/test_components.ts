@@ -8,6 +8,7 @@ import { EditBox } from '../lib/preact/components/EditBox.js'
 import { ListBox } from '../lib/preact/components/ListBox.js'
 import { Tab } from '../lib/preact/components/Tab.js'
 import { ListView } from '../lib/preact/components/ListView.js'
+import { ScrollView } from '../lib/preact/components/ScrollView.js'
 
 export const suite = {
     name: 'components',
@@ -120,6 +121,48 @@ export const suite = {
         })
         const lv4Hwnd = render(lv4, parent)
         t.checkTrue('returned hwnd is truthy', lv4Hwnd !== null && lv4Hwnd !== 0)
+
+        t.section('ScrollView renders')
+        const sv = createElement(ScrollView, { scrollY: true },
+            createElement('w', { type: 'STATIC', text: 'child', style: { height: 30, width: 200 } })
+        )
+        const svHwnd = render(sv, parent)
+        t.checkTrue('returned hwnd is truthy', svHwnd !== null && svHwnd !== 0)
+
+        t.section('ScrollView with many children')
+        const sv2 = createElement(ScrollView, { style: { height: 100 } },
+            createElement('w', { type: 'STATIC', text: 'a', style: { height: 30 } }),
+            createElement('w', { type: 'STATIC', text: 'b', style: { height: 30 } }),
+            createElement('w', { type: 'STATIC', text: 'c', style: { height: 30 } }),
+            createElement('w', { type: 'STATIC', text: 'd', style: { height: 30 } }),
+            createElement('w', { type: 'STATIC', text: 'e', style: { height: 30 } }),
+        )
+        const sv2Hwnd = render(sv2, parent)
+        t.checkTrue('returned hwnd is truthy', sv2Hwnd !== null && sv2Hwnd !== 0)
+
+        t.section('ScrollView handles WM_VSCROLL without crash')
+        const sv3Root = gui.CreateWindow('STATIC', '', 0, 0, 0, 300, 300, null, null)
+        if (sv3Root) {
+            const sv3 = createElement(ScrollView, { style: { height: 80, width: 200 } },
+                createElement('w', { type: 'STATIC', text: 'row0', style: { height: 40 } }),
+                createElement('w', { type: 'STATIC', text: 'row1', style: { height: 40 } }),
+                createElement('w', { type: 'STATIC', text: 'row2', style: { height: 40 } }),
+                createElement('w', { type: 'STATIC', text: 'row3', style: { height: 40 } }),
+                createElement('w', { type: 'STATIC', text: 'row4', style: { height: 40 } }),
+            )
+            const sv3Hwnd = render(sv3, sv3Root) as number
+            t.checkTrue('sv3 created', sv3Hwnd !== 0)
+            if (sv3Hwnd) {
+                gui.SendMessage(sv3Hwnd as gui.HWND, 0x0115, 0, 0)
+                gui.SendMessage(sv3Hwnd as gui.HWND, 0x0115, 1, 0)
+                gui.SendMessage(sv3Hwnd as gui.HWND, 0x0115, 2, 0)
+                gui.SendMessage(sv3Hwnd as gui.HWND, 0x0115, 3, 0)
+                gui.SendMessage(sv3Hwnd as gui.HWND, 0x020A, 0x00780000, 0)
+                t.checkTrue('WM_VSCROLL messages handled without crash', true)
+            }
+            gui.RemoveWindow(sv3Root)
+            gui.DestroyWindow(sv3Root)
+        }
 
         gui.RemoveWindow(parent)
         gui.DestroyWindow(parent)

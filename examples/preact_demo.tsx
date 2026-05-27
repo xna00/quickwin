@@ -9,6 +9,7 @@ import { EditBox } from '../lib/preact/components/EditBox.js'
 import { ListBox } from '../lib/preact/components/ListBox.js'
 import { Tab } from '../lib/preact/components/Tab.js'
 import { ListView } from '../lib/preact/components/ListView.js'
+import { ScrollView } from '../lib/preact/components/ScrollView.js'
 
 const _user32 = win.LoadLibrary('user32.dll')
 const GetSystemMetrics = _user32 ? win.GetProcAddress(_user32, 'GetSystemMetrics') : 0
@@ -43,7 +44,7 @@ function App() {
     const [selFruit, setSelFruit] = useState('(none)')
 
     return (
-        <w type="STATIC" style={{ flexDirection: 'column', padding: 10, gap: 8 }}>
+        <ScrollView style={{ flexDirection: 'column', padding: 10, gap: 8, flex: 1 }}>
             <w type="STATIC" text={`Counter: ${count}`} style={{ height: 24 }} />
             <w type="STATIC" style={{ flexDirection: 'row', gap: 8 }}>
                 <Button text="+1" onClick={() => setCount(count + 1)} style={{ width: 80, height: 28 }} />
@@ -66,12 +67,12 @@ function App() {
             ]} onChange={(i) => {
                 const row = [['Apple', 'Red', '$1.20'], ['Banana', 'Yellow', '$0.80'], ['Cherry', 'Dark Red', '$2.50'], ['Durian', 'Green', '$5.00'], ['Elderberry', 'Purple', '$3.00']][i]
                 setSelFruit(row ? row[0] : '(none)')
-            }} style={{ flex: 1 }} />
+            }} style={{ height: 150 }} />
             <Tab tabs={[
                 { title: 'Hello', content: <w type="STATIC" text="Hello tab!" /> },
                 { title: 'World', content: <w type="STATIC" text="World tab!" /> },
-            ]} style={{ flex: 1 }} />
-        </w>
+            ]} style={{ height: 150 }} />
+        </ScrollView>
     )
 }
 

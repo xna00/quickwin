@@ -446,6 +446,7 @@ declare module "gui" {
         SETFONT = 0x0030,
         HSCROLL = 0x0114,
         VSCROLL = 0x0115,
+        NCHITTEST = 0x0084,
         MOUSEWHEEL = 0x020A,
     }
 

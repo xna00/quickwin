@@ -15,7 +15,7 @@ interface WIntrinsicProps {
     disabled?: boolean
     visible?: boolean
     style?: LayoutStyle
-    onEvent?: (e: WEvent) => void
+    onEvent?: (e: WEvent) => number | void
     children?: ComponentChildren
 }
 

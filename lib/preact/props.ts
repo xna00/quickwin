@@ -23,7 +23,7 @@ export interface WProps {
     disabled?: boolean
     visible?: boolean
     style?: Record<string, any>
-    onEvent?: (e: Record<string, any>) => void
+    onEvent?: (e: Record<string, any>) => number | void
     children?: any
 }
 
@@ -43,7 +43,10 @@ export function applyProps(hwnd: number, props: WProps, vnode?: Record<string, a
         vnode._oldProc = oldProc
         gui.SetWindowProc(h, (hw, msg, wParam, lParam) => {
             const cb = vnode!.props?.onEvent
-            if (cb) cb({ hwnd: hw as unknown as number, msg, wParam, lParam })
+            if (cb) {
+                const ret = cb({ hwnd: hw as unknown as number, msg, wParam, lParam })
+                if (ret !== undefined) return ret
+            }
             return gui.CallWindowProc(oldProc as unknown as gui.WNDPROC, hw, msg, wParam, lParam)
         })
     }
