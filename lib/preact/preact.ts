@@ -21,11 +21,9 @@ export type FunctionComponent<P = {}> = {
 
 export type ComponentType<P = {}> = FunctionComponent<P>
 
-export interface VNode<P = any> {
-    type: string | ComponentType<P>
-    props: P & { children?: ComponentChildren }
+type VNodeCommon = {
     key: Key
-    ref?: Ref<any>
+    ref: Ref<any> | null
     _children: VNode[]
     _parent: VNode | null
     _depth: number
@@ -37,6 +35,20 @@ export interface VNode<P = any> {
     _flags: number
     _mask?: number[]
 }
+
+interface WVNode extends VNodeCommon {
+    type: 'w'
+    props: { type: string, text?: string } & { children?: ComponentChildren }
+}
+interface FVNode<P> extends VNodeCommon {
+    type: ComponentType<P>
+    props: P & { children?: ComponentChildren }
+}
+export type VNode<P extends {
+    ref?: Ref<any> | null
+    key?: Key
+
+} = {}> = WVNode | FVNode<P>
 
 export interface Component<P = {}, S = {}> {
     props: P
@@ -67,7 +79,7 @@ export interface Options {
 export const options: Options = {}
 
 export function createElement<P extends Record<string, any> = {}>(
-    type: string | ComponentType<P>,
+    type: VNode['type'],
     props: (P & { key?: Key; ref?: Ref<any> }) | null,
     ...children: ComponentChildren[]
 ): VNode<P> {
@@ -91,7 +103,7 @@ export function createElement<P extends Record<string, any> = {}>(
 }
 
 export function createVNode<P = {}>(
-    type: string | ComponentType<P>,
+    type: VNode['type'],
     props: P,
     key: Key,
     ref: Ref<any>,
