@@ -5,7 +5,6 @@ dist/
 *.d
 *.a
 *.js
-!vendor/react/**
 *.wasm
 *.png
 *.tsbuildinfo

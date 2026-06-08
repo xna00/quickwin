@@ -689,6 +689,38 @@ static JSValue js_setScrollInfo(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_NewInt32(ctx, SetScrollInfo((HWND)hwnd, bar, &si, redraw));
 }
 
+/* ─── Win32 parent/position/state ───────────────────────────── */
+
+static JSValue js_setParent(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    HWND hwnd = toHWND(ctx, argv[0]);
+    HWND parent = toHWND(ctx, argv[1]);
+    HWND old = SetParent(hwnd, parent);
+    return JS_NewInt64(ctx, (int64_t)old);
+}
+
+static JSValue js_enableWindow(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    HWND hwnd = toHWND(ctx, argv[0]);
+    BOOL enable = JS_ToBool(ctx, argv[1]);
+    BOOL prev = EnableWindow(hwnd, enable);
+    return JS_NewBool(ctx, prev);
+}
+
+static JSValue js_setWindowPos(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    HWND hwnd = toHWND(ctx, argv[0]);
+    int64_t insertAfter; JS_ToInt64(ctx, &insertAfter, argv[1]);
+    int32_t x, y, cx, cy, flags;
+    JS_ToInt32(ctx, &x,     argv[2]);
+    JS_ToInt32(ctx, &y,     argv[3]);
+    JS_ToInt32(ctx, &cx,    argv[4]);
+    JS_ToInt32(ctx, &cy,    argv[5]);
+    JS_ToInt32(ctx, &flags, argv[6]);
+    BOOL result = SetWindowPos(hwnd, (HWND)insertAfter, x, y, cx, cy, flags);
+    return JS_NewBool(ctx, result);
+}
+
 static const JSCFunctionListEntry gui_funcs[] = {
     JS_CFUNC_DEF("RegisterClass", 2, js_registerClass),
     JS_CFUNC_DEF("CreateWindow", 9, js_createWindow),
@@ -719,6 +751,9 @@ static const JSCFunctionListEntry gui_funcs[] = {
     JS_CFUNC_DEF("GetClientRect", 1, js_getClientRect),
     JS_CFUNC_DEF("InvalidateRect", 3, js_invalidateRect),
     JS_CFUNC_DEF("SetScrollInfo", 4, js_setScrollInfo),
+    JS_CFUNC_DEF("SetParent", 2, js_setParent),
+    JS_CFUNC_DEF("EnableWindow", 2, js_enableWindow),
+    JS_CFUNC_DEF("SetWindowPos", 7, js_setWindowPos),
 };
 
 

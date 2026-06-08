@@ -376,6 +376,9 @@ declare module "gui" {
     function SetWindowLongPtr(hwnd: HWND, nIndex: number, newLong: number): number;
     function UnsetWindowProc(hwnd: HWND): boolean;
     function CallWindowProc(wndProc: WNDPROC, hwnd: HWND, msg: number, wParam: number, lParam: number): number;
+    function SetParent(hwnd: HWND, parent: HWND | null): void;
+    function EnableWindow(hwnd: HWND, enable: boolean): void;
+    function SetWindowPos(hwnd: HWND, insertAfter: number, x: number, y: number, width: number, height: number, flags: number): void;
 
     // Tray icon
     const enum NotifyIconCmd { ADD = 0, MODIFY = 1, DELETE = 2 }
@@ -662,7 +665,7 @@ declare module "ffi" {
 
     type FfiType = TYPE_OF_FFI_TYPE_VOID | TYPE_OF_FFI_TYPE_UINT8 | TYPE_OF_FFI_TYPE_SINT8 | TYPE_OF_FFI_TYPE_UINT16 | TYPE_OF_FFI_TYPE_SINT16 | TYPE_OF_FFI_TYPE_UINT32 | TYPE_OF_FFI_TYPE_SINT32 | TYPE_OF_FFI_TYPE_UINT64 | TYPE_OF_FFI_TYPE_SINT64 | TYPE_OF_FFI_TYPE_POINTER;
     type TypeArg<T extends FfiType> = T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID | TYPE_OF_FFI_TYPE_POINTER> ? number : T extends TYPE_OF_FFI_TYPE_POINTER ? (ArrayBuffer | null) : never;
-    type TypeArgs<T extends FfiType[], Args = []> = T extends [infer T1, ...infer RES] ? TypeArgs<RES, [...Args, TypeArg<T1>]> : Args;
+    type TypeArgs<T extends FfiType[], Args extends(number | null | ArrayBuffer)[] = []> = T extends [infer T1 extends FfiType, ...infer RES extends FfiType[]] ? TypeArgs<RES, [...Args, TypeArg<T1>]> : Args;
 
     function ffiCall<const T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID>[], const R extends FfiType>(func: number, argTypes: T, args: TypeArgs<T>, retType: R): R extends TYPE_OF_FFI_TYPE_VOID ? undefined : R extends TYPE_OF_FFI_TYPE_POINTER ? number | null : TypeArg<R>;
     function bufferPtr(buf: ArrayBuffer): number;

@@ -1,0 +1,26 @@
+import { build } from 'esbuild'
+
+const nativeModules = ['gui', 'os', 'std', 'sock', 'brotli', 'ffi', 'wamr', 'win', 'tls', 'wolfssl', '../lib/polyfill.js']
+
+async function main() {
+  await build({
+    entryPoints: [
+      '_build/test/test_react_counter.js',
+      '_build/test/test_jsx.js',
+      '_build/test/test_react_render.js',
+    ],
+    allowOverwrite: true,
+    bundle: true,
+    external: nativeModules,
+    format: 'esm',
+    // platform: 'browser',
+    jsx: 'automatic',
+    jsxImportSource: 'react',
+    outdir: '.',
+    outbase: '.',
+    logLevel: 'warning',
+  })
+  console.log('React bundles built')
+}
+
+main().catch(e => { console.error(e); process.exit(1) })
