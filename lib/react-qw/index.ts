@@ -1,8 +1,9 @@
+import * as gui from 'gui'
 import reconciler from './reconciler.js'
 
 const noop = () => {}
 
-export function createRoot(containerHwnd: number) {
+export function createRoot(containerHwnd: gui.HWND) {
   const root = reconciler.createContainer(
     containerHwnd, 0, null, false, null, '',
     noop, noop, noop, noop,
@@ -17,7 +18,7 @@ export function createRoot(containerHwnd: number) {
   }
 }
 
-export function render(element: any, containerHwnd: number, callback?: () => void) {
+export function render(element: any, containerHwnd: gui.HWND, callback?: () => void) {
   const root = createRoot(containerHwnd)
   root.render(element)
 }

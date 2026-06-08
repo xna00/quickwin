@@ -5,20 +5,41 @@ import * as os from 'os'
 import { applyProps } from './props.js'
 
 type Container = gui.HWND
+type Props = Record<string, any>
 
 interface Instance {
   hwnd: gui.HWND
   type: string
-  props: Record<string, any>
+  props: Props
   children: Instance[]
 }
 
 type TextInstance = gui.HWND
+type HostContext = Record<string, never>
+
+/**
+ * 扩展 HostConfig 类型定义
+ * 
+ * @types/react-reconciler 的 HostConfig 存在以下问题：
+ * 1. 缺少 rendererPackageName/rendererVersion 属性
+ * 
+ * 解决方案：扩展补充缺失定义
+ */
+type QuickWinHostConfig = ReactReconciler.HostConfig<
+  string, Props, Container, Instance, TextInstance,
+  never, never, never, gui.HWND,
+  HostContext, never, any, -1, null
+> & {
+  // rendererPackageName/rendererVersion（原类型定义中缺失）
+  rendererPackageName: string
+  rendererVersion: string
+}
 
 let currentUpdatePriority = 0
 const DefaultEventPriority = 16
 
-const hostConfig: any = {
+const hostConfig: QuickWinHostConfig = {
+  // Core methods
   createInstance(type: string, props: Record<string, any>, rootContainer: Container) {
     console.log('[reconciler] createInstance called:', type, props)
     const winClass = props.type
@@ -83,19 +104,7 @@ const hostConfig: any = {
     applyProps(instance, newProps, oldProps)
   },
 
-
   commitMount(_instance: Instance, _type: string, _props: Record<string, any>, _internal: any) { },
-
-  prepareUpdate(_instance: Instance, _type: string, oldProps: Record<string, any>, newProps: Record<string, any>) {
-    // 比较关键 props，只在有差异时返回 true
-    const keys = ['type', 'text', 'ws', 'disabled', 'visible', 'x', 'y', 'width', 'height', 'onEvent']
-    for (const key of keys) {
-      if (oldProps[key] !== newProps[key]) {
-        return true
-      }
-    }
-    return null  // 无差异，不需要更新
-  },
 
   finalizeInitialChildren(instance: Instance, _type: string, props: Record<string, any>) {
     console.log('[reconciler] finalizeInitialChildren instance:', instance.hwnd, 'props:', props)
@@ -163,11 +172,26 @@ const hostConfig: any = {
 
   shouldAttemptEagerTransition() { return false },
   detachDeletedInstance(_instance: Instance) { },
+  
+  // 添加必需方法
+  getInstanceFromNode(_node: any) { return null },
+  beforeActiveInstanceBlur() { },
+  afterActiveInstanceBlur() { },
+  prepareScopeUpdate(_scopeInstance: any, _instance: any) { },
+  getInstanceFromScope(_scopeInstance: any) { return null },
+  
+  // Suspense/Concurrent Mode 支持
+  maySuspendCommit() { return false },
+  requestPostPaintCallback() { },
+  preloadInstance() { return true },
+  startSuspendingCommit() { },
+  suspendInstance() { },
+  waitForCommitToBeReady() { return null },
 
   rendererVersion: '0.1.0',
   rendererPackageName: 'react-qw',
   NotPendingTransition: null,
-  HostTransitionContext: createContext(null),
+  HostTransitionContext: createContext(null) as any,
   resetFormInstance(_form: any) { },
 }
 
