@@ -270,26 +270,43 @@ static JSValue js_setWndProc(JSContext *ctx, JSValueConst this_val, int argc, JS
     return JS_UNDEFINED;
 }
 
+// 内部函数：清理单个窗口的 WNDPROC 和 JS 引用
+static BOOL unsetWindowProcInternal(HWND hwnd)
+{
+    int idx = findWindowIndex(hwnd);
+    if (idx >= 0) {
+        if (g_windows[idx].oldProc)
+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)g_windows[idx].oldProc);
+        JS_FreeValue(g_ctx, g_windows[idx].proc);
+        for (int i = idx; i < g_windowCount - 1; i++) {
+            g_windows[i] = g_windows[i + 1];
+        }
+        g_windowCount--;
+        return TRUE;
+    }
+    return FALSE;
+}
+
 static JSValue js_unsetWindowProc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
     int64_t hwnd_val;
     JS_ToInt64(ctx, &hwnd_val, argv[0]);
     HWND hwnd = (HWND)hwnd_val;
+    return JS_NewBool(ctx, unsetWindowProcInternal(hwnd));
+}
 
-    int idx = findWindowIndex(hwnd);
-    if (idx >= 0)
-    {
-        if (g_windows[idx].oldProc)
-            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)g_windows[idx].oldProc);
-        JS_FreeValue(ctx, g_windows[idx].proc);
-        for (int i = idx; i < g_windowCount - 1; i++)
-        {
-             g_windows[i] = g_windows[i + 1];
-        }
-        g_windowCount--;
-        return JS_TRUE;
+// 递归清理窗口及其子窗口的 WNDPROC 和 JS 引用
+static void cleanupWindowAndChildren(HWND hwnd)
+{
+    // 先递归清理子窗口
+    HWND child = GetWindow(hwnd, GW_CHILD);
+    while (child) {
+        HWND next = GetWindow(child, GW_HWNDNEXT);
+        cleanupWindowAndChildren(child);
+        child = next;
     }
-    return JS_FALSE;
+    // 清理当前窗口
+    unsetWindowProcInternal(hwnd);
 }
 
 static JSValue js_destroyWindow(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
@@ -298,8 +315,21 @@ static JSValue js_destroyWindow(JSContext *ctx, JSValueConst this_val, int argc,
     JS_ToInt64(ctx, &hwnd_val, argv[0]);
     HWND hwnd = (HWND)hwnd_val;
     
+    cleanupWindowAndChildren(hwnd);
     BOOL result = DestroyWindow(hwnd);
     return JS_NewBool(ctx, result);
+}
+
+static JSValue js_getWindow(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    int64_t hwnd_val;
+    int32_t cmd;
+    JS_ToInt64(ctx, &hwnd_val, argv[0]);
+    JS_ToInt32(ctx, &cmd, argv[1]);
+    HWND hwnd = (HWND)hwnd_val;
+    
+    HWND result = GetWindow(hwnd, cmd);
+    return JS_NewInt64(ctx, (int64_t)result);
 }
 
 static JSValue js_CallWindowProc(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
@@ -725,6 +755,7 @@ static const JSCFunctionListEntry gui_funcs[] = {
     JS_CFUNC_DEF("RegisterClass", 2, js_registerClass),
     JS_CFUNC_DEF("CreateWindow", 9, js_createWindow),
     JS_CFUNC_DEF("DestroyWindow", 1, js_destroyWindow),
+    JS_CFUNC_DEF("GetWindow", 2, js_getWindow),
     JS_CFUNC_DEF("ShowWindow", 1, js_showWindow),
     JS_CFUNC_DEF("SetWindowProc", 2, js_setWndProc),
     JS_CFUNC_DEF("DefWindowProc", 4, js_DefWindowProc),

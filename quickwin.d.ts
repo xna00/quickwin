@@ -361,7 +361,19 @@ declare module "gui" {
 
     function RegisterClass(className: string, wndProc?: (hwnd: HWND, msg: number, wParam: number, lParam: number) => number): number;
     function CreateWindow(className: string, title: string, style: number, x: number, y: number, width: number, height: number, parent: HWND | null, menu: HMENU | null): HWND | null;
+    // 销毁窗口及其所有子窗口，自动清理 WNDPROC 和 JS 引用
     function DestroyWindow(hwnd: HWND): boolean;
+    function GetWindow(hwnd: HWND, cmd: number): HWND;
+
+    // GetWindow 命令
+    const enum GetWindowCmd {
+        FIRST = 0,
+        LAST = 1,
+        NEXT = 2,
+        PREV = 3,
+        OWNER = 4,
+        CHILD = 5,
+    }
     function ShowWindow(hwnd: HWND, nCmdShow?: number): void;
     function SetWindowProc(hwnd: HWND, wndProc: (hwnd: HWND, msg: number, wParam: number, lParam: number) => number): void;
     function DefWindowProc(hwnd: HWND, msg: number, wParam: number, lParam: number): number;

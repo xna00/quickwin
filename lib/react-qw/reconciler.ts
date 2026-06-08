@@ -132,7 +132,13 @@ const hostConfig: any = {
   preparePortalMount(_containerInfo: Container) { },
 
   clearContainer(container: Container) {
-    // TODO: recursively destroy children
+    // 枚举并销毁所有子窗口
+    let child = gui.GetWindow(container, gui.GetWindowCmd.CHILD)
+    while (child) {
+      const next = gui.GetWindow(child, gui.GetWindowCmd.NEXT)
+      gui.DestroyWindow(child)
+      child = next
+    }
   },
 
   scheduleTimeout(fn: () => void, delay: number) {
