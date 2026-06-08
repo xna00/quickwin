@@ -20,7 +20,7 @@ const DefaultEventPriority = 16
 
 const hostConfig: any = {
   createInstance(type: string, props: Record<string, any>, rootContainer: Container) {
-    console.log('[reconciler] createInstance called:', type, props, 'container:', rootContainer)
+    console.log('[reconciler] createInstance called:', type, props)
     const winClass = props.type
     const hwnd = gui.CreateWindow(
       winClass, props.text || '', props.ws ?? 0,
@@ -131,14 +131,8 @@ const hostConfig: any = {
 
   preparePortalMount(_containerInfo: Container) { },
 
-  clearContainer(container: Container) {
-    // 枚举并销毁所有子窗口
-    let child = gui.GetWindow(container, gui.GetWindowCmd.CHILD)
-    while (child) {
-      const next = gui.GetWindow(child, gui.GetWindowCmd.NEXT)
-      gui.DestroyWindow(child)
-      child = next
-    }
+  clearContainer(_container: Container) {
+    // 不需要清理，React reconciler 会通过 removeChildFromContainer 来移除子节点
   },
 
   scheduleTimeout(fn: () => void, delay: number) {

@@ -15,6 +15,7 @@
 2. **调度函数缺失** - 添加 `resolveEventType`, `resolveEventTimeStamp`, `trackSchedulerEvent`
 3. **onEvent prop 更新问题** - `createInstance` 中始终设置 `SetWindowProc`，窗口过程通过 `instance.props.onEvent` 访问回调
 4. **prepareUpdate 性能优化** - 比较关键 props，只在有差异时返回 true
+5. **clearContainer 导致子窗口被销毁** - `clearContainer` 在首次渲染时被调用，会销毁刚创建的子窗口。修复：`clearContainer` 改为空实现，React reconciler 会通过 `removeChildFromContainer` 来移除子节点（与 Ink 的实现一致）
 
 **待改进：**
 - `prepareUpdate` 可进一步优化为返回 payload 数组（类似 react-dom 的 diffProperties），让 `commitUpdate` 只处理变化的属性
