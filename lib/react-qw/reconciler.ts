@@ -87,7 +87,14 @@ const hostConfig: any = {
   commitMount(_instance: Instance, _type: string, _props: Record<string, any>, _internal: any) { },
 
   prepareUpdate(_instance: Instance, _type: string, oldProps: Record<string, any>, newProps: Record<string, any>) {
-    return true
+    // 比较关键 props，只在有差异时返回 true
+    const keys = ['type', 'text', 'ws', 'disabled', 'visible', 'x', 'y', 'width', 'height', 'onEvent']
+    for (const key of keys) {
+      if (oldProps[key] !== newProps[key]) {
+        return true
+      }
+    }
+    return null  // 无差异，不需要更新
   },
 
   finalizeInitialChildren(instance: Instance, _type: string, props: Record<string, any>) {

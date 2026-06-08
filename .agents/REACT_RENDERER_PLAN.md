@@ -14,6 +14,10 @@
 1. **TypeScript 增量编译问题** - 关闭增量编译解决
 2. **调度函数缺失** - 添加 `resolveEventType`, `resolveEventTimeStamp`, `trackSchedulerEvent`
 3. **onEvent prop 更新问题** - `createInstance` 中始终设置 `SetWindowProc`，窗口过程通过 `instance.props.onEvent` 访问回调
+4. **prepareUpdate 性能优化** - 比较关键 props，只在有差异时返回 true
+
+**待改进：**
+- `prepareUpdate` 可进一步优化为返回 payload 数组（类似 react-dom 的 diffProperties），让 `commitUpdate` 只处理变化的属性
 
 ---
 
