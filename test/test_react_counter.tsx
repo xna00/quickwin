@@ -23,11 +23,11 @@ function Counter() {
     <w
       type="BUTTON"
       text={`Count: ${count}`}
-      ws={WS_CHILD | WS_VISIBLE}
+      ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
       x={50} y={50} width={200} height={30}
       onEvent={(e: any) => {
         if (e.msg === WM_LBUTTONUP) {
-          setCount((c: number) => c + 1)
+          setCount(count + 1)
         }
       }}
     />

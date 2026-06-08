@@ -29,14 +29,13 @@ const hostConfig: any = {
       rootContainer, null
     )!
     console.log('[reconciler] createInstance hwnd:', hwnd)
-    const instance = { hwnd, type: winClass, props, children: [] }
-    if (props.onEvent) {
-      const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
-      gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
-        instance.props.onEvent?.({ hwnd, msg, wParam, lParam })
-        return gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
-      })
-    }
+    const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
+    const instance: Instance = { hwnd, type: winClass, props, children: [] }
+    // 始终设置窗口过程，以便后续 onEvent 更新能生效
+    gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
+      instance.props.onEvent?.({ hwnd, msg, wParam, lParam })
+      return gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
+    })
     return instance
   },
 

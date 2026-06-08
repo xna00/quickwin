@@ -1,5 +1,22 @@
 # React Custom Renderer 实现方案
 
+## 当前进度
+
+**已完成：**
+- ✅ 步骤 1：清理 preact
+- ✅ 步骤 2：安装依赖 + esbuild bundle
+- ✅ 步骤 3：JSX 类型声明
+- ✅ 步骤 4：Reconciler Host Config（基础实现）
+- ✅ 步骤 5：公开 API（render, createRoot）
+- ⚠️ 步骤 6：组件移植（进行中）
+
+**已解决的问题：**
+1. **TypeScript 增量编译问题** - 关闭增量编译解决
+2. **调度函数缺失** - 添加 `resolveEventType`, `resolveEventTimeStamp`, `trackSchedulerEvent`
+3. **onEvent prop 更新问题** - `createInstance` 中始终设置 `SetWindowProc`，窗口过程通过 `instance.props.onEvent` 访问回调
+
+---
+
 ## 目标
 
 在 QuickWin 中实现 React Custom Renderer，使得可以用 React 19 的 API（useState、useEffect 等）编写 Win32 GUI 应用。**完全替换现有 preact 实现**（分支上删除 `lib/preact/`）。
