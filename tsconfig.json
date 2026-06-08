@@ -11,7 +11,7 @@
     "types": ["./quickwin.d.ts", "./lib/preact/jsx.d.ts"],
     "outDir": "_build",
     "jsx": "react-jsx",
-    "jsxImportSource": "../lib/preact",
+    "jsxImportSource": "../lib/react-qw",
   },
   "include": ["test/**/*.ts", "examples/**/*.ts", "examples/**/*.tsx", "main.ts"],
   "exclude": []

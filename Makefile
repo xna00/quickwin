@@ -213,7 +213,8 @@ npm-pkg: js wasm
 	rm -rf $(NPM_PKG_DIR)
 	mkdir -p $(NPM_PKG_DIR)
 	cp -r $(BUILD_DIR)/lib $(BUILD_DIR)/test $(BUILD_DIR)/examples $(BUILD_DIR)/vendor $(NPM_PKG_DIR)/
-	cp -r lib/preact $(NPM_PKG_DIR)/lib/
+	cp -r vendor/react $(NPM_PKG_DIR)/vendor/
+
 	cp lib/*.ts $(NPM_PKG_DIR)/lib/
 	cp test/*.ts $(NPM_PKG_DIR)/test/
 	cp examples/*.ts examples/*.tsx $(NPM_PKG_DIR)/examples/

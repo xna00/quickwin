@@ -304,3 +304,9 @@ return extract_body(response);
 ### 相关文件
 - `quickjs-http.c` — `http_get_sync`、`decode_chunked`、`is_chunked`、`skip_crlf`
 - `quickjs-brotli.c` / `quickjs-brotli.h` — Brotli 解压 JS API (`brotli.decompress`)、`JS_BrotliDecompress`
+
+## 10. React Custom Renderer 计划
+
+**文件位置：** `.agents/REACT_RENDERER_PLAN.md`
+
+**功能：** 记录 React Custom Renderer 实现方案，包括完整步骤（清理 preact、esbuild bundle、reconciler、公开 API、组件移植）、类型方案（`@types/react` + vendor bundle 桥接）和依赖清单。每次迭代前查看该文件了解当前进度。
