@@ -251,6 +251,8 @@ declare module "os" {
     function sleepAsync(delay_ms: number): Promise<void>;
     function setTimeout(func: () => void, delay: number): number;
     function clearTimeout(id: number): void;
+    function setInterval(func: () => void, delay: number): number;
+    function clearInterval(id: number): void;
 
     const platform: string;
 
@@ -433,6 +435,8 @@ declare module "gui" {
     function GetClientRect(hwnd: HWND): RECT | null;
     /** Invalidates client area (rect can be null/undefined for full window) */
     function InvalidateRect(hwnd: HWND, rect?: RECT | null, erase?: boolean): void;
+    /** Checks if the window handle is valid */
+    function IsWindow(hwnd: HWND): boolean;
     /** Sets scroll info; returns current scroll box position. Signature matches Win32 SetScrollInfo. */
     function SetScrollInfo(hwnd: HWND, bar: number, info: { pos?: number; page?: number; min?: number; max?: number }, redraw?: boolean): number;
 

@@ -8,6 +8,7 @@ async function main() {
       '_build/test/test_react_counter.js',
       '_build/test/test_jsx.js',
       '_build/test/test_react_render.js',
+      '_build/test/test_react_complex.js',
     ],
     allowOverwrite: true,
     bundle: true,

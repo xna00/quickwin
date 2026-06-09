@@ -16,6 +16,22 @@
 3. **onEvent prop 更新问题** - `createInstance` 中始终设置 `SetWindowProc`，窗口过程通过 `instance.props.onEvent` 访问回调
 4. **prepareUpdate 性能优化** - 比较关键 props，只在有差异时返回 true
 5. **clearContainer 导致子窗口被销毁** - `clearContainer` 在首次渲染时被调用，会销毁刚创建的子窗口。修复：`clearContainer` 改为空实现，React reconciler 会通过 `removeChildFromContainer` 来移除子节点（与 Ink 的实现一致）
+6. **DestroyWindow 后按钮视觉残留** -
+   `removeChildFromContainer` 调用 `DestroyWindow` 销毁子窗口 HWND 后，
+   由于父窗口类注册时未设 `hbrBackground`（`WNDCLASSEXW` 初始化为全零，
+   默认为 `NULL`），`DefWindowProc` 处理 `WM_ERASEBKGND` 时不填充暴
+   露区域，导致已销毁按钮的视觉像素残留在屏幕上（表现为"按钮还在但点不
+   动"）。
+
+   **可选方案：**
+   - **方案 A（已实施）**：在 `quickjs-gui.c:js_registerClass` 中添加
+     `wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);`，全局默认使用系
+     统背景色，所有已注册窗口类均获得自动擦除能力
+   - **方案 B**：在 WNDPROC 中手动处理 `WM_ERASEBKGND`，用特定画刷填充
+     背景，适用于需要自定义背景色的场景
+   - **方案 C**：在 `removeChildFromContainer` 中用
+     `GetClientRect` + `FillRect` 绘制父窗口特定区域，精确清除但代码较
+     侵入
 
 **待改进：**
 - `prepareUpdate` 可进一步优化为返回 payload 数组（类似 react-dom 的 diffProperties），让 `commitUpdate` 只处理变化的属性

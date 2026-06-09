@@ -184,6 +184,7 @@ done:
     wc.lpfnWndProc = ProxyWndProc;
     wc.hInstance = GetModuleHandleW(NULL);
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = wclassName;
     ATOM atom = RegisterClassExW(&wc);
 
@@ -660,6 +661,13 @@ static JSValue js_invalidateRect(JSContext *ctx, JSValueConst this_val, int argc
     return JS_UNDEFINED;
 }
 
+static JSValue js_isWindow(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    int64_t hwnd;
+    JS_ToInt64(ctx, &hwnd, argv[0]);
+    return JS_NewBool(ctx, IsWindow((HWND)hwnd));
+}
+
 static JSValue js_setScrollInfo(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
     int64_t hwnd;
@@ -781,6 +789,7 @@ static const JSCFunctionListEntry gui_funcs[] = {
     JS_CFUNC_DEF("GetScreenSize", 0, js_getScreenSize),
     JS_CFUNC_DEF("GetClientRect", 1, js_getClientRect),
     JS_CFUNC_DEF("InvalidateRect", 3, js_invalidateRect),
+    JS_CFUNC_DEF("IsWindow", 1, js_isWindow),
     JS_CFUNC_DEF("SetScrollInfo", 4, js_setScrollInfo),
     JS_CFUNC_DEF("SetParent", 2, js_setParent),
     JS_CFUNC_DEF("EnableWindow", 2, js_enableWindow),
