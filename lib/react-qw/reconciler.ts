@@ -4,6 +4,9 @@ import * as gui from 'gui'
 import * as os from 'os'
 import { applyProps } from './props.js'
 
+// DEBUG 由 esbuild --define 在 bundle 时替换（见 build.ts），生产环境为 false
+declare const DEBUG: boolean
+
 type Container = gui.HWND
 type Props = Record<string, any>
 
@@ -41,7 +44,7 @@ const DefaultEventPriority = 16
 const hostConfig: QuickWinHostConfig = {
   // Core methods
   createInstance(type: string, props: Record<string, any>, rootContainer: Container) {
-    console.log('[reconciler] createInstance called:', type, props)
+    if (DEBUG) console.log('[reconciler] createInstance called:', type, props)
     const winClass = props.type
     const hwnd = gui.CreateWindow(
       winClass, props.text || '', props.ws ?? 0,
@@ -49,7 +52,7 @@ const hostConfig: QuickWinHostConfig = {
       props.width ?? 100, props.height ?? 30,
       rootContainer, null
     )!
-    console.log('[reconciler] createInstance hwnd:', hwnd)
+    if (DEBUG) console.log('[reconciler] createInstance hwnd:', hwnd)
     const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
     const instance: Instance = { hwnd, type: winClass, props, children: [] }
     // 始终设置窗口过程，以便后续 onEvent 更新能生效
@@ -61,22 +64,22 @@ const hostConfig: QuickWinHostConfig = {
   },
 
   createTextInstance(text: string, _rootContainer: Container) {
-    console.log('[reconciler] createTextInstance:', text)
+    if (DEBUG) console.log('[reconciler] createTextInstance:', text)
     return gui.CreateWindow('STATIC', text, 0, 0, 0, 0, 0, null, null)!
   },
 
   appendInitialChild(parent: Instance, child: Instance) {
-    console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', child.hwnd)
+    if (DEBUG) console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', child.hwnd)
     gui.SetParent(child.hwnd, parent.hwnd)
   },
 
   appendChild(parent: Instance, child: Instance) {
-    console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', child.hwnd)
+    if (DEBUG) console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', child.hwnd)
     gui.SetParent(child.hwnd, parent.hwnd)
   },
 
   appendChildToContainer(container: Container, child: Instance | TextInstance) {
-    console.log('[reconciler] appendChildToContainer container:', container, 'child hwnd:', (child as any).hwnd ?? child)
+    if (DEBUG) console.log('[reconciler] appendChildToContainer container:', container, 'child hwnd:', (child as any).hwnd ?? child)
     gui.SetParent((child as any).hwnd ?? child, container)
   },
 
@@ -89,15 +92,15 @@ const hostConfig: QuickWinHostConfig = {
   },
 
   removeChild(parent: Instance, child: Instance) {
-    console.log('[reconciler] removeChild parent:', parent.hwnd, 'child:', child.hwnd)
+    if (DEBUG) console.log('[reconciler] removeChild parent:', parent.hwnd, 'child:', child.hwnd)
     gui.DestroyWindow(child.hwnd)
   },
 
   removeChildFromContainer(container: Container, child: Instance | TextInstance) {
     const hwnd = (child as any).hwnd ?? child
-    console.log('[reconciler] removeChildFromContainer container:', container, 'child hwnd:', hwnd)
+    if (DEBUG) console.log('[reconciler] removeChildFromContainer container:', container, 'child hwnd:', hwnd)
     const result = gui.DestroyWindow(hwnd)
-    console.log('[reconciler] DestroyWindow result:', result)
+    if (DEBUG) console.log('[reconciler] DestroyWindow result:', result)
   },
 
   commitTextUpdate(textInstance: TextInstance, _oldText: string, newText: string) {
@@ -111,13 +114,13 @@ const hostConfig: QuickWinHostConfig = {
   commitMount(_instance: Instance, _type: string, _props: Record<string, any>, _internal: any) { },
 
   finalizeInitialChildren(instance: Instance, _type: string, props: Record<string, any>) {
-    console.log('[reconciler] finalizeInitialChildren instance:', instance.hwnd, 'props:', props)
+    if (DEBUG) console.log('[reconciler] finalizeInitialChildren instance:', instance.hwnd, 'props:', props)
     applyProps(instance, props, {})
     return false
   },
 
   resetAfterCommit(_containerInfo: Container) {
-    console.log('[reconciler] resetAfterCommit')
+    if (DEBUG) console.log('[reconciler] resetAfterCommit')
   },
 
   resetTextContent(_instance: Instance) { },

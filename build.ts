@@ -20,6 +20,8 @@ async function main() {
     outdir: '.',
     outbase: '.',
     logLevel: 'warning',
+    define: { 'DEBUG': 'false' },
+    treeShaking: true
   })
   console.log('React bundles built')
 }
