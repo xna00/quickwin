@@ -1,5 +1,6 @@
 import ReactReconciler from 'react-reconciler'
 import { createContext } from 'react'
+import { DefaultEventPriority, NoEventPriority } from 'react-reconciler/constants'
 import * as gui from 'gui'
 import * as os from 'os'
 import { applyProps } from './props.js'
@@ -38,8 +39,7 @@ type QuickWinHostConfig = ReactReconciler.HostConfig<
   rendererVersion: string
 }
 
-let currentUpdatePriority = 0
-const DefaultEventPriority = 16
+let currentUpdatePriority = NoEventPriority
 
 const hostConfig: QuickWinHostConfig = {
   // Core methods
