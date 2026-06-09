@@ -165,7 +165,7 @@ const hostConfig: QuickWinHostConfig = {
   supportsPersistence: false,
   supportsHydration: false,
   isPrimaryRenderer: true,
-  supportsMicrotasks: true,
+  supportsMicrotasks: false,
 
   setCurrentUpdatePriority(p: number) { currentUpdatePriority = p },
   getCurrentUpdatePriority() { return currentUpdatePriority },
