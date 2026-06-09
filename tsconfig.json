@@ -9,7 +9,7 @@
     // "skipLibCheck": true,
     "allowJs": false,
     "lib": ["ES2020"],
-    "types": ["./quickwin.d.ts", "./lib/preact/jsx.d.ts"],
+    "types": ["./quickwin.d.ts"],
     "outDir": "_build",
     "jsx": "react-jsx",
     "jsxImportSource": "react",

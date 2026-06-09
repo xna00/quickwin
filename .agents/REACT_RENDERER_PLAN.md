@@ -394,3 +394,115 @@ declare module '../../vendor/react/react-reconciler.js' {
 2. **esbuild 产物兼容性** — 确保产出的 ESM 格式能被 QuickJS 模块加载器正确解析
 3. **HWND 生命周期** — React 的 fiber 树卸载时需要正确释放所有 Win32 资源（HWND、WNDPROC）
 
+---
+
+# Flex Layout 实现计划
+
+## 目标
+
+在 `<w>` 元素上通过 `style` prop 支持简单的 flex 布局，覆盖 ~80% 的 UI 布局场景，消除手动绝对坐标计算。
+
+## 类型设计
+
+```typescript
+interface WStyle {
+  x?: number; y?: number
+  width?: number; height?: number
+  flexDirection?: 'row' | 'column'
+  justifyContent?: 'flex-start' | 'flex-end' | 'center'
+  alignItems?: 'flex-start' | 'flex-end' | 'center' | 'stretch'
+  gap?: number
+}
+
+interface WIntrinsicProps {
+  type?: string; text?: string; ws?: number
+  disabled?: boolean; visible?: boolean
+  style?: WStyle
+  onEvent?: (e: WEvent) => void
+  children?: React.ReactNode
+  ref?: React.Ref<gui.HWND>
+}
+```
+
+所有布局属性（`x`, `y`, `width`, `height` 及 flex 属性）都在 `style` 中。Flat props 只保留非视觉属性（`type`, `text`, `ws`, `disabled`, `visible`, `onEvent`, `children`, `ref`）。
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `lib/react-qw/jsx.d.ts` | 加 `WStyle` 类型，更新 `WIntrinsicProps`，children/ref 不再用 any |
+| `lib/react-qw/layout.ts` | **新建** — `calculateFlexLayout()` |
+| `lib/react-qw/reconciler.ts` | `appendChild`/`insertBefore`/`removeChild` 维护 `children` 数组；`resetAfterCommit` 触发布局；`createInstance`/`applyProps` 读 `style.width/height` 替代 `props.width/height` |
+| `lib/react-qw/props.ts` | 从 `style` 中提取 `width/height/x/y` 应用到 `SetWindowPos` |
+
+## 实现步骤
+
+### 步骤 1 — 更新类型定义 (`jsx.d.ts`)
+
+- 新增 `WStyle` 接口
+- `WIntrinsicProps` 中替换 `children?: any` → `children?: React.ReactNode`，`ref?: any` → `ref?: React.Ref<gui.HWND>`
+- 移除 flat 的 `width`, `height` 属性
+- 引入 `React` 类型（通过 `react.d.ts` 桥接）
+
+### 步骤 2 — 创建 layout.ts
+
+纯函数布局引擎：
+
+```typescript
+export interface FlexProps {
+  flexDirection: 'row' | 'column'
+  justifyContent: 'flex-start' | 'flex-end' | 'center'
+  alignItems: 'flex-start' | 'flex-end' | 'center' | 'stretch'
+  gap: number
+}
+
+export function calculateFlexLayout(
+  style: FlexProps,
+  parentWidth: number,
+  parentHeight: number,
+  children: Array<{ style: Record<string, any> }>
+): Array<{ x: number, y: number, width: number, height: number }>
+```
+
+算法：
+1. 收集子元素尺寸（`style.width` / `style.height`，无则默认 `100x30`）
+2. 主轴方向：`column` 垂直排列（默认），`row` 水平排列
+3. 子元素间距 `gap`
+4. `justifyContent`: `flex-start` 从头排，`flex-end` 从尾排，`center` 居中
+5. `alignItems`: `flex-start`/`flex-end`/`center` 交叉轴对齐，`stretch` 拉伸到容器尺寸
+
+### 步骤 3 — reconciler.ts 修改
+
+- `appendChild` / `appendInitialChild` / `insertBefore` / `removeChild` 中正确维护 `parent.children` 数组
+- `resetAfterCommit` 中遍历 Instance 树，对有 `style.flexDirection` 的容器运行布局 + 调用 `gui.SetWindowPos`
+- `createInstance` 中 `props.width` → `props.style?.width`（fallback 处理）
+
+### 步骤 4 — props.ts 修改
+
+- `applyProps` 中从 `newProps.style` 读取 `x`, `y`, `width`, `height` 传递给 `SetWindowPos`
+- 需要处理 `style` 对象引用变化触发重新布局
+
+### 步骤 5 — 验证
+
+编写测试代码验证基本场景：
+
+- `flexDirection: 'column'`（默认）垂直堆叠 + gap
+- `flexDirection: 'row'` 水平排列 + gap
+- `justifyContent: 'center'` 居中
+- `alignItems: 'stretch'` 拉伸填充
+
+## 不做（后续可扩展）
+
+- `flexWrap` — 多行布局，复杂
+- `flexGrow` / `flexShrink` — 弹性比例，需要更复杂的测量通道
+- `alignSelf` — 单子元素覆盖
+- `order` — 重排序
+
+## 实现顺序
+
+1. `jsx.d.ts` 类型
+2. `layout.ts` 布局引擎
+3. `reconciler.ts` children 追踪 + layout trigger
+4. `props.ts` style 读取
+5. 测试验证
+

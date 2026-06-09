@@ -4,6 +4,7 @@ import { DefaultEventPriority, NoEventPriority } from 'react-reconciler/constant
 import * as gui from 'gui'
 import * as os from 'os'
 import { applyProps } from './props.js'
+import { calculateFlexLayout, type FlexStyle } from './layout.js'
 
 // DEBUG 由 esbuild --define 在 bundle 时替换（见 build.ts），生产环境为 false
 declare const DEBUG: boolean
@@ -20,6 +21,30 @@ interface Instance {
 
 type TextInstance = gui.HWND
 type HostContext = Record<string, never>
+
+const instancesByHwnd = new Map<gui.HWND, Instance>()
+
+function runFlexLayout(inst: Instance) {
+  if (inst.children.length === 0) return
+  const s = inst.props.style
+  const flex: FlexStyle = s || {}
+  if (!flex.flexDirection && !flex.gap && !flex.justifyContent && !flex.alignItems) {
+    for (const c of inst.children) runFlexLayout(c)
+    return
+  }
+  const rect = gui.GetClientRect(inst.hwnd)
+  if (!rect) return
+  const pw = rect.right - rect.left
+  const ph = rect.bottom - rect.top
+  if (pw <= 0 || ph <= 0) return
+  const results = calculateFlexLayout(flex, pw, ph, inst.children.map(c => ({ style: c.props.style || {} })))
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i]
+    const child = inst.children[i]
+    gui.SetWindowPos(child.hwnd, 0, r.x, r.y, r.width, r.height, 0)
+  }
+  for (const c of inst.children) runFlexLayout(c)
+}
 
 /**
  * 扩展 HostConfig 类型定义
@@ -46,15 +71,17 @@ const hostConfig: QuickWinHostConfig = {
   createInstance(type: string, props: Record<string, any>, rootContainer: Container) {
     if (DEBUG) console.log('[reconciler] createInstance called:', type, props)
     const winClass = props.type
+    const sty = props.style || {}
     const hwnd = gui.CreateWindow(
       winClass, props.text || '', props.ws ?? 0,
-      props.x ?? 0, props.y ?? 0,
-      props.width ?? 100, props.height ?? 30,
+      sty.x ?? 0, sty.y ?? 0,
+      sty.width ?? 100, sty.height ?? 30,
       rootContainer, null
     )!
     if (DEBUG) console.log('[reconciler] createInstance hwnd:', hwnd)
     const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
     const instance: Instance = { hwnd, type: winClass, props, children: [] }
+    instancesByHwnd.set(hwnd, instance)
     // 始终设置窗口过程，以便后续 onEvent 更新能生效
     gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
       const result = gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
@@ -72,11 +99,13 @@ const hostConfig: QuickWinHostConfig = {
   appendInitialChild(parent: Instance, child: Instance) {
     if (DEBUG) console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', child.hwnd)
     gui.SetParent(child.hwnd, parent.hwnd)
+    parent.children.push(child)
   },
 
   appendChild(parent: Instance, child: Instance) {
     if (DEBUG) console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', child.hwnd)
     gui.SetParent(child.hwnd, parent.hwnd)
+    parent.children.push(child)
   },
 
   appendChildToContainer(container: Container, child: Instance | TextInstance) {
@@ -86,6 +115,8 @@ const hostConfig: QuickWinHostConfig = {
 
   insertBefore(parent: Instance, child: Instance, beforeChild: Instance) {
     gui.SetParent(child.hwnd, parent.hwnd)
+    const idx = parent.children.indexOf(beforeChild)
+    if (idx >= 0) parent.children.splice(idx, 0, child)
   },
 
   insertInContainerBefore(container: Container, child: Instance | TextInstance, _before: any) {
@@ -95,6 +126,8 @@ const hostConfig: QuickWinHostConfig = {
   removeChild(parent: Instance, child: Instance) {
     if (DEBUG) console.log('[reconciler] removeChild parent:', parent.hwnd, 'child:', child.hwnd)
     gui.DestroyWindow(child.hwnd)
+    const idx = parent.children.indexOf(child)
+    if (idx >= 0) parent.children.splice(idx, 1)
   },
 
   removeChildFromContainer(container: Container, child: Instance | TextInstance) {
@@ -120,8 +153,10 @@ const hostConfig: QuickWinHostConfig = {
     return false
   },
 
-  resetAfterCommit(_containerInfo: Container) {
+  resetAfterCommit(containerInfo: Container) {
     if (DEBUG) console.log('[reconciler] resetAfterCommit')
+    const root = instancesByHwnd.get(containerInfo)
+    if (root) runFlexLayout(root)
   },
 
   resetTextContent(_instance: Instance) { },

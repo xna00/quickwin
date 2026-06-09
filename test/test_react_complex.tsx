@@ -52,7 +52,7 @@ function Counter({ label, initial = 0, x = 10, y = 10 }: { label: string; initia
       type="BUTTON"
       text={`${label}: ${count}`}
       ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-      x={x} y={y} width={180} height={30}
+      style={{x, y, width:180, height:30}}
       onEvent={(e: any) => {
         if (e.msg === WM_LBUTTONUP) {
           setCount(count + 1)
@@ -69,13 +69,13 @@ function NestedButtons() {
       type="STATIC"
       text="Nested Panel"
       ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle.CLIPCHILDREN}
-      x={10} y={90} width={460} height={100}
+      style={{x:10, y:90, width:460, height:100}}
     >
       <w
         type="BUTTON"
         text={`Nested A: ${clicks}`}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={15} y={20} width={160} height={25}
+        style={{x:15, y:20, width:160, height:25}}
         onEvent={(e: any) => {
           if (e.msg === WM_LBUTTONUP) {
             setClicks((c: number) => c + 1)
@@ -86,13 +86,13 @@ function NestedButtons() {
         type="BUTTON"
         text={`Nested B: ${clicks * 2}`}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={190} y={20} width={160} height={25}
+        style={{x:190, y:20, width:160, height:25}}
       />
       <w
         type="BUTTON"
         text="Reset"
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={360} y={18} width={60} height={29}
+        style={{x:360, y:18, width:60, height:29}}
         onEvent={(e: any) => {
           if (e.msg === WM_LBUTTONUP) {
             setClicks(0)
@@ -113,14 +113,14 @@ function InputField({ x, y }: { x: number; y: number }) {
         type="EDIT"
         text="type here"
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
-        x={x} y={y} width={160} height={24}
+        style={{x, y, width:160, height:24}}
         ref={editRef}
       />
       <w
         type="BUTTON"
         text="Read"
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={x + 170} y={y} width={60} height={24}
+        style={{x: x + 170, y, width:60, height:24}}
         onEvent={(e: any) => {
           if (e.msg === WM_LBUTTONUP && editRef.current) {
             setText(gui.GetWindowText(editRef.current))
@@ -131,7 +131,7 @@ function InputField({ x, y }: { x: number; y: number }) {
         type="STATIC"
         text={`Input: ${text}`}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
-        x={x} y={y + 30} width={300} height={22}
+        style={{x, y: y + 30, width:300, height:22}}
       />
     </>
   )
@@ -148,14 +148,14 @@ function CounterWithInput({ x, y }: { x: number; y: number }) {
         type="EDIT"
         text="0"
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
-        x={x} y={y} width={60} height={24}
+        style={{x, y, width:60, height:24}}
         ref={inputRef}
       />
       <w
         type="BUTTON"
         text="Start"
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={x + 70} y={y} width={60} height={24}
+        style={{x: x + 70, y, width:60, height:24}}
         onEvent={(e: any) => {
           if (e.msg === WM_LBUTTONUP && inputRef.current) {
             const val = parseInt(gui.GetWindowText(inputRef.current) || '0', 10)
@@ -168,7 +168,7 @@ function CounterWithInput({ x, y }: { x: number; y: number }) {
         type="BUTTON"
         text={`Count: ${displayValue + count}`}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={x + 140} y={y} width={160} height={24}
+        style={{x: x + 140, y, width:160, height:24}}
         onEvent={(e: any) => {
           if (e.msg === WM_LBUTTONUP) {
             setCount((c: number) => c + 1)
@@ -192,7 +192,7 @@ function EffectLogger({ x, y }: { x: number; y: number }) {
       type="STATIC"
       text={`useEffect: ${log}`}
       ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
-      x={x} y={y} width={200} height={22}
+      style={{x, y, width:200, height:22}}
     />
   )
 }
@@ -208,7 +208,7 @@ function ControlledInput({ x, y }: { x: number; y: number }) {
         type="EDIT"
         text={value}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
-        x={x} y={y} width={200} height={24}
+        style={{x, y, width:200, height:24}}
         onEvent={(e: any) => {
           if (e.msg === WM_CHAR) {
             setValue(gui.GetWindowText(e.hwnd))
@@ -219,7 +219,7 @@ function ControlledInput({ x, y }: { x: number; y: number }) {
         type="STATIC"
         text={`Controlled: "${value}"`}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
-        x={x} y={y + 30} width={300} height={22}
+        style={{x, y: y + 30, width:300, height:22}}
       />
     </>
   )
@@ -238,7 +238,7 @@ function App() {
         type="BUTTON"
         text="Toggle Extra"
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={10} y={50} width={120} height={30}
+        style={{x:10, y:50, width:120, height:30}}
         onEvent={(e: any) => {
           if (e.msg === WM_LBUTTONUP) {
             console.log('[App] Toggle button clicked, current showExtra:', showExtra)
@@ -250,7 +250,7 @@ function App() {
         type="BUTTON"
         text={showNested ? 'Hide Panel' : 'Show Panel'}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
-        x={140} y={50} width={120} height={30}
+        style={{x:140, y:50, width:120, height:30}}
         onEvent={(e: any) => {
           if (e.msg === WM_LBUTTONUP) {
             console.log('[App] Toggle Nested button clicked, current showNested:', showNested)

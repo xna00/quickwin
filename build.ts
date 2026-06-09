@@ -9,6 +9,7 @@ async function main() {
       '_build/test/test_jsx.js',
       '_build/test/test_react_render.js',
       '_build/test/test_react_complex.js',
+      '_build/test/test_react_flex.js',
     ],
     allowOverwrite: true,
     bundle: true,
@@ -22,7 +23,7 @@ async function main() {
     logLevel: 'warning',
     define: { 'DEBUG': 'false' },
     treeShaking: true,
-    minify: true
+    // minify: true
   })
   console.log('React bundles built')
 }

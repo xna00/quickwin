@@ -433,6 +433,8 @@ declare module "gui" {
     type RECT = { left: number; top: number; right: number; bottom: number };
     /** Returns { left, top, right, bottom } of client area, or null if invalid */
     function GetClientRect(hwnd: HWND): RECT | null;
+    
+    function GetWindowRect(hwnd: HWND): RECT | null;
     /** Invalidates client area (rect can be null/undefined for full window) */
     function InvalidateRect(hwnd: HWND, rect?: RECT | null, erase?: boolean): void;
     /** Checks if the window handle is valid */

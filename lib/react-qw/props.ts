@@ -28,13 +28,15 @@ export function applyProps(
   if ('visible' in newProps) {
     gui.ShowWindow(instance.hwnd, newProps.visible)
   }
-  if ('x' in newProps || 'y' in newProps || 'width' in newProps || 'height' in newProps) {
+  const s = newProps.style
+  const os = _oldProps.style || _oldProps
+  if (s && ('x' in s || 'y' in s || 'width' in s || 'height' in s)) {
     gui.SetWindowPos(
       instance.hwnd, 0,
-      newProps.x ?? _oldProps.x ?? 0,
-      newProps.y ?? _oldProps.y ?? 0,
-      newProps.width ?? _oldProps.width ?? 100,
-      newProps.height ?? _oldProps.height ?? 30,
+      s.x ?? os.x ?? 0,
+      s.y ?? os.y ?? 0,
+      s.width ?? os.width ?? 100,
+      s.height ?? os.height ?? 30,
       0
     )
   }

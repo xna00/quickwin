@@ -637,6 +637,21 @@ static JSValue js_getClientRect(JSContext *ctx, JSValueConst this_val, int argc,
     return obj;
 }
 
+static JSValue js_getWindowRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    int64_t hwnd_val;
+    JS_ToInt64(ctx, &hwnd_val, argv[0]);
+    RECT rect;
+    if (!GetWindowRect((HWND)hwnd_val, &rect))
+        return JS_NULL;
+    JSValue obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, obj, "left",   JS_NewInt32(ctx, rect.left));
+    JS_SetPropertyStr(ctx, obj, "top",    JS_NewInt32(ctx, rect.top));
+    JS_SetPropertyStr(ctx, obj, "right",  JS_NewInt32(ctx, rect.right));
+    JS_SetPropertyStr(ctx, obj, "bottom", JS_NewInt32(ctx, rect.bottom));
+    return obj;
+}
+
 static JSValue js_invalidateRect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
     int64_t hwnd;
@@ -788,6 +803,7 @@ static const JSCFunctionListEntry gui_funcs[] = {
     JS_CFUNC_DEF("GetCursorPos", 0, js_getCursorPos),
     JS_CFUNC_DEF("GetScreenSize", 0, js_getScreenSize),
     JS_CFUNC_DEF("GetClientRect", 1, js_getClientRect),
+    JS_CFUNC_DEF("GetWindowRect", 1, js_getWindowRect),
     JS_CFUNC_DEF("InvalidateRect", 3, js_invalidateRect),
     JS_CFUNC_DEF("IsWindow", 1, js_isWindow),
     JS_CFUNC_DEF("SetScrollInfo", 4, js_setScrollInfo),
