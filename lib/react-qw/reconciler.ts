@@ -63,9 +63,9 @@ const hostConfig: QuickWinHostConfig = {
     return instance
   },
 
-  createTextInstance(text: string, _rootContainer: Container) {
+  createTextInstance(text: string, rootContainer: Container) {
     if (DEBUG) console.log('[reconciler] createTextInstance:', text)
-    return gui.CreateWindow('STATIC', text, 0, 0, 0, 0, 0, null, null)!
+    return gui.CreateWindow('STATIC', text, gui.WindowStyle.CHILD, 0, 0, 0, 0, rootContainer, null)!
   },
 
   appendInitialChild(parent: Instance, child: Instance) {
@@ -172,7 +172,7 @@ const hostConfig: QuickWinHostConfig = {
   resolveUpdatePriority() { return DefaultEventPriority },
 
   resolveEventType() { return null },
-  resolveEventTimeStamp() { return -1.1 },
+  resolveEventTimeStamp() { return Date.now() },
   trackSchedulerEvent() {
     // console.log('[reconciler] trackSchedulerEvent') 
   },
