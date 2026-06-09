@@ -57,8 +57,9 @@ const hostConfig: QuickWinHostConfig = {
     const instance: Instance = { hwnd, type: winClass, props, children: [] }
     // 始终设置窗口过程，以便后续 onEvent 更新能生效
     gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
+      const result = gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
       instance.props.onEvent?.({ hwnd, msg, wParam, lParam })
-      return gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
+      return result
     })
     return instance
   },

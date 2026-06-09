@@ -197,6 +197,34 @@ function EffectLogger({ x, y }: { x: number; y: number }) {
   )
 }
 
+const WM_CHAR = 0x0102
+
+function ControlledInput({ x, y }: { x: number; y: number }) {
+  const [value, setValue] = useState('')
+
+  return (
+    <>
+      <w
+        type="EDIT"
+        text={value}
+        ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
+        x={x} y={y} width={200} height={24}
+        onEvent={(e: any) => {
+          if (e.msg === WM_CHAR) {
+            setValue(gui.GetWindowText(e.hwnd))
+          }
+        }}
+      />
+      <w
+        type="STATIC"
+        text={`Controlled: "${value}"`}
+        ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
+        x={x} y={y + 30} width={300} height={22}
+      />
+    </>
+  )
+}
+
 function App() {
   const [showExtra, setShowExtra] = useState(false)
   const [showNested, setShowNested] = useState(true)
@@ -239,7 +267,8 @@ function App() {
 
       <InputField x={10} y={210} />
       <CounterWithInput x={10} y={280} />
-      <EffectLogger x={10} y={330} />
+      <ControlledInput x={10} y={330} />
+      <EffectLogger x={10} y={390} />
     </>
   )
 }
@@ -247,7 +276,7 @@ function App() {
 const hwnd = gui.CreateWindow(
   'ComplexTest', 'Complex React Test',
   gui.WindowStyle.OVERLAPPEDWINDOW,
-  100, 100, 520, 420, null, null
+  100, 100, 520, 480, null, null
 )
 
 if (hwnd) {

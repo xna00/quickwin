@@ -21,7 +21,8 @@ async function main() {
     outbase: '.',
     logLevel: 'warning',
     define: { 'DEBUG': 'false' },
-    treeShaking: true
+    treeShaking: true,
+    minify: true
   })
   console.log('React bundles built')
 }
