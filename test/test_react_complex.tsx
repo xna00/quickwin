@@ -17,7 +17,6 @@ function printWindowTree(hwnd: gui.HWND, indent: number = 0) {
   const isWindow = gui.IsWindow(hwnd)
   console.log(`${prefix}hwnd=${hwnd}, text="${text}", IsWindow=${isWindow}`)
   
-  // 遍历子窗口
   let child = gui.GetWindow(hwnd, gui.GetWindowCmd.CHILD)
   while (child) {
     printWindowTree(child, indent + 1)
@@ -25,7 +24,6 @@ function printWindowTree(hwnd: gui.HWND, indent: number = 0) {
   }
 }
 
-// 用 setTimeout 模拟 setInterval
 function mockSetInterval(func: () => void, delay: number) {
   function loop() {
     func()
@@ -43,9 +41,10 @@ gui.RegisterClass('ComplexTest', (hwnd, msg, wParam, lParam) => {
   return gui.DefWindowProc(hwnd, msg, wParam, lParam)
 })
 
+const SS_LEFT = 0x00000000
+const SS_SUNKEN = 0x00000100
 const WM_LBUTTONUP = 0x202
 
-// 计数器组件
 function Counter({ label, initial = 0, x = 10, y = 10 }: { label: string; initial?: number; x?: number; y?: number }) {
   const [count, setCount] = useState(initial)
   return (
@@ -63,13 +62,53 @@ function Counter({ label, initial = 0, x = 10, y = 10 }: { label: string; initia
   )
 }
 
-// 主应用
+function NestedButtons() {
+  const [clicks, setClicks] = useState(0)
+  return (
+    <w
+      type="STATIC"
+      text="Nested Panel"
+      ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle.CLIPCHILDREN}
+      x={10} y={90} width={460} height={100}
+    >
+      <w
+        type="BUTTON"
+        text={`Nested A: ${clicks}`}
+        ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
+        x={15} y={20} width={160} height={25}
+        onEvent={(e: any) => {
+          if (e.msg === WM_LBUTTONUP) {
+            setClicks((c: number) => c + 1)
+          }
+        }}
+      />
+      <w
+        type="BUTTON"
+        text={`Nested B: ${clicks * 2}`}
+        ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
+        x={190} y={20} width={160} height={25}
+      />
+      <w
+        type="BUTTON"
+        text="Reset"
+        ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
+        x={360} y={18} width={60} height={29}
+        onEvent={(e: any) => {
+          if (e.msg === WM_LBUTTONUP) {
+            setClicks(0)
+          }
+        }}
+      />
+    </w>
+  )
+}
+
 function App() {
   const [showExtra, setShowExtra] = useState(false)
+  const [showNested, setShowNested] = useState(true)
 
   return (
     <>
-      {/* 第一行：两个计数器 */}
       <Counter label="Counter A" initial={0} />
       <w
         type="BUTTON"
@@ -78,7 +117,6 @@ function App() {
         x={200} y={10} width={180} height={30}
       />
 
-      {/* 第二行：切换按钮 - 文本不变 */}
       <w
         type="BUTTON"
         text="Toggle Extra"
@@ -91,10 +129,23 @@ function App() {
           }
         }}
       />
+      <w
+        type="BUTTON"
+        text={showNested ? 'Hide Panel' : 'Show Panel'}
+        ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
+        x={140} y={50} width={120} height={30}
+        onEvent={(e: any) => {
+          if (e.msg === WM_LBUTTONUP) {
+            console.log('[App] Toggle Nested button clicked, current showNested:', showNested)
+            setShowNested(!showNested)
+          }
+        }}
+      />
 
-      {/* 条件渲染 */}
+      {showNested && <NestedButtons />}
+
       {showExtra && (
-        <Counter label="Extra" initial={100} x={140} y={50} />
+        <Counter label="Extra" initial={100} x={280} y={50} />
       )}
     </>
   )
@@ -103,14 +154,13 @@ function App() {
 const hwnd = gui.CreateWindow(
   'ComplexTest', 'Complex React Test',
   gui.WindowStyle.OVERLAPPEDWINDOW,
-  100, 100, 500, 200, null, null
+  100, 100, 520, 260, null, null
 )
 
 if (hwnd) {
   gui.ShowWindow(hwnd)
   render(<App />, hwnd)
   
-  // 每 3 秒打印窗口树
   mockSetInterval(() => {
     console.log('\n=== Window Tree ===')
     printWindowTree(hwnd)
