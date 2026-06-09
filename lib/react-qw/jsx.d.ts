@@ -6,7 +6,7 @@ interface WEvent {
 interface WIntrinsicProps {
   type?: string; text?: string; ws?: number; disabled?: boolean
   visible?: boolean; x?: number; y?: number; width?: number; height?: number
-  onEvent?: (e: WEvent) => void; children?: any
+  onEvent?: (e: WEvent) => void; children?: any; ref?: any
 }
 declare module 'react' {
   namespace JSX { interface IntrinsicElements { w: WIntrinsicProps } }
