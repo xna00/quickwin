@@ -1,7 +1,9 @@
 import * as gui from 'gui'
 
+const EM_SETSEL = 0x00B1
+
 export function applyProps(
-  instance: { hwnd: gui.HWND; props: Record<string, any> },
+  instance: { hwnd: gui.HWND; type: string; props: Record<string, any> },
   newProps: Record<string, any>,
   _oldProps: Record<string, any>,
 ) {
@@ -9,6 +11,11 @@ export function applyProps(
 
   if ('text' in newProps) {
     gui.SetWindowText(instance.hwnd, newProps.text ?? '')
+    // SetWindowText on EDIT resets cursor to position 0; restore to end
+    if (instance.type === 'EDIT') {
+      const len = gui.GetWindowText(instance.hwnd).length
+      gui.SendMessage(instance.hwnd, EM_SETSEL, len, len)
+    }
   }
   if ('disabled' in newProps) {
     gui.EnableWindow(instance.hwnd, !newProps.disabled)
