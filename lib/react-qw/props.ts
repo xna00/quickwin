@@ -1,5 +1,6 @@
 import * as gui from 'gui'
 
+const EM_GETSEL = 0x00B0
 const EM_SETSEL = 0x00B1
 
 export function applyProps(
@@ -10,11 +11,15 @@ export function applyProps(
   instance.props = newProps
 
   if ('text' in newProps) {
-    gui.SetWindowText(instance.hwnd, newProps.text ?? '')
-    // SetWindowText on EDIT resets cursor to position 0; restore to end
+    // SetWindowText on EDIT resets cursor to position 0; save and restore it
+    let cursor = -1
     if (instance.type === 'EDIT') {
-      const len = gui.GetWindowText(instance.hwnd).length
-      gui.SendMessage(instance.hwnd, EM_SETSEL, len, len)
+      const sel = gui.SendMessage(instance.hwnd, EM_GETSEL, 0, 0)
+      cursor = sel >>> 16 // caret position is in HIWORD
+    }
+    gui.SetWindowText(instance.hwnd, newProps.text ?? '')
+    if (instance.type === 'EDIT' && cursor >= 0) {
+      gui.SendMessage(instance.hwnd, EM_SETSEL, cursor, cursor)
     }
   }
   if ('disabled' in newProps) {
