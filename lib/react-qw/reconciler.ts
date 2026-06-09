@@ -96,9 +96,6 @@ const hostConfig: QuickWinHostConfig = {
   removeChildFromContainer(container: Container, child: Instance | TextInstance) {
     const hwnd = (child as any).hwnd ?? child
     console.log('[reconciler] removeChildFromContainer container:', container, 'child hwnd:', hwnd)
-    // 先恢复原始窗口过程
-    gui.UnsetWindowProc(hwnd)
-    // 再销毁
     const result = gui.DestroyWindow(hwnd)
     console.log('[reconciler] DestroyWindow result:', result)
   },
