@@ -1,6 +1,8 @@
+export type JustifyContent = 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly'
+
 export interface FlexStyle {
   flexDirection?: 'row' | 'column'
-  justifyContent?: 'flex-start' | 'flex-end' | 'center'
+  justifyContent?: JustifyContent
   alignItems?: 'flex-start' | 'flex-end' | 'center' | 'stretch'
   gap?: number
 }
@@ -26,48 +28,61 @@ export function calculateFlexLayout(
   const gap = flex.gap ?? 0
   const justify = flex.justifyContent || 'flex-start'
   const align = flex.alignItems || 'stretch'
+  const isRow = dir === 'row'
+  const n = children.length
+
+  const mainSize: 'w' | 'h' = isRow ? 'w' : 'h'
+  const crossSize: 'w' | 'h' = isRow ? 'h' : 'w'
+  const mainPos: 'x' | 'y' = isRow ? 'x' : 'y'
+  const crossPos: 'x' | 'y' = isRow ? 'y' : 'x'
+  const mainDim: 'width' | 'height' = isRow ? 'width' : 'height'
+  const crossDim: 'width' | 'height' = isRow ? 'height' : 'width'
+  const parentMain = isRow ? parentW : parentH
+  const parentCross = isRow ? parentH : parentW
 
   const sizes = children.map(c => ({
     w: c.style.width ?? DEFAULT_W,
     h: c.style.height ?? DEFAULT_H,
   }))
 
-  if (dir === 'row') {
-    const totalW = sizes.reduce((s, c) => s + c.w, 0) + Math.max(0, children.length - 1) * gap
-    let offset = 0
-    if (justify === 'flex-end') offset = parentW - totalW
-    else if (justify === 'center') offset = Math.max(0, (parentW - totalW) / 2)
+  const flexGrows = children.map(c => c.style.flexGrow ?? 0)
+  const totalGrow = flexGrows.reduce((s, g) => s + g, 0)
 
-    let cursor = offset
-    return sizes.map(sz => {
-      let childW = sz.w
-      let childH = sz.h
-      let x = cursor
-      let y = 0
-      if (align === 'stretch') { childH = parentH; y = 0 }
-      else if (align === 'flex-end') y = parentH - childH
-      else if (align === 'center') y = Math.max(0, (parentH - childH) / 2)
-      cursor += childW + gap
-      return { x, y, width: childW, height: childH }
-    })
+  const baseMain = sizes.reduce((s, c) => s + c[mainSize], 0)
+  let freeGrow = parentMain - baseMain - Math.max(0, n - 1) * gap
+  if (totalGrow > 0 && freeGrow > 0) {
+    for (let i = 0; i < n; i++) {
+      sizes[i][mainSize] += freeGrow * flexGrows[i] / totalGrow
+    }
   }
 
-  // column (default)
-  const totalH = sizes.reduce((s, c) => s + c.h, 0) + Math.max(0, children.length - 1) * gap
-  let offset = 0
-  if (justify === 'flex-end') offset = parentH - totalH
-  else if (justify === 'center') offset = Math.max(0, (parentH - totalH) / 2)
+  const totalMain = sizes.reduce((s, c) => s + c[mainSize], 0)
+  const free = parentMain - totalMain - Math.max(0, n - 1) * gap
+  let offset = 0, extraGap = 0
+  if (justify === 'flex-end') offset = free
+  else if (justify === 'center') offset = Math.max(0, free / 2)
+  else if (justify === 'space-between' && n > 1) extraGap = free / (n - 1)
+  else if (justify === 'space-around') { extraGap = free / n; offset = extraGap / 2 }
+  else if (justify === 'space-evenly') { extraGap = free / (n + 1); offset = extraGap }
 
   let cursor = offset
   return sizes.map(sz => {
-    let childW = sz.w
-    let childH = sz.h
-    let x = 0
-    let y = cursor
-    if (align === 'stretch') { childW = parentW; x = 0 }
-    else if (align === 'flex-end') x = parentW - childW
-    else if (align === 'center') x = Math.max(0, (parentW - childW) / 2)
-    cursor += childH + gap
-    return { x, y, width: childW, height: childH }
+    const childMain = sz[mainSize]
+    const childCross = sz[crossSize]
+    const res: LayoutResult = { x: 0, y: 0, width: 0, height: 0 }
+    res[mainPos] = cursor
+    res[crossPos] = 0
+    res[mainDim] = childMain
+    res[crossDim] = childCross
+    if (align === 'stretch') {
+      res[crossDim] = parentCross
+      res[crossPos] = 0
+    } else if (align === 'flex-end') {
+      res[crossPos] = parentCross - childCross
+    } else if (align === 'center') {
+      res[crossPos] = Math.max(0, (parentCross - childCross) / 2)
+    }
+    cursor += childMain + gap + extraGap
+    return res
   })
 }

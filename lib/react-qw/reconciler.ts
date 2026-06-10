@@ -28,7 +28,7 @@ function runFlexLayout(inst: Instance) {
   if (inst.children.length === 0) return
   const s = inst.props.style
   const flex: FlexStyle = s || {}
-  if (!flex.flexDirection && !flex.gap && !flex.justifyContent && !flex.alignItems) {
+  if (flex.flexDirection === undefined && flex.gap === undefined && flex.justifyContent === undefined && flex.alignItems === undefined) {
     for (const c of inst.children) runFlexLayout(c)
     return
   }

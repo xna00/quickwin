@@ -45,39 +45,68 @@ function flush(): Promise<void> {
 function expectedPositions(
   dir: 'row' | 'column',
   parentW: number, parentH: number,
-  children: Array<{ w: number; h: number }>,
+  children: Array<{ w: number; h: number; flexGrow?: number }>,
   justify: string = 'flex-start',
   align: string = 'stretch',
   gap: number = 0
 ) {
+  const n = children.length
+  const sizes = children.map(c => ({ w: c.w, h: c.h }))
+  const flexGrows = children.map(c => c.flexGrow ?? 0)
+  const totalGrow = flexGrows.reduce((s, g) => s + g, 0)
+
   if (dir === 'row') {
-    const totalW = children.reduce((s, c) => s + c.w, 0) + Math.max(0, children.length - 1) * gap
-    let offset = 0
-    if (justify === 'flex-end') offset = parentW - totalW
-    else if (justify === 'center') offset = Math.max(0, (parentW - totalW) / 2)
+    const baseW = sizes.reduce((s, c) => s + c.w, 0)
+    const freeGrow = parentW - baseW - Math.max(0, n - 1) * gap
+    if (totalGrow > 0 && freeGrow > 0) {
+      for (let i = 0; i < n; i++) {
+        sizes[i].w += freeGrow * flexGrows[i] / totalGrow
+      }
+    }
+
+    const totalW = sizes.reduce((s, c) => s + c.w, 0)
+    const free = parentW - totalW - Math.max(0, n - 1) * gap
+    let offset = 0, extraGap = 0
+    if (justify === 'flex-end') offset = free
+    else if (justify === 'center') offset = Math.max(0, free / 2)
+    else if (justify === 'space-between' && n > 1) extraGap = free / (n - 1)
+    else if (justify === 'space-around') { extraGap = free / n; offset = extraGap / 2 }
+    else if (justify === 'space-evenly') { extraGap = free / (n + 1); offset = extraGap }
     let cursor = offset
-    return children.map(c => {
-      let ch = align === 'stretch' ? parentH : c.h
+    return sizes.map((sz, i) => {
+      let ch = align === 'stretch' ? parentH : children[i].h
       let y = 0
       if (align === 'flex-end') y = parentH - ch
       else if (align === 'center') y = Math.max(0, (parentH - ch) / 2)
-      const r = { x: cursor, y, width: c.w, height: ch }
-      cursor += c.w + gap
+      const r = { x: cursor, y, width: sz.w, height: ch }
+      cursor += sz.w + gap + extraGap
       return r
     })
   }
-  const totalH = children.reduce((s, c) => s + c.h, 0) + Math.max(0, children.length - 1) * gap
-  let offset = 0
-  if (justify === 'flex-end') offset = parentH - totalH
-  else if (justify === 'center') offset = Math.max(0, (parentH - totalH) / 2)
+  const baseH = sizes.reduce((s, c) => s + c.h, 0)
+  const freeGrow = parentH - baseH - Math.max(0, n - 1) * gap
+  if (totalGrow > 0 && freeGrow > 0) {
+    for (let i = 0; i < n; i++) {
+      sizes[i].h += freeGrow * flexGrows[i] / totalGrow
+    }
+  }
+
+  const totalH = sizes.reduce((s, c) => s + c.h, 0)
+  const free = parentH - totalH - Math.max(0, n - 1) * gap
+  let offset = 0, extraGap = 0
+  if (justify === 'flex-end') offset = free
+  else if (justify === 'center') offset = Math.max(0, free / 2)
+  else if (justify === 'space-between' && n > 1) extraGap = free / (n - 1)
+  else if (justify === 'space-around') { extraGap = free / n; offset = extraGap / 2 }
+  else if (justify === 'space-evenly') { extraGap = free / (n + 1); offset = extraGap }
   let cursor = offset
-  return children.map(c => {
-    let cw = align === 'stretch' ? parentW : c.w
+  return sizes.map((sz, i) => {
+    let cw = align === 'stretch' ? parentW : children[i].w
     let x = 0
     if (align === 'flex-end') x = parentW - cw
     else if (align === 'center') x = Math.max(0, (parentW - cw) / 2)
-    const r = { x, y: cursor, width: cw, height: c.h }
-    cursor += c.h + gap
+    const r = { x, y: cursor, width: cw, height: sz.h }
+    cursor += sz.h + gap + extraGap
     return r
   })
 }
@@ -88,7 +117,7 @@ async function testRowCol(
   name: string,
   dir: 'row' | 'column',
   parentW: number, parentH: number,
-  childSizes: Array<{ w: number; h: number }>,
+  childSizes: Array<{ w: number; h: number; flexGrow?: number }>,
   justify: string = 'flex-start',
   align: string = 'stretch',
   gap: number = 0
@@ -99,7 +128,7 @@ async function testRowCol(
   root.render(
     <w type="BUTTON" style={{flexDirection: dir, justifyContent: justify as any, alignItems: align as any, gap, width: parentW, height: parentH, x: 0, y: 0}}>
       {childSizes.map((c, i) =>
-        <w key={String(i)} type="BUTTON" style={{width: c.w, height: c.h}} />
+        <w key={String(i)} type="BUTTON" style={{width: c.w, height: c.h, flexGrow: c.flexGrow ?? 0}} />
       )}
     </w>
   )
@@ -151,6 +180,27 @@ async function main() {
   await testRowCol(tester, root, hwnd, 'Col align end', 'column', 200, 400, c3, 'flex-start', 'flex-end')
   await testRowCol(tester, root, hwnd, 'Col center+center+gap', 'column', 200, 400, c3, 'center', 'center', 10)
   await testRowCol(tester, root, hwnd, 'Col mixed sizes', 'column', 200, 400, c2)
+
+  // ── space-between / space-around / space-evenly ──
+  // parent sizes chosen to avoid fractional pixel positions (SetWindowPos truncates)
+  await testRowCol(tester, root, hwnd, 'Row space-between', 'row', 400, 200, c3, 'space-between')
+  await testRowCol(tester, root, hwnd, 'Row space-around', 'row', 300, 200, c3, 'space-around')
+  await testRowCol(tester, root, hwnd, 'Row space-evenly', 'row', 350, 200, c3, 'space-evenly')
+  await testRowCol(tester, root, hwnd, 'Col space-between', 'column', 200, 400, c3, 'space-between')
+  await testRowCol(tester, root, hwnd, 'Col space-around', 'column', 200, 300, c3, 'space-around')
+  await testRowCol(tester, root, hwnd, 'Col space-evenly', 'column', 200, 330, c3, 'space-evenly')
+  // single-child edge cases (space-between = flex-start, space-around/evenly = center)
+  await testRowCol(tester, root, hwnd, 'Row single space-evenly', 'row', 400, 200, [{w:50,h:30}], 'space-evenly')
+  await testRowCol(tester, root, hwnd, 'Col single space-around', 'column', 200, 400, [{w:50,h:30}], 'space-around')
+
+  // ── flexGrow ──
+  await testRowCol(tester, root, hwnd, 'Row flexGrow equal', 'row', 400, 200, [{w:50, h:30, flexGrow:1}, {w:50, h:30, flexGrow:1}])
+  await testRowCol(tester, root, hwnd, 'Row flexGrow 1:3', 'row', 400, 200, [{w:50, h:30, flexGrow:1}, {w:50, h:30, flexGrow:3}])
+  await testRowCol(tester, root, hwnd, 'Row flexGrow only one', 'row', 400, 200, [{w:50, h:30, flexGrow:1}, {w:50, h:30}])
+  await testRowCol(tester, root, hwnd, 'Row flexGrow middle only', 'row', 400, 200, [{w:50, h:30}, {w:50, h:30, flexGrow:1}, {w:50, h:30}])
+  await testRowCol(tester, root, hwnd, 'Row flexGrow + gap', 'row', 400, 200, [{w:50, h:30, flexGrow:1}, {w:50, h:30, flexGrow:1}], 'flex-start', 'stretch', 10)
+  await testRowCol(tester, root, hwnd, 'Col flexGrow equal', 'column', 200, 400, [{w:50, h:30, flexGrow:1}, {w:50, h:30, flexGrow:1}])
+  await testRowCol(tester, root, hwnd, 'Col flexGrow only one', 'column', 200, 400, [{w:50, h:30, flexGrow:1}, {w:50, h:30}])
 
   // ── Empty ──
   tester.section('Empty container no crash')

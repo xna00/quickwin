@@ -4,9 +4,10 @@ interface WStyle {
   x?: number; y?: number
   width?: number; height?: number
   flexDirection?: 'row' | 'column'
-  justifyContent?: 'flex-start' | 'flex-end' | 'center'
+  justifyContent?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly'
   alignItems?: 'flex-start' | 'flex-end' | 'center' | 'stretch'
   gap?: number
+  flexGrow?: number
 }
 
 interface WEvent {
