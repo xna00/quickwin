@@ -69,16 +69,19 @@ let currentUpdatePriority = NoEventPriority
 const hostConfig: QuickWinHostConfig = {
   // Core methods
   createInstance(type: string, props: Record<string, any>, rootContainer: Container) {
-    if (DEBUG) console.log('[reconciler] createInstance called:', type, props)
+    if (DEBUG) console.log('[reconciler] createInstance called:', type, 'class=' + props.type)
     const winClass = props.type
     const sty = props.style || {}
+    // reconciler 创建的都是子窗口，确保 WS_CHILD 避免定位异常
+    const ws = (props.ws ?? 0) | gui.WindowStyle.CHILD
+    if (DEBUG) console.log('[reconciler] CreateWindow args:', winClass, props.text || '', ws, sty.x ?? 0, sty.y ?? 0, sty.width ?? 100, sty.height ?? 30, rootContainer)
     const hwnd = gui.CreateWindow(
-      winClass, props.text || '', props.ws ?? 0,
+      winClass, props.text || '', ws,
       sty.x ?? 0, sty.y ?? 0,
       sty.width ?? 100, sty.height ?? 30,
       rootContainer, null
     )!
-    if (DEBUG) console.log('[reconciler] createInstance hwnd:', hwnd)
+    if (DEBUG) console.log('[reconciler] createInstance hwnd result:', hwnd, 'null?', hwnd === null)
     const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
     const instance: Instance = { hwnd, type: winClass, props, children: [] }
     instancesByHwnd.set(hwnd, instance)
@@ -114,12 +117,14 @@ const hostConfig: QuickWinHostConfig = {
   },
 
   insertBefore(parent: Instance, child: Instance, beforeChild: Instance) {
+    if (DEBUG) console.log('[reconciler] insertBefore parent:', parent.hwnd, 'child:', child.hwnd, 'before:', beforeChild.hwnd)
     gui.SetParent(child.hwnd, parent.hwnd)
     const idx = parent.children.indexOf(beforeChild)
     if (idx >= 0) parent.children.splice(idx, 0, child)
   },
 
   insertInContainerBefore(container: Container, child: Instance | TextInstance, _before: any) {
+    if (DEBUG) console.log('[reconciler] insertInContainerBefore container:', container, 'child hwnd:', (child as any).hwnd ?? child)
     gui.SetParent((child as any).hwnd ?? child, container)
   },
 
@@ -148,15 +153,23 @@ const hostConfig: QuickWinHostConfig = {
   commitMount(_instance: Instance, _type: string, _props: Record<string, any>, _internal: any) { },
 
   finalizeInitialChildren(instance: Instance, _type: string, props: Record<string, any>) {
-    if (DEBUG) console.log('[reconciler] finalizeInitialChildren instance:', instance.hwnd, 'props:', props)
+    if (DEBUG) console.log('[reconciler] finalizeInitialChildren instance:', instance.hwnd, 'props:', JSON.stringify(props))
     applyProps(instance, props, {})
     return false
   },
 
   resetAfterCommit(containerInfo: Container) {
     if (DEBUG) console.log('[reconciler] resetAfterCommit')
-    const root = instancesByHwnd.get(containerInfo)
-    if (root) runFlexLayout(root)
+    let count = 0
+    let child = gui.GetWindow(containerInfo, gui.GetWindowCmd.CHILD)
+    while (child) {
+      count++
+      if (DEBUG) console.log('[reconciler] resetAfterCommit child:', child)
+      const inst = instancesByHwnd.get(child)
+      if (inst) runFlexLayout(inst)
+      child = gui.GetWindow(child, gui.GetWindowCmd.NEXT)
+    }
+    if (DEBUG) console.log('[reconciler] resetAfterCommit child count:', count)
   },
 
   resetTextContent(_instance: Instance) { },
@@ -209,12 +222,13 @@ const hostConfig: QuickWinHostConfig = {
 
   resolveEventType() { return null },
   resolveEventTimeStamp() { return Date.now() },
-  trackSchedulerEvent() {
-    // console.log('[reconciler] trackSchedulerEvent') 
-  },
+  trackSchedulerEvent() { },
 
   shouldAttemptEagerTransition() { return false },
-  detachDeletedInstance(_instance: Instance) { },
+  detachDeletedInstance(instance: Instance) {
+    if (DEBUG) console.log('[reconciler] detachDeletedInstance hwnd:', instance.hwnd)
+    instancesByHwnd.delete(instance.hwnd)
+  },
   
   // 添加必需方法
   getInstanceFromNode(_node: any) { return null },

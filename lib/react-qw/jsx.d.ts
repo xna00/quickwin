@@ -13,8 +13,8 @@ interface WEvent {
   hwnd: HWND; msg: number; wParam: number; lParam: number
 }
 interface WIntrinsicProps {
-  type?: string; text?: string; ws?: number; disabled?: boolean
-  visible?: boolean; style?: WStyle
+  key?: string | number; type?: string; text?: string; ws?: number
+  disabled?: boolean; visible?: boolean; style?: WStyle
   onEvent?: (e: WEvent) => void
   children?: React.ReactNode
   ref?: React.Ref<HWND>
