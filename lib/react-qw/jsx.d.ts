@@ -6,6 +6,7 @@ interface WStyle {
   flexDirection?: 'row' | 'column'
   justifyContent?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly'
   alignItems?: 'flex-start' | 'flex-end' | 'center' | 'stretch'
+  alignSelf?: 'auto' | 'flex-start' | 'flex-end' | 'center' | 'stretch'
   gap?: number
   flexGrow?: number
 }

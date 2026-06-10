@@ -66,20 +66,23 @@ export function calculateFlexLayout(
   else if (justify === 'space-evenly') { extraGap = free / (n + 1); offset = extraGap }
 
   let cursor = offset
-  return sizes.map(sz => {
-    const childMain = sz[mainSize]
-    const childCross = sz[crossSize]
+  return sizes.map((sz, i) => {
+    const childCrossBase = sz[crossSize]
+    const childAlign = children[i].style.alignSelf ?? 'auto'
+    const effectiveAlign = childAlign === 'auto' ? align : childAlign
+    let childMain = sz[mainSize]
+    let childCross = childCrossBase
     const res: LayoutResult = { x: 0, y: 0, width: 0, height: 0 }
     res[mainPos] = cursor
     res[crossPos] = 0
     res[mainDim] = childMain
     res[crossDim] = childCross
-    if (align === 'stretch') {
+    if (effectiveAlign === 'stretch') {
       res[crossDim] = parentCross
       res[crossPos] = 0
-    } else if (align === 'flex-end') {
+    } else if (effectiveAlign === 'flex-end') {
       res[crossPos] = parentCross - childCross
-    } else if (align === 'center') {
+    } else if (effectiveAlign === 'center') {
       res[crossPos] = Math.max(0, (parentCross - childCross) / 2)
     }
     cursor += childMain + gap + extraGap

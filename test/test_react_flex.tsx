@@ -45,7 +45,7 @@ function flush(): Promise<void> {
 function expectedPositions(
   dir: 'row' | 'column',
   parentW: number, parentH: number,
-  children: Array<{ w: number; h: number; flexGrow?: number }>,
+  children: Array<{ w: number; h: number; flexGrow?: number; alignSelf?: 'auto' | 'flex-start' | 'flex-end' | 'center' | 'stretch' }>,
   justify: string = 'flex-start',
   align: string = 'stretch',
   gap: number = 0
@@ -74,10 +74,11 @@ function expectedPositions(
     else if (justify === 'space-evenly') { extraGap = free / (n + 1); offset = extraGap }
     let cursor = offset
     return sizes.map((sz, i) => {
-      let ch = align === 'stretch' ? parentH : children[i].h
+      const ca = children[i].alignSelf && children[i].alignSelf !== 'auto' ? children[i].alignSelf : align
+      let ch = ca === 'stretch' ? parentH : children[i].h
       let y = 0
-      if (align === 'flex-end') y = parentH - ch
-      else if (align === 'center') y = Math.max(0, (parentH - ch) / 2)
+      if (ca === 'flex-end') y = parentH - ch
+      else if (ca === 'center') y = Math.max(0, (parentH - ch) / 2)
       const r = { x: cursor, y, width: sz.w, height: ch }
       cursor += sz.w + gap + extraGap
       return r
@@ -101,10 +102,11 @@ function expectedPositions(
   else if (justify === 'space-evenly') { extraGap = free / (n + 1); offset = extraGap }
   let cursor = offset
   return sizes.map((sz, i) => {
-    let cw = align === 'stretch' ? parentW : children[i].w
+    const ca = children[i].alignSelf && children[i].alignSelf !== 'auto' ? children[i].alignSelf : align
+    let cw = ca === 'stretch' ? parentW : children[i].w
     let x = 0
-    if (align === 'flex-end') x = parentW - cw
-    else if (align === 'center') x = Math.max(0, (parentW - cw) / 2)
+    if (ca === 'flex-end') x = parentW - cw
+    else if (ca === 'center') x = Math.max(0, (parentW - cw) / 2)
     const r = { x, y: cursor, width: cw, height: sz.h }
     cursor += sz.h + gap + extraGap
     return r
@@ -117,7 +119,7 @@ async function testRowCol(
   name: string,
   dir: 'row' | 'column',
   parentW: number, parentH: number,
-  childSizes: Array<{ w: number; h: number; flexGrow?: number }>,
+  childSizes: Array<{ w: number; h: number; flexGrow?: number; alignSelf?: 'auto' | 'flex-start' | 'flex-end' | 'center' | 'stretch' }>,
   justify: string = 'flex-start',
   align: string = 'stretch',
   gap: number = 0
@@ -128,7 +130,7 @@ async function testRowCol(
   root.render(
     <w type="BUTTON" style={{flexDirection: dir, justifyContent: justify as any, alignItems: align as any, gap, width: parentW, height: parentH, x: 0, y: 0}}>
       {childSizes.map((c, i) =>
-        <w key={String(i)} type="BUTTON" style={{width: c.w, height: c.h, flexGrow: c.flexGrow ?? 0}} />
+        <w key={String(i)} type="BUTTON" style={{width: c.w, height: c.h, flexGrow: c.flexGrow ?? 0, alignSelf: c.alignSelf ?? 'auto'}} />
       )}
     </w>
   )
@@ -201,6 +203,20 @@ async function main() {
   await testRowCol(tester, root, hwnd, 'Row flexGrow + gap', 'row', 400, 200, [{w:50, h:30, flexGrow:1}, {w:50, h:30, flexGrow:1}], 'flex-start', 'stretch', 10)
   await testRowCol(tester, root, hwnd, 'Col flexGrow equal', 'column', 200, 400, [{w:50, h:30, flexGrow:1}, {w:50, h:30, flexGrow:1}])
   await testRowCol(tester, root, hwnd, 'Col flexGrow only one', 'column', 200, 400, [{w:50, h:30, flexGrow:1}, {w:50, h:30}])
+
+  // ── alignSelf ──
+  await testRowCol(tester, root, hwnd, 'Row alignSelf flex-start flex-end', 'row', 400, 200,
+    [{w:50, h:30, alignSelf:'flex-start'}, {w:50, h:30}, {w:50, h:30, alignSelf:'flex-end'}],
+    'flex-start', 'center')
+  await testRowCol(tester, root, hwnd, 'Row alignSelf stretch in flex-start', 'row', 400, 200,
+    [{w:50, h:30, alignSelf:'stretch'}, {w:50, h:30}],
+    'flex-start', 'flex-start')
+  await testRowCol(tester, root, hwnd, 'Col alignSelf flex-end flex-start', 'column', 200, 400,
+    [{w:50, h:30, alignSelf:'flex-end'}, {w:50, h:30, alignSelf:'flex-start'}, {w:50, h:30}],
+    'flex-start', 'center')
+  await testRowCol(tester, root, hwnd, 'Col alignSelf stretch in flex-start', 'column', 200, 400,
+    [{w:50, h:30, alignSelf:'stretch'}, {w:50, h:30}],
+    'flex-start', 'flex-start')
 
   // ── Empty ──
   tester.section('Empty container no crash')
