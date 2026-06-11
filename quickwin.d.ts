@@ -476,6 +476,7 @@ declare module "gui" {
         HSCROLL = 0x0114,
         VSCROLL = 0x0115,
         MOUSEWHEEL = 0x020A,
+        NOTIFY = 0x004E,
     }
 
     // 滚动条常量 (Scroll Bar)
@@ -577,6 +578,11 @@ declare module "gui" {
         DELETEALLITEMS = 0x1309,
         GETCURSEL = 0x130B,
         SETCURSEL = 0x130C,
+    }
+
+    // Tab 通知码 (Tab Control Notification Codes)
+    export const enum TcNotifyCode {
+        SELCHANGE = -550,
     }
 
     // ListView 控件样式 (List-View Styles)

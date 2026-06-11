@@ -9,6 +9,8 @@ import { calculateFlexLayout, type FlexStyle } from './layout.js'
 // DEBUG 由 esbuild --define 在 bundle 时替换（见 build.ts），生产环境为 false
 declare const DEBUG: boolean
 
+const dpiFont = gui.CreateSystemDpiFont()
+
 type Container = gui.HWND
 type Props = Record<string, any>
 
@@ -33,14 +35,15 @@ function runFlexLayout(inst: Instance) {
     return
   }
   const rect = gui.GetClientRect(inst.hwnd)
-  if (!rect) return
+  if (!rect) { console.log('flex: no rect for', inst.hwnd, inst.type); return }
   const pw = rect.right - rect.left
   const ph = rect.bottom - rect.top
-  if (pw <= 0 || ph <= 0) return
+  if (pw <= 0 || ph <= 0) { console.log('flex: zero size for', inst.hwnd, inst.type, pw, ph); return }
   const results = calculateFlexLayout(flex, pw, ph, inst.children.map(c => ({ style: c.props.style || {} })))
   for (let i = 0; i < results.length; i++) {
     const r = results[i]
     const child = inst.children[i]
+    console.log('flex: set', child.type, child.hwnd, 'to', r.x, r.y, r.width, r.height)
     gui.SetWindowPos(child.hwnd, 0, r.x, r.y, r.width, r.height, 0)
   }
   for (const c of inst.children) runFlexLayout(c)
@@ -81,6 +84,7 @@ const hostConfig: QuickWinHostConfig = {
       sty.width ?? 100, sty.height ?? 30,
       rootContainer, null
     )!
+    if (dpiFont) gui.SendMessage(hwnd, gui.WmMsg.SETFONT, dpiFont, 1)
     if (DEBUG) console.log('[reconciler] createInstance hwnd result:', hwnd, 'null?', hwnd === null)
     const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
     const instance: Instance = { hwnd, type: winClass, props, children: [] }

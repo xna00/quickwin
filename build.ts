@@ -11,6 +11,7 @@ async function main() {
       '_build/test/test_react_complex.js',
       '_build/test/test_react_flex.js',
       '_build/examples/test_gallery.js',
+      '_build/examples/test_tab.js',
     ],
     allowOverwrite: true,
     bundle: true,
