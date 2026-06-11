@@ -563,6 +563,11 @@ declare module "gui" {
         STANDARD = 0x0001 | 0x0002 | 0x00200000 | 0x00800000,
     }
 
+    // 列表框通知码 (List Box Notification Codes)
+    export const enum LbnCode {
+        SELCHANGE = 1,
+    }
+
     // Tab 控件样式 (Tab Control Styles)
     export const enum TabStyle {
         FOCUSNEVER = 0x8000,

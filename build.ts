@@ -13,6 +13,7 @@ async function main() {
       '_build/test/test_react_hidden.js',
       '_build/examples/test_gallery.js',
       '_build/examples/test_tab.js',
+      '_build/examples/test_react_listbox.js',
     ],
     allowOverwrite: true,
     bundle: true,
