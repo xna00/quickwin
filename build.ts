@@ -10,6 +10,7 @@ async function main() {
       '_build/test/test_react_render.js',
       '_build/test/test_react_complex.js',
       '_build/test/test_react_flex.js',
+      '_build/test/test_react_hidden.js',
       '_build/examples/test_gallery.js',
       '_build/examples/test_tab.js',
     ],

@@ -16,7 +16,7 @@ interface WEvent {
 }
 interface WIntrinsicProps {
   key?: string | number; type?: string; text?: string; ws?: number
-  disabled?: boolean; visible?: boolean; style?: WStyle
+  disabled?: boolean; visible?: boolean; hidden?: boolean; style?: WStyle
   onEvent?: (e: WEvent) => void
   children?: React.ReactNode
   ref?: React.Ref<HWND>

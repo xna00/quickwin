@@ -25,6 +25,9 @@ export function applyProps(
   if ('disabled' in newProps) {
     gui.EnableWindow(instance.hwnd, !newProps.disabled)
   }
+  if ('hidden' in newProps) {
+    gui.ShowWindow(instance.hwnd, newProps.hidden ? 0 : 5)
+  }
   if ('visible' in newProps) {
     gui.ShowWindow(instance.hwnd, newProps.visible)
   }

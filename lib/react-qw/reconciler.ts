@@ -34,15 +34,17 @@ function runFlexLayout(inst: Instance) {
     for (const c of inst.children) runFlexLayout(c)
     return
   }
+  const visible = inst.children.filter(c => !c.props.hidden)
+  if (visible.length === 0) return
   const rect = gui.GetClientRect(inst.hwnd)
   if (!rect) { console.log('flex: no rect for', inst.hwnd, inst.type); return }
   const pw = rect.right - rect.left
   const ph = rect.bottom - rect.top
   if (pw <= 0 || ph <= 0) { console.log('flex: zero size for', inst.hwnd, inst.type, pw, ph); return }
-  const results = calculateFlexLayout(flex, pw, ph, inst.children.map(c => ({ style: c.props.style || {} })))
+  const results = calculateFlexLayout(flex, pw, ph, visible.map(c => ({ style: c.props.style || {} })))
   for (let i = 0; i < results.length; i++) {
     const r = results[i]
-    const child = inst.children[i]
+    const child = visible[i]
     console.log('flex: set', child.type, child.hwnd, 'to', r.x, r.y, r.width, r.height)
     gui.SetWindowPos(child.hwnd, 0, r.x, r.y, r.width, r.height, 0)
   }
