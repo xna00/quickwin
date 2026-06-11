@@ -1,6 +1,7 @@
 import * as std from 'std'
 import * as win from 'win'
 import * as ffi from 'ffi'
+import { defineStruct } from '../lib/ffi/struct.js'
 import { Tester } from './test_helper.js'
 
 function decodeWideAtPtr(ptr: number): string {
@@ -170,5 +171,53 @@ export const suite = {
             threw = true
         }
         t.checkTrue('non-ArrayBuffer pointer arg throws TypeError', threw)
+
+        t.section('defineStruct')
+        const Point = defineStruct([
+            ['x', ffi.FFI_TYPE_SINT32],
+            ['y', ffi.FFI_TYPE_SINT32],
+        ] as const)
+        t.check('Point.size is 8', 8, Point.size)
+        const buf1 = new ArrayBuffer(8)
+        const dv1 = new DataView(buf1)
+        dv1.setInt32(0, 42, true)
+        dv1.setInt32(4, -7, true)
+        const p = Point(buf1)
+        t.check('point.x is 42', 42, p.x)
+        t.check('point.y is -7', -7, p.y)
+
+        const Mixed = defineStruct([
+            ['a', ffi.FFI_TYPE_UINT8],
+            ['b', ffi.FFI_TYPE_UINT32],
+        ] as const)
+        t.check('Mixed.size is 8 (3 bytes padding)', 8, Mixed.size)
+        const buf2 = new ArrayBuffer(8)
+        const dv2 = new DataView(buf2)
+        dv2.setUint8(0, 0xAB)
+        dv2.setUint32(4, 0xDEADBEEF, true)
+        const m = Mixed(buf2)
+        t.check('a is 0xAB', 0xAB, m.a)
+        t.check('b is 0xDEADBEEF', 0xDEADBEEF, m.b)
+
+        t.section('defineStruct: float/double')
+        const Vec2 = defineStruct([
+            ['x', ffi.FFI_TYPE_FLOAT],
+            ['y', ffi.FFI_TYPE_FLOAT],
+        ] as const)
+        t.check('Vec2.size is 8', 8, Vec2.size)
+        const buf3 = new ArrayBuffer(8)
+        const dv3 = new DataView(buf3)
+        dv3.setFloat32(0, 1.5, true)
+        dv3.setFloat32(4, -3.25, true)
+        const v = Vec2(buf3)
+        t.check('x is 1.5', 1.5, v.x)
+        t.check('y is -3.25', -3.25, v.y)
+
+        const dbl = defineStruct([
+            ['val', ffi.FFI_TYPE_DOUBLE],
+        ] as const)
+        const buf4 = new ArrayBuffer(8)
+        new DataView(buf4).setFloat64(0, Math.PI, true)
+        t.check('double reads PI', Math.PI, dbl(buf4).val)
     }
 }

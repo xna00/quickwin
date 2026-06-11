@@ -7,8 +7,8 @@
 static ffi_type *ffi_types[] = {
     &ffi_type_void,
     NULL,
-    NULL,
-    NULL,
+    &ffi_type_float,
+    &ffi_type_double,
     NULL,
     &ffi_type_uint8,
     &ffi_type_sint8,
@@ -44,15 +44,14 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
     ffi_type *arg_types[length];
     int64_t args[length];
     void *ffi_args[length];
+    // 所有参数统一用 int64_t 存储，ffi_args[i] 指向 args[i]
+    // 然后 ffi_call 根据 arg_types[i] 从对应地址读 N 个字节
+    // 在小端（x86/x64/ARM64）上：int64_t 的前 N 个字节就是低 N 个字节，结果正确
+    // float/double 通过 memcpy 写入 args[i]，避免 type-punning
+    // Windows 全平台均为小端，此处明确不做大端适配
     for (int i = 0; i < length; i++)
-    {
-        // 所有参数统一用 int64_t 存储，ffi_args[i] 指向 args[i]
-        // 然后 ffi_call 根据 arg_types[i] 读取对应字节数
-        // 在小端（x86/x64/ARM64）上：int64_t 的前 N 个字节就是低 N 个字节，结果正确
-        // 在大端上：int64_t 的前 N 个字节是高 N 字节，对于小值全是 0，结果错误
-        // Windows 全平台均为小端，此处明确不做大端适配
         ffi_args[i] = args + i;
-    }
+
     for (int i = 0; i < length; i++)
     {
         JSValue js_arg_type = JS_GetPropertyUint32(ctx, js_arg_types_array, i);
@@ -62,12 +61,23 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
         arg_types[i] = ffi_types[arg_type];
 
         JSValue js_arg = JS_GetPropertyUint32(ctx, js_args_array, i);
-        if (arg_type == FFI_TYPE_POINTER)
+        if (arg_type == FFI_TYPE_FLOAT)
+        {
+            double d;
+            JS_ToFloat64(ctx, &d, js_arg);
+            float f = (float)d;
+            memcpy(&args[i], &f, 4);
+        }
+        else if (arg_type == FFI_TYPE_DOUBLE)
+        {
+            double d;
+            JS_ToFloat64(ctx, &d, js_arg);
+            memcpy(&args[i], &d, 8);
+        }
+        else if (arg_type == FFI_TYPE_POINTER)
         {
             if (JS_IsNull(js_arg))
-            {
                 args[i] = (int64_t)NULL;
-            }
             else
             {
                 size_t size;
@@ -99,6 +109,10 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
 
     if (ret_type == FFI_TYPE_VOID)
         return JS_UNDEFINED;
+    if (ret_type == FFI_TYPE_FLOAT)
+        return JS_NewFloat64(ctx, *(float *)&ret);
+    if (ret_type == FFI_TYPE_DOUBLE)
+        return JS_NewFloat64(ctx, *(double *)&ret);
     if (ret_type == FFI_TYPE_POINTER && ret == (uint64_t)NULL)
         return JS_NULL;
     return JS_NewInt64(ctx, ret);
@@ -131,6 +145,8 @@ static const JSCFunctionListEntry ffi_funcs[] = {
 #define DEF(x) JS_PROP_INT32_DEF(#x, x, JS_PROP_CONFIGURABLE)
 static const JSCFunctionListEntry ffi_consts[] = {
     DEF(FFI_TYPE_VOID),
+    DEF(FFI_TYPE_FLOAT),
+    DEF(FFI_TYPE_DOUBLE),
     DEF(FFI_TYPE_UINT8),
     DEF(FFI_TYPE_SINT8),
     DEF(FFI_TYPE_UINT16),
