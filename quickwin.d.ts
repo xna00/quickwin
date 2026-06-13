@@ -394,6 +394,15 @@ declare module "gui" {
     function EnableWindow(hwnd: HWND, enable: boolean): void;
     function SetWindowPos(hwnd: HWND, insertAfter: number, x: number, y: number, width: number, height: number, flags: number): void;
 
+    const enum SetWindowPosFlag {
+        SWP_NOSIZE     = 0x0001,
+        SWP_NOMOVE     = 0x0002,
+        SWP_NOZORDER   = 0x0004,
+        SWP_NOACTIVATE = 0x0010,
+        SWP_SHOWWINDOW = 0x0040,
+        SWP_HIDEWINDOW = 0x0080,
+    }
+
     // Tray icon
     const enum NotifyIconCmd { ADD = 0, MODIFY = 1, DELETE = 2 }
     const enum NotifyIconFlag { MESSAGE = 1, ICON = 2, TIP = 4 }

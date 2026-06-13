@@ -14,11 +14,12 @@ const dpiFont = gui.CreateSystemDpiFont()
 type Container = gui.HWND
 type Props = Record<string, any>
 
-interface Instance {
+export interface Instance {
   hwnd: gui.HWND
   type: string
   props: Props
   children: Instance[]
+  lastRect?: { x: number; y: number; w: number; h: number }
 }
 
 type TextInstance = gui.HWND
@@ -27,14 +28,15 @@ type HostContext = Record<string, never>
 const instancesByHwnd = new Map<gui.HWND, Instance>()
 
 function runFlexLayout(inst: Instance) {
-  if (inst.children.length === 0) return
+  const children = inst.children.filter(c => typeof c === 'object') as Instance[]
+  if (children.length === 0) return
   const s = inst.props.style
   const flex: FlexStyle = s || {}
   if (flex.flexDirection === undefined && flex.gap === undefined && flex.justifyContent === undefined && flex.alignItems === undefined) {
-    for (const c of inst.children) runFlexLayout(c)
+    for (const c of children) runFlexLayout(c)
     return
   }
-  const visible = inst.children.filter(c => !c.props.hidden)
+  const visible = children.filter(c => !c.props.hidden)
   if (visible.length === 0) return
   const rect = gui.GetClientRect(inst.hwnd)
   if (!rect) { console.log('flex: no rect for', inst.hwnd, inst.type); return }
@@ -45,10 +47,13 @@ function runFlexLayout(inst: Instance) {
   for (let i = 0; i < results.length; i++) {
     const r = results[i]
     const child = visible[i]
+    const lr = child.lastRect
+    if (lr && lr.x === r.x && lr.y === r.y && lr.w === r.width && lr.h === r.height) continue
     console.log('flex: set', child.type, child.hwnd, 'to', r.x, r.y, r.width, r.height)
     gui.SetWindowPos(child.hwnd, 0, r.x, r.y, r.width, r.height, 0)
+    child.lastRect = { x: r.x, y: r.y, w: r.width, h: r.height }
   }
-  for (const c of inst.children) runFlexLayout(c)
+  for (const c of children) runFlexLayout(c)
 }
 
 /**
@@ -105,16 +110,18 @@ const hostConfig: QuickWinHostConfig = {
     return gui.CreateWindow('STATIC', text, gui.WindowStyle.CHILD, 0, 0, 0, 0, rootContainer, null)!
   },
 
-  appendInitialChild(parent: Instance, child: Instance) {
-    if (DEBUG) console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', child.hwnd)
-    gui.SetParent(child.hwnd, parent.hwnd)
-    parent.children.push(child)
+  appendInitialChild(parent: Instance, child: Instance | TextInstance) {
+    const childHwnd = (child as any).hwnd ?? child
+    if (DEBUG) console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', childHwnd)
+    gui.SetParent(childHwnd, parent.hwnd)
+    if (typeof child === 'object') parent.children.push(child)
   },
 
-  appendChild(parent: Instance, child: Instance) {
-    if (DEBUG) console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', child.hwnd)
-    gui.SetParent(child.hwnd, parent.hwnd)
-    parent.children.push(child)
+  appendChild(parent: Instance, child: Instance | TextInstance) {
+    const childHwnd = (child as any).hwnd ?? child
+    if (DEBUG) console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', childHwnd)
+    gui.SetParent(childHwnd, parent.hwnd)
+    if (typeof child === 'object') parent.children.push(child)
   },
 
   appendChildToContainer(container: Container, child: Instance | TextInstance) {
