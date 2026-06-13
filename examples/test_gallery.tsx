@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { render } from '../lib/react-qw/index.js'
 import { Button } from '../lib/react-qw/components/Button.js'
 import { Tab } from '../lib/react-qw/components/Tab.js'
+import { ListBox } from '../lib/react-qw/components/ListBox.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -24,9 +25,12 @@ function App() {
   const [count, setCount] = useState(0)
   const [disabled, setDisabled] = useState(true)
   const [tabIndex, setTabIndex] = useState(0)
+  const [listSel, setListSel] = useState(-1)
+  const [listItems, setListItems] = useState(['Apple', 'Banana', 'Cherry', 'Date', 'Elderberry', 'Fig', 'Grape'])
+  const [newItemCount, setNewItemCount] = useState(0)
 
   return (
-    <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:10, width:560, height:420, x:20, y:20}}>
+    <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:10, width:560, height:540, x:20, y:20}}>
       <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:10, width:560, height:30, alignItems:'stretch'}}>
         <Button onClick={() => setCount(c => c + 1)} style={{flexGrow:1}}>
           {`Clicked ${count} times`}
@@ -46,7 +50,17 @@ function App() {
       <Tab
         tabs={[
           { title: 'Buttons', content: <Button>Inside Tab 1</Button> },
-          { title: 'Info', content: <w type="STATIC" ws={VISIBLE}>Tab 2 content</w> },
+          { title: 'ListBox', content: (
+            <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:4}}>
+              <ListBox items={listItems} selectedIndex={listSel} onChange={(i) => setListSel(i)} style={{flexGrow:1}} />
+              <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:4, alignItems:'stretch', height:30}}>
+                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={listSel >= 0 ? `Selected: ${listItems[listSel]}` : '(none selected)'} />
+                <Button onClick={() => { setListItems(items => [...items, 'Item ' + String(newItemCount + 1)]); setNewItemCount(c => c + 1) }} style={{width:120}}>
+                  Add Item
+                </Button>
+              </w>
+            </w>
+          ) },
         ]}
         style={{flexGrow:1}}
         selectedIndex={tabIndex}
@@ -59,7 +73,7 @@ function App() {
 const hwnd = gui.CreateWindow(
   'Gallery', 'Component Gallery',
   gui.WindowStyle.OVERLAPPEDWINDOW,
-  100, 100, 640, 520, null, null
+  100, 100, 640, 640, null, null
 )
 
 function dumpRects(): void {

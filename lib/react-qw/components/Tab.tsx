@@ -84,7 +84,7 @@ export const Tab = forwardRef<gui.HWND, TabProps>(
         />
         <w type="STATIC" 
         ws={gui.WindowStyle.VISIBLE | gui.WindowStyle.CLIPCHILDREN} 
-        style={{ flexGrow: 1 } as any}>
+        style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'stretch' } as any}>
           {tabs[sel]?.content}
         </w>
       </w>
