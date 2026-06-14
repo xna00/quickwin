@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { render } from '../lib/react-qw/index.js'
 import { Button } from '../lib/react-qw/components/Button.js'
 import { Input } from '../lib/react-qw/components/Input.js'
+import { CheckBox } from '../lib/react-qw/components/CheckBox.js'
+import { ProgressBar } from '../lib/react-qw/components/ProgressBar.js'
+import { ComboBox } from '../lib/react-qw/components/ComboBox.js'
 import { Tab } from '../lib/react-qw/components/Tab.js'
 import { ListView } from '../lib/react-qw/components/ListView.js'
 import type { Column } from '../lib/react-qw/components/ListView.js'
@@ -30,8 +33,13 @@ interface Fruit {
 function App() {
   const [count, setCount] = useState(0)
   const [disabled, setDisabled] = useState(true)
-  const [tabIndex, setTabIndex] = useState(1)  // ListView tab for testing
+  const [inputText, setInputText] = useState('')
+  const [checkA, setCheckA] = useState(true)
+  const [checkB, setCheckB] = useState(false)
+  const [progress, setProgress] = useState(30)
   const [listSel, setListSel] = useState(0)
+  const [lbSel, setLbSel] = useState(0)
+  const [cbSel, setCbSel] = useState(-1)
   const [listData, setListData] = useState<Fruit[]>([
     { name: 'Apple', color: 'Red', origin: 'China' },
     { name: 'Banana', color: 'Yellow', origin: 'Philippines' },
@@ -41,86 +49,117 @@ function App() {
     { name: 'Fig', color: 'Purple', origin: 'Turkey' },
     { name: 'Grape', color: 'Green', origin: 'Italy' },
   ])
-  const [newItemCount, setNewItemCount] = useState(0)
-  const [lbItems, setLbItems] = useState(['Apple', 'Banana', 'Cherry', 'Date', 'Elderberry', 'Fig', 'Grape'])
-  const [lbSel, setLbSel] = useState(0)
-  const [lbNewCount, setLbNewCount] = useState(0)
   const [listCols, setListCols] = useState<Column<Fruit>[]>([
     { name: 'Name', dataIndex: 'name' },
     { name: 'Color', dataIndex: 'color' },
     { name: 'Origin', dataIndex: 'origin' },
   ])
+  const [newItemCount, setNewItemCount] = useState(7)
   const [colNewCount, setColNewCount] = useState(3)
-  const [inputText, setInputText] = useState('')
+  const lbItems = ['Apple', 'Banana', 'Cherry', 'Date', 'Elderberry', 'Fig', 'Grape']
+  const cbItems = ['Red', 'Green', 'Blue', 'Yellow', 'Purple', 'Orange']
 
   return (
-    <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:10, width:560, height:540, x:20, y:20}}>
-      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:10, width:560, height:30, alignItems:'stretch'}}>
-        <Button onClick={() => setCount(c => c + 1)} style={{flexGrow:1}}>
-          {`Clicked ${count} times`}
-        </Button>
-        <Button onClick={() => setCount(0)} style={{width:80}}>
-          Reset
-        </Button>
+    <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:8, width:780, height:660, x:20, y:20}}>
+      {/* ===== 三列上半区 ===== */}
+      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:10, flexGrow:1}}>
+
+        {/* --- 左列: Buttons + CheckBoxes --- */}
+        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, flexGrow:1}}>
+          <w type="STATIC" ws={VISIBLE} text="Buttons" style={{height:20}} />
+          <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', height:30}}>
+            <Button onClick={() => setCount(c => c + 1)} style={{flexGrow:1}}>
+              {`Clicked ${count} times`}
+            </Button>
+            <Button onClick={() => setCount(0)} style={{width:70}}>
+              Reset
+            </Button>
+          </w>
+          <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', height:30}}>
+            <Button onClick={() => setDisabled(d => !d)} style={{flexGrow:1}}>
+              {`Toggle disabled (${String(disabled)})`}
+            </Button>
+            <Button disabled={disabled} style={{width:80}}>
+              Disabled
+            </Button>
+          </w>
+          <w type="STATIC" ws={VISIBLE} text="CheckBoxes" style={{height:20}} />
+          <CheckBox checked={checkA} onChange={setCheckA} label={`Option A (${String(checkA)})`} style={{height:26}} />
+          <CheckBox checked={checkB} onChange={setCheckB} label={`Option B (${String(checkB)})`} style={{height:26}} />
+          <CheckBox label="Disabled checkbox" disabled style={{height:26}} />
+        </w>
+
+        {/* --- 中列: Input + ProgressBar --- */}
+        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, flexGrow:1}}>
+          <w type="STATIC" ws={VISIBLE} text="Input" style={{height:20}} />
+          <Input value={inputText} onChange={setInputText} placeholder="Type here..." style={{height:28}} />
+          <w type="STATIC" ws={VISIBLE} text={`You typed: ${inputText || '(empty)'}`} style={{height:20}} />
+          <Input placeholder="Password" password style={{height:28}} />
+          <Input placeholder="Number only" number style={{height:28}} />
+          <Input value="Read only" readonly style={{height:28}} />
+          <w type="STATIC" ws={VISIBLE} text="ProgressBar" style={{height:20}} />
+          <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', height:24}}>
+            <ProgressBar value={progress} max={100} smooth style={{flexGrow:1}} />
+            <w type="STATIC" ws={VISIBLE} text={`${progress}%`} style={{width:40}} />
+          </w>
+          <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', height:30}}>
+            <Button onClick={() => setProgress(p => Math.min(100, p + 10))} style={{flexGrow:1}}>
+              +10
+            </Button>
+            <Button onClick={() => setProgress(p => Math.max(0, p - 10))} style={{flexGrow:1}}>
+              -10
+            </Button>
+            <Button onClick={() => setProgress(0)} style={{width:50}}>
+              0
+            </Button>
+          </w>
+        </w>
+
+        {/* --- 右列: ListBox + ComboBox --- */}
+        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, flexGrow:1}}>
+          <w type="STATIC" ws={VISIBLE} text={`ListBox (sel=${lbSel >= 0 ? lbItems[lbSel] : 'none'})`} style={{height:20}} />
+          <ListBox items={lbItems} selectedIndex={lbSel} onChange={(i) => setLbSel(i)} style={{flexGrow:1}} />
+          <w type="STATIC" ws={VISIBLE} text="ComboBox" style={{height:20}} />
+          <ComboBox items={cbItems} selectedIndex={cbSel} onChange={(i) => setCbSel(i)} style={{height:26}} />
+          <w type="STATIC" ws={VISIBLE}
+            text={cbSel >= 0 ? `Selected: ${cbItems[cbSel]}` : '(none selected)'}
+            style={{height:20}} />
+        </w>
       </w>
-      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:10, width:560, height:30, alignItems:'stretch'}}>
-        <Button onClick={() => setDisabled(d => !d)} style={{flexGrow:1}}>
-          {`Toggle disabled (${String(disabled)})`}
-        </Button>
-        <Button disabled={disabled} style={{width:120}}>
-          Disabled
-        </Button>
-      </w>
+
+      {/* ===== Tab Demo ===== */}
+      <w type="STATIC" ws={VISIBLE} text="Tab" style={{height:20}} />
       <Tab
         tabs={[
-          { title: 'Buttons', content: <Button>Inside Tab 1</Button> },
-          { title: 'ListView', content: (
-            <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:4}}>
-              <ListView<Fruit> columns={listCols} data={listData} selectedIndex={listSel} onChange={(i) => setListSel(i)} style={{flexGrow:1}} />
-              <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:4, alignItems:'stretch', height:30}}>
-                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={listSel >= 0 ? `Selected: ${listData[listSel].name}` : '(none selected)'} />
-                <Button onClick={() => { setListData(d => [...d, { name: 'Item ' + String(newItemCount + 1), color: '', origin: '' }]); setNewItemCount(c => c + 1) }} style={{width:90}}>
-                  Add Item
-                </Button>
-                <Button onClick={() => {
-                  const n = colNewCount + 1
-                  setListCols(cols => [...cols, { name: 'Col ' + n, dataIndex: 'name' as keyof Fruit }])
-                  setColNewCount(n)
-                }} style={{width:90}}>
-                  Add Column
-                </Button>
-              </w>
-            </w>
-          ) },
-          { title: 'ListBox', content: (
-            <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:4}}>
-              <ListBox items={lbItems} selectedIndex={lbSel} onChange={(i) => setLbSel(i)} style={{flexGrow:1}} />
-              <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:4, alignItems:'stretch', height:30}}>
-                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={lbSel >= 0 ? `Selected: ${lbItems[lbSel]}` : '(none selected)'} />
-                <Button onClick={() => { setLbItems(items => [...items, 'Item ' + String(lbNewCount + 1)]); setLbNewCount(c => c + 1) }} style={{width:120}}>
-                  Add Item
-                </Button>
-              </w>
-            </w>
-          ) },
-          { title: 'Input', content: (
-            <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:6}}>
-              <w type="STATIC" ws={VISIBLE} text="Controlled:" style={{height:24}} />
-              <Input value={inputText} onChange={setInputText} style={{height:28}} />
-              <w type="STATIC" ws={VISIBLE} text={`You typed: ${inputText || '(empty)'}`} style={{height:24}} />
-              <w type="STATIC" ws={VISIBLE} text="Password:" style={{height:24}} />
-              <Input placeholder="Enter password" password style={{height:28}} />
-              <w type="STATIC" ws={VISIBLE} text="Number only:" style={{height:24}} />
-              <Input placeholder="123" number style={{height:28}} />
-              <w type="STATIC" ws={VISIBLE} text="Read only:" style={{height:24}} />
-              <Input value="This is read-only" readonly style={{height:28}} />
-            </w>
-          ) },
+          { title: 'Tab A', content: <w type="STATIC" ws={VISIBLE} text="Content A" style={{height:24}} /> },
+          { title: 'Tab B', content: <w type="STATIC" ws={VISIBLE} text="Content B" style={{height:24}} /> },
         ]}
-        style={{flexGrow:1}}
-        selectedIndex={tabIndex}
-        onChange={(i) => setTabIndex(i)}
+        style={{height:60}}
       />
+
+      {/* ===== 下半区: ListView ===== */}
+      <w type="STATIC" ws={VISIBLE} text={`ListView (sel=${listSel >= 0 ? listData[listSel].name : 'none'})`} style={{height:20}} />
+      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:2}}>
+        <ListView<Fruit>
+          columns={listCols}
+          data={listData}
+          selectedIndex={listSel}
+          onChange={(i) => setListSel(i)}
+          style={{flexGrow:1}}
+        />
+        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, width:100}}>
+          <Button onClick={() => { setListData(d => [...d, { name: 'NewItem ' + String(newItemCount + 1), color: '', origin: '' }]); setNewItemCount(c => c + 1) }} style={{height:28}}>
+            Add
+          </Button>
+          <Button onClick={() => {
+            const n = colNewCount + 1
+            setListCols(cols => [...cols, { name: 'Col' + n, dataIndex: 'name' as keyof Fruit }])
+            setColNewCount(n)
+          }} style={{height:28}}>
+            +Column
+          </Button>
+        </w>
+      </w>
     </w>
   )
 }
@@ -128,7 +167,7 @@ function App() {
 const hwnd = gui.CreateWindow(
   'Gallery', 'Component Gallery',
   gui.WindowStyle.OVERLAPPEDWINDOW,
-  100, 100, 640, 640, null, null
+  100, 100, 840, 720, null, null
 )
 
 if (hwnd) {

@@ -136,6 +136,7 @@ declare module "gui" {
 
     export const enum ComboBoxStyle {
         DROPDOWNLIST = 3, // 0x3
+        HASSTRINGS = 512, // 0x200
     }
 
     export const enum ListBoxStyle {
@@ -235,11 +236,26 @@ declare module "gui" {
 
     export const enum ComboBoxMsg {
         ADDSTRING = 323, // 0x143
+        SETCURSEL = 334, // 0x14E
+        GETCURSEL = 327, // 0x147
+        DELETESTRING = 324, // 0x144
+        RESETCONTENT = 331, // 0x14B
+        GETCOUNT = 326, // 0x146
+        GETLBTEXT = 328, // 0x148
+        GETLBTEXTLEN = 329, // 0x149
+    }
+
+    export const enum CbnCode {
+        SELCHANGE = 1, // 0x1
     }
 
     export const enum ProgressMsg {
         SETRANGE32 = 1030, // 0x406
         SETPOS = 1026, // 0x402
+    }
+
+    export const enum ProgressStyle {
+        SMOOTH = 1, // 0x1
     }
 
     export const enum Gwlp {

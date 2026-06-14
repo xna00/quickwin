@@ -148,6 +148,7 @@ static void print_enums(void) {
 
     printf("    export const enum ComboBoxStyle {\n");
     DEC(DROPDOWNLIST, CBS_DROPDOWNLIST);
+    DEC(HASSTRINGS, CBS_HASSTRINGS);
     printf("    }\n\n");
 
     printf("    export const enum ListBoxStyle {\n");
@@ -247,11 +248,26 @@ static void print_enums(void) {
 
     printf("    export const enum ComboBoxMsg {\n");
     DEC(ADDSTRING, CB_ADDSTRING);
+    DEC(SETCURSEL, CB_SETCURSEL);
+    DEC(GETCURSEL, CB_GETCURSEL);
+    DEC(DELETESTRING, CB_DELETESTRING);
+    DEC(RESETCONTENT, CB_RESETCONTENT);
+    DEC(GETCOUNT, CB_GETCOUNT);
+    DEC(GETLBTEXT, CB_GETLBTEXT);
+    DEC(GETLBTEXTLEN, CB_GETLBTEXTLEN);
+    printf("    }\n\n");
+
+    printf("    export const enum CbnCode {\n");
+    DEC(SELCHANGE, CBN_SELCHANGE);
     printf("    }\n\n");
 
     printf("    export const enum ProgressMsg {\n");
     DEC(SETRANGE32, PBM_SETRANGE32);
     DEC(SETPOS, PBM_SETPOS);
+    printf("    }\n\n");
+
+    printf("    export const enum ProgressStyle {\n");
+    DEC(SMOOTH, PBS_SMOOTH);
     printf("    }\n\n");
 
     printf("    export const enum Gwlp {\n");
