@@ -109,6 +109,10 @@ declare module "gui" {
         GROUPBOX = 7, // 0x7
     }
 
+    export const enum MouseKeyFlag {
+        MK_SHIFT = 4, // 0x4
+    }
+
     export const enum LbMsg {
         ADDSTRING = 384, // 0x180
         INSERTSTRING = 385, // 0x181

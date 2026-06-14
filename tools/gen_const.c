@@ -121,6 +121,10 @@ static void print_enums(void) {
     DEC(GROUPBOX, BS_GROUPBOX);
     printf("    }\n\n");
 
+    printf("    export const enum MouseKeyFlag {\n");
+    DEC(MK_SHIFT, MK_SHIFT);
+    printf("    }\n\n");
+
     printf("    export const enum LbMsg {\n");
     DEC(ADDSTRING, LB_ADDSTRING);
     DEC(INSERTSTRING, LB_INSERTSTRING);

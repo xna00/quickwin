@@ -170,8 +170,8 @@ function App() {
             {Array.from({ length: 20 }, (_, i) => (
               <w type="STATIC" ws={VISIBLE}
                 key={i}
-                text={`Item ${i + 1}`}
-                style={{height:28}}
+                text={`Item ${i + 1} - ${i === 0 ? 'here is a line so wide that the horizontal scrollbar appears for demonstration' : ''}`}
+                style={{width: i === 0 ? 500 : 200, height:28}}
               />
             ))}
           </ScrollView>
