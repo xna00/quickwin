@@ -146,9 +146,17 @@ endif
 clean:
 	@echo "Cleaning..."
 	rm -rf $(BUILD_DIR)
+	rm -f quickwin_const.d.ts tools/gen_const.exe
 	@echo "Clean complete"
 
 distclean: clean
+
+
+const: tools/gen_const.exe
+	tools/gen_const.exe > quickwin_const.d.ts
+
+tools/gen_const.exe: tools/gen_const.c
+	$(CC) -o $@ $<
 
 wamr:
 	@echo "Building WAMR..."
@@ -198,7 +206,7 @@ info:
 	@echo "  BUILD_DIR = $(BUILD_DIR)"
 	@echo "  DEBUG     = $(DEBUG)"
 
-js:
+js: const
 	@echo "Compiling TypeScript files to JavaScript using tsgo..."
 	@npx tsgo --project tsconfig.json
 	@echo "Bundling react entries with esbuild..."
@@ -230,6 +238,7 @@ help:
 	@echo "  clean     - Remove built files and JS files"
 	@echo "  distclean - Remove all generated files"
 	@echo "  info      - Show build configuration"
+	@echo "  const     - Generate quickwin_const.d.ts from tools/gen_const.c"
 	@echo "  js        - Compile TypeScript files to JavaScript"
 	@echo "  test      - Run all suites: make test"
 	@echo "  test      - Filter by name: make test TEST=wasm"

@@ -1,0 +1,324 @@
+#include <winsock2.h>
+#include <windows.h>
+#include <commctrl.h>
+#include <shellapi.h>
+#include <wolfssl/options.h>
+#include <wolfssl/ssl.h>
+#include <stdio.h>
+
+#define DEC(ts, c) printf("        %s = %d, // 0x%X\n", #ts, (int)(c), (unsigned)(c));
+
+static void print_enums(void) {
+    /* gui */
+    printf("declare module \"gui\" {\n\n");
+
+    printf("    export const enum GetWindowCmd {\n");
+    DEC(FIRST, GW_HWNDFIRST);
+    DEC(LAST, GW_HWNDLAST);
+    DEC(NEXT, GW_HWNDNEXT);
+    DEC(PREV, GW_HWNDPREV);
+    DEC(OWNER, GW_OWNER);
+    DEC(CHILD, GW_CHILD);
+    printf("    }\n\n");
+
+    printf("    export const enum SetWindowPosFlag {\n");
+    DEC(SWP_NOSIZE, SWP_NOSIZE);
+    DEC(SWP_NOMOVE, SWP_NOMOVE);
+    DEC(SWP_NOZORDER, SWP_NOZORDER);
+    DEC(SWP_NOACTIVATE, SWP_NOACTIVATE);
+    DEC(SWP_SHOWWINDOW, SWP_SHOWWINDOW);
+    DEC(SWP_HIDEWINDOW, SWP_HIDEWINDOW);
+    printf("    }\n\n");
+
+    printf("    export const enum NotifyIconCmd {\n");
+    DEC(ADD, NIM_ADD);
+    DEC(MODIFY, NIM_MODIFY);
+    DEC(DELETE, NIM_DELETE);
+    printf("    }\n\n");
+
+    printf("    export const enum NotifyIconFlag {\n");
+    DEC(MESSAGE, NIF_MESSAGE);
+    DEC(ICON, NIF_ICON);
+    DEC(TIP, NIF_TIP);
+    printf("    }\n\n");
+
+    printf("    export const enum MenuFlag {\n");
+    DEC(STRING, MF_STRING);
+    DEC(SEPARATOR, MF_SEPARATOR);
+    DEC(CHECKED, MF_CHECKED);
+    DEC(GRAYED, MF_GRAYED);
+    DEC(DISABLED, MF_DISABLED);
+    DEC(POPUP, MF_POPUP);
+    printf("    }\n\n");
+
+    printf("    export const enum WindowStyle {\n");
+    DEC(OVERLAPPEDWINDOW, WS_OVERLAPPEDWINDOW);
+    DEC(CHILD, WS_CHILD);
+    DEC(VISIBLE, WS_VISIBLE);
+    DEC(BORDER, WS_BORDER);
+    DEC(HSCROLL, WS_HSCROLL);
+    DEC(VSCROLL, WS_VSCROLL);
+    DEC(CLIPCHILDREN, WS_CLIPCHILDREN);
+    DEC(TABSTOP, WS_TABSTOP);
+    printf("    }\n\n");
+
+    printf("    export const enum WmMsg {\n");
+    DEC(CREATE, WM_CREATE);
+    DEC(DESTROY, WM_DESTROY);
+    DEC(CLOSE, WM_CLOSE);
+    DEC(QUIT, WM_QUIT);
+    DEC(PAINT, WM_PAINT);
+    DEC(COMMAND, WM_COMMAND);
+    DEC(SIZE, WM_SIZE);
+    DEC(CHAR, WM_CHAR);
+    DEC(KEYDOWN, WM_KEYDOWN);
+    DEC(KEYUP, WM_KEYUP);
+    DEC(MOUSEMOVE, WM_MOUSEMOVE);
+    DEC(LBUTTONDOWN, WM_LBUTTONDOWN);
+    DEC(LBUTTONUP, WM_LBUTTONUP);
+    DEC(LBUTTONDBLCLK, WM_LBUTTONDBLCLK);
+    DEC(RBUTTONDOWN, WM_RBUTTONDOWN);
+    DEC(RBUTTONUP, WM_RBUTTONUP);
+    DEC(SETFONT, WM_SETFONT);
+    DEC(HSCROLL, WM_HSCROLL);
+    DEC(VSCROLL, WM_VSCROLL);
+    DEC(MOUSEWHEEL, WM_MOUSEWHEEL);
+    DEC(NOTIFY, WM_NOTIFY);
+    printf("    }\n\n");
+
+    printf("    export const enum ScrollBar {\n");
+    DEC(HORZ, SB_HORZ);
+    DEC(VERT, SB_VERT);
+    printf("    }\n\n");
+
+    printf("    export const enum ScrollCmd {\n");
+    DEC(LINEUP, SB_LINEUP);
+    DEC(LINEDOWN, SB_LINEDOWN);
+    DEC(PAGEUP, SB_PAGEUP);
+    DEC(PAGEDOWN, SB_PAGEDOWN);
+    DEC(THUMBTRACK, SB_THUMBTRACK);
+    printf("    }\n\n");
+
+    printf("    export const enum ScrollInfoFlag {\n");
+    DEC(RANGE, SIF_RANGE);
+    DEC(PAGE, SIF_PAGE);
+    DEC(POS, SIF_POS);
+    DEC(ALL, SIF_ALL);
+    printf("    }\n\n");
+
+    printf("    export const enum SysMetrics {\n");
+    DEC(CXSCREEN, SM_CXSCREEN);
+    DEC(CYSCREEN, SM_CYSCREEN);
+    printf("    }\n\n");
+
+    printf("    export const enum ButtonStyle {\n");
+    DEC(PUSHBUTTON, BS_PUSHBUTTON);
+    DEC(DEFPUSHBUTTON, BS_DEFPUSHBUTTON);
+    DEC(CHECKBOX, BS_CHECKBOX);
+    DEC(AUTOCHECKBOX, BS_AUTOCHECKBOX);
+    DEC(GROUPBOX, BS_GROUPBOX);
+    printf("    }\n\n");
+
+    printf("    export const enum LbMsg {\n");
+    DEC(ADDSTRING, LB_ADDSTRING);
+    DEC(INSERTSTRING, LB_INSERTSTRING);
+    DEC(DELETESTRING, LB_DELETESTRING);
+    DEC(RESETCONTENT, LB_RESETCONTENT);
+    DEC(SETCURSEL, LB_SETCURSEL);
+    DEC(GETCURSEL, LB_GETCURSEL);
+    DEC(GETTEXT, LB_GETTEXT);
+    DEC(GETTEXTLEN, LB_GETTEXTLEN);
+    DEC(GETCOUNT, LB_GETCOUNT);
+    printf("    }\n\n");
+
+    printf("    export const enum StaticStyle {\n");
+    DEC(LEFT, SS_LEFT);
+    printf("    }\n\n");
+
+    printf("    export const enum EditStyle {\n");
+    DEC(LEFT, ES_LEFT);
+    DEC(MULTILINE, ES_MULTILINE);
+    DEC(PASSWORD, ES_PASSWORD);
+    DEC(AUTOVSCROLL, ES_AUTOVSCROLL);
+    DEC(AUTOHSCROLL, ES_AUTOHSCROLL);
+    DEC(READONLY, ES_READONLY);
+    DEC(WANTRETURN, ES_WANTRETURN);
+    DEC(NUMBER, ES_NUMBER);
+    printf("    }\n\n");
+
+    printf("    export const enum ComboBoxStyle {\n");
+    DEC(DROPDOWNLIST, CBS_DROPDOWNLIST);
+    printf("    }\n\n");
+
+    printf("    export const enum ListBoxStyle {\n");
+    DEC(NOTIFY, LBS_NOTIFY);
+    DEC(SORT, LBS_SORT);
+    DEC(MULTIPLESEL, LBS_MULTIPLESEL);
+    DEC(HASSTRINGS, LBS_HASSTRINGS);
+    DEC(NOINTEGRALHEIGHT, LBS_NOINTEGRALHEIGHT);
+    DEC(EXTENDEDSEL, LBS_EXTENDEDSEL);
+    DEC(STANDARD, LBS_STANDARD);
+    printf("    }\n\n");
+
+    printf("    export const enum LbnCode {\n");
+    DEC(SELCHANGE, LBN_SELCHANGE);
+    printf("    }\n\n");
+
+    printf("    export const enum TabStyle {\n");
+    DEC(FOCUSNEVER, TCS_FOCUSNEVER);
+    DEC(FIXEDWIDTH, TCS_FIXEDWIDTH);
+    printf("    }\n\n");
+
+    printf("    export const enum TcMsg {\n");
+    DEC(GETITEMCOUNT, TCM_GETITEMCOUNT);
+    DEC(INSERTITEMW, TCM_INSERTITEMW);
+    DEC(DELETEITEM, TCM_DELETEITEM);
+    DEC(DELETEALLITEMS, TCM_DELETEALLITEMS);
+    DEC(GETCURSEL, TCM_GETCURSEL);
+    DEC(SETCURSEL, TCM_SETCURSEL);
+    printf("    }\n\n");
+
+    printf("    export const enum TcNotifyCode {\n");
+    DEC(SELCHANGE, TCN_SELCHANGE);
+    printf("    }\n\n");
+
+    printf("    export const enum ListViewStyle {\n");
+    DEC(REPORT, LVS_REPORT);
+    DEC(SINGLESEL, LVS_SINGLESEL);
+    DEC(SHOWSELALWAYS, LVS_SHOWSELALWAYS);
+    DEC(NOSORTHEADER, LVS_NOSORTHEADER);
+    printf("    }\n\n");
+
+    printf("    export const enum LvExStyle {\n");
+    DEC(GRIDLINES, LVS_EX_GRIDLINES);
+    DEC(CHECKBOXES, LVS_EX_CHECKBOXES);
+    DEC(TRACKSELECT, LVS_EX_TRACKSELECT);
+    DEC(HEADERDRAGDROP, LVS_EX_HEADERDRAGDROP);
+    DEC(FULLROWSELECT, LVS_EX_FULLROWSELECT);
+    DEC(DOUBLEBUFFER, LVS_EX_DOUBLEBUFFER);
+    printf("    }\n\n");
+
+    printf("    export const enum LvMsg {\n");
+    DEC(GETITEMCOUNT, LVM_GETITEMCOUNT);
+    DEC(DELETEALLITEMS, LVM_DELETEALLITEMS);
+    DEC(GETNEXTITEM, LVM_GETNEXTITEM);
+    DEC(GETITEMSTATE, LVM_GETITEMSTATE);
+    DEC(SETITEMSTATE, LVM_SETITEMSTATE);
+    DEC(GETSELECTEDCOUNT, LVM_GETSELECTEDCOUNT);
+    DEC(SETEXTENDEDLISTVIEWSTYLE, LVM_SETEXTENDEDLISTVIEWSTYLE);
+    DEC(INSERTCOLUMNW, LVM_INSERTCOLUMNW);
+    DEC(GETSELECTIONMARK, LVM_GETSELECTIONMARK);
+    DEC(INSERTITEMW, LVM_INSERTITEMW);
+    DEC(SETITEMW, LVM_SETITEMW);
+    DEC(ENSUREVISIBLE, LVM_ENSUREVISIBLE);
+    DEC(SETCOLUMNWIDTH, LVM_SETCOLUMNWIDTH);
+    DEC(DELETECOLUMN, LVM_DELETECOLUMN);
+    printf("    }\n\n");
+
+    printf("    export const enum LvNotifyCode {\n");
+    DEC(ITEMCHANGED, LVN_ITEMCHANGED);
+    printf("    }\n\n");
+
+    printf("    export const enum ShowWindowCmd {\n");
+    DEC(HIDE, SW_HIDE);
+    DEC(SHOW, SW_SHOW);
+    printf("    }\n\n");
+
+    printf("    export const enum ButtonMsg {\n");
+    DEC(GETCHECK, BM_GETCHECK);
+    DEC(SETCHECK, BM_SETCHECK);
+    printf("    }\n\n");
+
+    printf("    export const enum ButtonCheckState {\n");
+    DEC(UNCHECKED, BST_UNCHECKED);
+    DEC(CHECKED, BST_CHECKED);
+    printf("    }\n\n");
+
+    printf("    export const enum EditMsg {\n");
+    DEC(SETCUEBANNER, EM_SETCUEBANNER);
+    DEC(SETPASSWORDCHAR, EM_SETPASSWORDCHAR);
+    printf("    }\n\n");
+
+    printf("    export const enum ComboBoxMsg {\n");
+    DEC(ADDSTRING, CB_ADDSTRING);
+    printf("    }\n\n");
+
+    printf("    export const enum ProgressMsg {\n");
+    DEC(SETRANGE32, PBM_SETRANGE32);
+    DEC(SETPOS, PBM_SETPOS);
+    printf("    }\n\n");
+
+    printf("    export const enum Gwlp {\n");
+    DEC(WNDPROC, GWLP_WNDPROC);
+    DEC(HINSTANCE, GWLP_HINSTANCE);
+    DEC(HWNDPARENT, GWLP_HWNDPARENT);
+    DEC(USERDATA, GWLP_USERDATA);
+    DEC(ID, GWLP_ID);
+    printf("    }\n\n");
+
+    printf("}\n\n");
+
+    /* sock */
+    printf("declare module \"sock\" {\n\n");
+
+    printf("    export const enum AddrFamily {\n");
+    DEC(AF_INET, AF_INET);
+    printf("    }\n\n");
+
+    printf("    export const enum SockType {\n");
+    DEC(SOCK_STREAM, SOCK_STREAM);
+    DEC(SOCK_DGRAM, SOCK_DGRAM);
+    printf("    }\n\n");
+
+    printf("    export const enum Protocol {\n");
+    DEC(IPPROTO_TCP, IPPROTO_TCP);
+    DEC(IPPROTO_UDP, IPPROTO_UDP);
+    printf("    }\n\n");
+
+    printf("    export const enum Shutdown {\n");
+    DEC(SD_RECEIVE, SD_RECEIVE);
+    DEC(SD_SEND, SD_SEND);
+    DEC(SD_BOTH, SD_BOTH);
+    printf("    }\n\n");
+
+    printf("    export const enum FdEvent {\n");
+    DEC(FD_READ, FD_READ);
+    DEC(FD_WRITE, FD_WRITE);
+    DEC(FD_CONNECT, FD_CONNECT);
+    DEC(FD_CLOSE, FD_CLOSE);
+    printf("    }\n\n");
+
+    printf("}\n\n");
+
+    /* wolfssl */
+    printf("declare module \"wolfssl\" {\n\n");
+
+    printf("    export const enum VerifyMode {\n");
+    DEC(SSL_VERIFY_NONE, SSL_VERIFY_NONE);
+    DEC(SSL_VERIFY_PEER, SSL_VERIFY_PEER);
+    printf("    }\n\n");
+
+    printf("    export const enum SniType {\n");
+    DEC(WOLFSSL_SNI_HOST_NAME, WOLFSSL_SNI_HOST_NAME);
+    printf("    }\n\n");
+
+    printf("    export const enum FileType {\n");
+    DEC(SSL_FILETYPE_PEM, SSL_FILETYPE_PEM);
+    printf("    }\n\n");
+
+    printf("    export const enum ReturnCode {\n");
+    DEC(SSL_SUCCESS, SSL_SUCCESS);
+    printf("    }\n\n");
+
+    printf("    export const enum ErrorCode {\n");
+    DEC(WOLFSSL_ERROR_WANT_READ, WOLFSSL_ERROR_WANT_READ);
+    DEC(WOLFSSL_ERROR_WANT_WRITE, WOLFSSL_ERROR_WANT_WRITE);
+    printf("    }\n\n");
+
+    printf("}\n");
+}
+
+int main(void) {
+    print_enums();
+    return 0;
+}

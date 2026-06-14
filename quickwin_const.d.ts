@@ -1,0 +1,304 @@
+declare module "gui" {
+
+    export const enum GetWindowCmd {
+        FIRST = 0, // 0x0
+        LAST = 1, // 0x1
+        NEXT = 2, // 0x2
+        PREV = 3, // 0x3
+        OWNER = 4, // 0x4
+        CHILD = 5, // 0x5
+    }
+
+    export const enum SetWindowPosFlag {
+        SWP_NOSIZE = 1, // 0x1
+        SWP_NOMOVE = 2, // 0x2
+        SWP_NOZORDER = 4, // 0x4
+        SWP_NOACTIVATE = 16, // 0x10
+        SWP_SHOWWINDOW = 64, // 0x40
+        SWP_HIDEWINDOW = 128, // 0x80
+    }
+
+    export const enum NotifyIconCmd {
+        ADD = 0, // 0x0
+        MODIFY = 1, // 0x1
+        DELETE = 2, // 0x2
+    }
+
+    export const enum NotifyIconFlag {
+        MESSAGE = 1, // 0x1
+        ICON = 2, // 0x2
+        TIP = 4, // 0x4
+    }
+
+    export const enum MenuFlag {
+        STRING = 0, // 0x0
+        SEPARATOR = 2048, // 0x800
+        CHECKED = 8, // 0x8
+        GRAYED = 1, // 0x1
+        DISABLED = 2, // 0x2
+        POPUP = 16, // 0x10
+    }
+
+    export const enum WindowStyle {
+        OVERLAPPEDWINDOW = 13565952, // 0xCF0000
+        CHILD = 1073741824, // 0x40000000
+        VISIBLE = 268435456, // 0x10000000
+        BORDER = 8388608, // 0x800000
+        HSCROLL = 1048576, // 0x100000
+        VSCROLL = 2097152, // 0x200000
+        CLIPCHILDREN = 33554432, // 0x2000000
+        TABSTOP = 65536, // 0x10000
+    }
+
+    export const enum WmMsg {
+        CREATE = 1, // 0x1
+        DESTROY = 2, // 0x2
+        CLOSE = 16, // 0x10
+        QUIT = 18, // 0x12
+        PAINT = 15, // 0xF
+        COMMAND = 273, // 0x111
+        SIZE = 5, // 0x5
+        CHAR = 258, // 0x102
+        KEYDOWN = 256, // 0x100
+        KEYUP = 257, // 0x101
+        MOUSEMOVE = 512, // 0x200
+        LBUTTONDOWN = 513, // 0x201
+        LBUTTONUP = 514, // 0x202
+        LBUTTONDBLCLK = 515, // 0x203
+        RBUTTONDOWN = 516, // 0x204
+        RBUTTONUP = 517, // 0x205
+        SETFONT = 48, // 0x30
+        HSCROLL = 276, // 0x114
+        VSCROLL = 277, // 0x115
+        MOUSEWHEEL = 522, // 0x20A
+        NOTIFY = 78, // 0x4E
+    }
+
+    export const enum ScrollBar {
+        HORZ = 0, // 0x0
+        VERT = 1, // 0x1
+    }
+
+    export const enum ScrollCmd {
+        LINEUP = 0, // 0x0
+        LINEDOWN = 1, // 0x1
+        PAGEUP = 2, // 0x2
+        PAGEDOWN = 3, // 0x3
+        THUMBTRACK = 5, // 0x5
+    }
+
+    export const enum ScrollInfoFlag {
+        RANGE = 1, // 0x1
+        PAGE = 2, // 0x2
+        POS = 4, // 0x4
+        ALL = 23, // 0x17
+    }
+
+    export const enum SysMetrics {
+        CXSCREEN = 0, // 0x0
+        CYSCREEN = 1, // 0x1
+    }
+
+    export const enum ButtonStyle {
+        PUSHBUTTON = 0, // 0x0
+        DEFPUSHBUTTON = 1, // 0x1
+        CHECKBOX = 2, // 0x2
+        AUTOCHECKBOX = 3, // 0x3
+        GROUPBOX = 7, // 0x7
+    }
+
+    export const enum LbMsg {
+        ADDSTRING = 384, // 0x180
+        INSERTSTRING = 385, // 0x181
+        DELETESTRING = 386, // 0x182
+        RESETCONTENT = 388, // 0x184
+        SETCURSEL = 390, // 0x186
+        GETCURSEL = 392, // 0x188
+        GETTEXT = 393, // 0x189
+        GETTEXTLEN = 394, // 0x18A
+        GETCOUNT = 395, // 0x18B
+    }
+
+    export const enum StaticStyle {
+        LEFT = 0, // 0x0
+    }
+
+    export const enum EditStyle {
+        LEFT = 0, // 0x0
+        MULTILINE = 4, // 0x4
+        PASSWORD = 32, // 0x20
+        AUTOVSCROLL = 64, // 0x40
+        AUTOHSCROLL = 128, // 0x80
+        READONLY = 2048, // 0x800
+        WANTRETURN = 4096, // 0x1000
+        NUMBER = 8192, // 0x2000
+    }
+
+    export const enum ComboBoxStyle {
+        DROPDOWNLIST = 3, // 0x3
+    }
+
+    export const enum ListBoxStyle {
+        NOTIFY = 1, // 0x1
+        SORT = 2, // 0x2
+        MULTIPLESEL = 8, // 0x8
+        HASSTRINGS = 64, // 0x40
+        NOINTEGRALHEIGHT = 256, // 0x100
+        EXTENDEDSEL = 2048, // 0x800
+        STANDARD = 10485763, // 0xA00003
+    }
+
+    export const enum LbnCode {
+        SELCHANGE = 1, // 0x1
+    }
+
+    export const enum TabStyle {
+        FOCUSNEVER = 32768, // 0x8000
+        FIXEDWIDTH = 1024, // 0x400
+    }
+
+    export const enum TcMsg {
+        GETITEMCOUNT = 4868, // 0x1304
+        INSERTITEMW = 4926, // 0x133E
+        DELETEITEM = 4872, // 0x1308
+        DELETEALLITEMS = 4873, // 0x1309
+        GETCURSEL = 4875, // 0x130B
+        SETCURSEL = 4876, // 0x130C
+    }
+
+    export const enum TcNotifyCode {
+        SELCHANGE = -551, // 0xFFFFFDD9
+    }
+
+    export const enum ListViewStyle {
+        REPORT = 1, // 0x1
+        SINGLESEL = 4, // 0x4
+        SHOWSELALWAYS = 8, // 0x8
+        NOSORTHEADER = 32768, // 0x8000
+    }
+
+    export const enum LvExStyle {
+        GRIDLINES = 1, // 0x1
+        CHECKBOXES = 4, // 0x4
+        TRACKSELECT = 8, // 0x8
+        HEADERDRAGDROP = 16, // 0x10
+        FULLROWSELECT = 32, // 0x20
+        DOUBLEBUFFER = 65536, // 0x10000
+    }
+
+    export const enum LvMsg {
+        GETITEMCOUNT = 4100, // 0x1004
+        DELETEALLITEMS = 4105, // 0x1009
+        GETNEXTITEM = 4108, // 0x100C
+        GETITEMSTATE = 4140, // 0x102C
+        SETITEMSTATE = 4139, // 0x102B
+        GETSELECTEDCOUNT = 4146, // 0x1032
+        SETEXTENDEDLISTVIEWSTYLE = 4150, // 0x1036
+        INSERTCOLUMNW = 4193, // 0x1061
+        GETSELECTIONMARK = 4162, // 0x1042
+        INSERTITEMW = 4173, // 0x104D
+        SETITEMW = 4172, // 0x104C
+        ENSUREVISIBLE = 4115, // 0x1013
+        SETCOLUMNWIDTH = 4126, // 0x101E
+        DELETECOLUMN = 4124, // 0x101C
+    }
+
+    export const enum LvNotifyCode {
+        ITEMCHANGED = -101, // 0xFFFFFF9B
+    }
+
+    export const enum ShowWindowCmd {
+        HIDE = 0, // 0x0
+        SHOW = 5, // 0x5
+    }
+
+    export const enum ButtonMsg {
+        GETCHECK = 240, // 0xF0
+        SETCHECK = 241, // 0xF1
+    }
+
+    export const enum ButtonCheckState {
+        UNCHECKED = 0, // 0x0
+        CHECKED = 1, // 0x1
+    }
+
+    export const enum EditMsg {
+        SETCUEBANNER = 5377, // 0x1501
+        SETPASSWORDCHAR = 204, // 0xCC
+    }
+
+    export const enum ComboBoxMsg {
+        ADDSTRING = 323, // 0x143
+    }
+
+    export const enum ProgressMsg {
+        SETRANGE32 = 1030, // 0x406
+        SETPOS = 1026, // 0x402
+    }
+
+    export const enum Gwlp {
+        WNDPROC = -4, // 0xFFFFFFFC
+        HINSTANCE = -6, // 0xFFFFFFFA
+        HWNDPARENT = -8, // 0xFFFFFFF8
+        USERDATA = -21, // 0xFFFFFFEB
+        ID = -12, // 0xFFFFFFF4
+    }
+
+}
+
+declare module "sock" {
+
+    export const enum AddrFamily {
+        AF_INET = 2, // 0x2
+    }
+
+    export const enum SockType {
+        SOCK_STREAM = 1, // 0x1
+        SOCK_DGRAM = 2, // 0x2
+    }
+
+    export const enum Protocol {
+        IPPROTO_TCP = 6, // 0x6
+        IPPROTO_UDP = 17, // 0x11
+    }
+
+    export const enum Shutdown {
+        SD_RECEIVE = 0, // 0x0
+        SD_SEND = 1, // 0x1
+        SD_BOTH = 2, // 0x2
+    }
+
+    export const enum FdEvent {
+        FD_READ = 1, // 0x1
+        FD_WRITE = 2, // 0x2
+        FD_CONNECT = 16, // 0x10
+        FD_CLOSE = 32, // 0x20
+    }
+
+}
+
+declare module "wolfssl" {
+
+    export const enum VerifyMode {
+        SSL_VERIFY_NONE = 0, // 0x0
+        SSL_VERIFY_PEER = 1, // 0x1
+    }
+
+    export const enum SniType {
+        WOLFSSL_SNI_HOST_NAME = 0, // 0x0
+    }
+
+    export const enum FileType {
+        SSL_FILETYPE_PEM = 1, // 0x1
+    }
+
+    export const enum ReturnCode {
+        SSL_SUCCESS = 1, // 0x1
+    }
+
+    export const enum ErrorCode {
+        WOLFSSL_ERROR_WANT_READ = 2, // 0x2
+        WOLFSSL_ERROR_WANT_WRITE = 3, // 0x3
+    }
+
+}
