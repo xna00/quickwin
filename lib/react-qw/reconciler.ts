@@ -15,14 +15,45 @@ type Container = gui.HWND
 type Props = Record<string, any>
 
 export interface Instance {
-  hwnd: gui.HWND
+  hwnd: gui.HWND | null
   type: string
   props: Props
   children: Instance[]
   lastRect?: { x: number; y: number; w: number; h: number }
 }
 
-type TextInstance = gui.HWND
+const DELAYED_CONTROLS = new Set(['SysListView32', 'SysTreeView32'])
+
+function isDelayedControl(winClass: string): boolean {
+  return DELAYED_CONTROLS.has(winClass)
+}
+
+function setupWindowProc(instance: Instance, hwnd: gui.HWND) {
+  instance.hwnd = hwnd
+  const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
+  instancesByHwnd.set(hwnd, instance)
+  gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
+    const result = gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
+    instance.props.onEvent?.({ hwnd, msg, wParam, lParam })
+    return result
+  })
+}
+
+function ensureChildWindow(child: Instance, parentHwnd: gui.HWND): gui.HWND {
+  if (child.hwnd !== null) return child.hwnd
+  const sty = child.props.style || {}
+  const ws = (child.props.ws ?? 0) | gui.WindowStyle.CHILD
+  const hwnd = gui.CreateWindow(
+    child.type, child.props.text || '', ws,
+    sty.x ?? 0, sty.y ?? 0,
+    sty.width ?? 100, sty.height ?? 30,
+    parentHwnd, null
+  )!
+  if (dpiFont) gui.SendMessage(hwnd, gui.WmMsg.SETFONT, dpiFont, 1)
+  setupWindowProc(child, hwnd)
+  return hwnd
+}
+
 type HostContext = Record<string, never>
 
 const instancesByHwnd = new Map<gui.HWND, Instance>()
@@ -38,7 +69,7 @@ function runFlexLayout(inst: Instance) {
   }
   const visible = children.filter(c => !c.props.hidden)
   if (visible.length === 0) return
-  const rect = gui.GetClientRect(inst.hwnd)
+  const rect = gui.GetClientRect(inst.hwnd!)
   if (!rect) { console.log('flex: no rect for', inst.hwnd, inst.type); return }
   const pw = rect.right - rect.left
   const ph = rect.bottom - rect.top
@@ -50,7 +81,7 @@ function runFlexLayout(inst: Instance) {
     const lr = child.lastRect
     if (lr && lr.x === r.x && lr.y === r.y && lr.w === r.width && lr.h === r.height) continue
     console.log('flex: set', child.type, child.hwnd, 'to', r.x, r.y, r.width, r.height)
-    gui.SetWindowPos(child.hwnd, 0, r.x, r.y, r.width, r.height, 0)
+    gui.SetWindowPos(child.hwnd!, 0, r.x, r.y, r.width, r.height, 0)
     child.lastRect = { x: r.x, y: r.y, w: r.width, h: r.height }
   }
   for (const c of children) runFlexLayout(c)
@@ -65,7 +96,7 @@ function runFlexLayout(inst: Instance) {
  * 解决方案：扩展补充缺失定义
  */
 type QuickWinHostConfig = ReactReconciler.HostConfig<
-  string, Props, Container, Instance, TextInstance,
+  string, Props, Container, Instance, Instance,
   never, never, never, gui.HWND,
   HostContext, never, any, -1, null
 > & {
@@ -81,6 +112,10 @@ const hostConfig: QuickWinHostConfig = {
   createInstance(type: string, props: Record<string, any>, rootContainer: Container) {
     if (DEBUG) console.log('[reconciler] createInstance called:', type, 'class=' + props.type)
     const winClass = props.type
+    if (isDelayedControl(winClass)) {
+      if (DEBUG) console.log('[reconciler] delayed control, skipping CreateWindow:', winClass)
+      return { hwnd: null, type: winClass, props, children: [] } as Instance
+    }
     const sty = props.style || {}
     // reconciler 创建的都是子窗口，确保 WS_CHILD 避免定位异常
     const ws = (props.ws ?? 0) | gui.WindowStyle.CHILD
@@ -93,70 +128,75 @@ const hostConfig: QuickWinHostConfig = {
     )!
     if (dpiFont) gui.SendMessage(hwnd, gui.WmMsg.SETFONT, dpiFont, 1)
     if (DEBUG) console.log('[reconciler] createInstance hwnd result:', hwnd, 'null?', hwnd === null)
-    const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
     const instance: Instance = { hwnd, type: winClass, props, children: [] }
-    instancesByHwnd.set(hwnd, instance)
-    // 始终设置窗口过程，以便后续 onEvent 更新能生效
-    gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
-      const result = gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
-      instance.props.onEvent?.({ hwnd, msg, wParam, lParam })
-      return result
-    })
+    setupWindowProc(instance, hwnd)
     return instance
   },
 
-  createTextInstance(text: string, rootContainer: Container) {
-    if (DEBUG) console.log('[reconciler] createTextInstance:', text)
-    return gui.CreateWindow('STATIC', text, gui.WindowStyle.CHILD, 0, 0, 0, 0, rootContainer, null)!
+  createTextInstance(_text: string, _rootContainer: Container) {
+    throw new Error('should never be called (shouldSetTextContent=true)')
   },
 
-  appendInitialChild(parent: Instance, child: Instance | TextInstance) {
-    const childHwnd = (child as any).hwnd ?? child
-    if (DEBUG) console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', childHwnd)
-    gui.SetParent(childHwnd, parent.hwnd)
-    if (typeof child === 'object') parent.children.push(child)
+  appendInitialChild(parent: Instance, child: Instance) {
+    if (child.hwnd === null) {
+      ensureChildWindow(child, parent.hwnd!)
+    } else {
+      gui.SetParent(child.hwnd, parent.hwnd)
+    }
+    if (DEBUG) console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', child.hwnd)
+    parent.children.push(child)
   },
 
-  appendChild(parent: Instance, child: Instance | TextInstance) {
-    const childHwnd = (child as any).hwnd ?? child
-    if (DEBUG) console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', childHwnd)
-    gui.SetParent(childHwnd, parent.hwnd)
-    if (typeof child === 'object') parent.children.push(child)
+  appendChild(parent: Instance, child: Instance) {
+    if (child.hwnd === null) {
+      ensureChildWindow(child, parent.hwnd!)
+    } else {
+      gui.SetParent(child.hwnd, parent.hwnd)
+    }
+    if (DEBUG) console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', child.hwnd)
+    parent.children.push(child)
   },
 
-  appendChildToContainer(container: Container, child: Instance | TextInstance) {
-    if (DEBUG) console.log('[reconciler] appendChildToContainer container:', container, 'child hwnd:', (child as any).hwnd ?? child)
-    gui.SetParent((child as any).hwnd ?? child, container)
+  appendChildToContainer(container: Container, child: Instance) {
+    if (child.hwnd === null) {
+      ensureChildWindow(child, container)
+    } else {
+      gui.SetParent(child.hwnd, container)
+    }
+    if (DEBUG) console.log('[reconciler] appendChildToContainer container:', container, 'child hwnd:', child.hwnd)
   },
 
   insertBefore(parent: Instance, child: Instance, beforeChild: Instance) {
+    if (child.hwnd === null) {
+      ensureChildWindow(child, parent.hwnd!)
+    } else {
+      gui.SetParent(child.hwnd, parent.hwnd)
+    }
     if (DEBUG) console.log('[reconciler] insertBefore parent:', parent.hwnd, 'child:', child.hwnd, 'before:', beforeChild.hwnd)
-    gui.SetParent(child.hwnd, parent.hwnd)
     const idx = parent.children.indexOf(beforeChild)
     if (idx >= 0) parent.children.splice(idx, 0, child)
   },
 
-  insertInContainerBefore(container: Container, child: Instance | TextInstance, _before: any) {
-    if (DEBUG) console.log('[reconciler] insertInContainerBefore container:', container, 'child hwnd:', (child as any).hwnd ?? child)
-    gui.SetParent((child as any).hwnd ?? child, container)
+  insertInContainerBefore(container: Container, child: Instance, _before: any) {
+    if (child.hwnd === null) {
+      ensureChildWindow(child, container)
+    } else {
+      gui.SetParent(child.hwnd, container)
+    }
+    if (DEBUG) console.log('[reconciler] insertInContainerBefore container:', container, 'child hwnd:', child.hwnd)
   },
 
   removeChild(parent: Instance, child: Instance) {
-    if (DEBUG) console.log('[reconciler] removeChild parent:', parent.hwnd, 'child:', child.hwnd)
-    gui.DestroyWindow(child.hwnd)
+    if (DEBUG) console.log('[reconciler] removeChild parent:', parent.hwnd, 'child:', child.hwnd, 'type:', child.type)
+    if (child.hwnd !== null) gui.DestroyWindow(child.hwnd)
     const idx = parent.children.indexOf(child)
     if (idx >= 0) parent.children.splice(idx, 1)
   },
 
-  removeChildFromContainer(container: Container, child: Instance | TextInstance) {
-    const hwnd = (child as any).hwnd ?? child
-    if (DEBUG) console.log('[reconciler] removeChildFromContainer container:', container, 'child hwnd:', hwnd)
-    const result = gui.DestroyWindow(hwnd)
-    if (DEBUG) console.log('[reconciler] DestroyWindow result:', result)
-  },
-
-  commitTextUpdate(textInstance: TextInstance, _oldText: string, newText: string) {
-    gui.SetWindowText(textInstance, newText)
+  removeChildFromContainer(container: Container, child: Instance) {
+    if (child.hwnd === null) return
+    if (DEBUG) console.log('[reconciler] removeChildFromContainer container:', container, 'child hwnd:', child.hwnd)
+    gui.DestroyWindow(child.hwnd)
   },
 
   commitUpdate(instance: Instance, _type: string, oldProps: Record<string, any>, newProps: Record<string, any>, _internalHandle: any) {
@@ -187,12 +227,12 @@ const hostConfig: QuickWinHostConfig = {
 
   resetTextContent(_instance: Instance) { },
 
-  shouldSetTextContent(_type: string, _props: Record<string, any>) {
-    return false
+  shouldSetTextContent(_type: string, props: Record<string, any>) {
+    return typeof props.children === 'string' || typeof props.children === 'number'
   },
 
   getPublicInstance(instance: Instance) {
-    return instance.hwnd
+    return instance.hwnd!
   },
 
   getRootHostContext(_rootContainer: Container) {
@@ -239,8 +279,8 @@ const hostConfig: QuickWinHostConfig = {
 
   shouldAttemptEagerTransition() { return false },
   detachDeletedInstance(instance: Instance) {
-    if (DEBUG) console.log('[reconciler] detachDeletedInstance hwnd:', instance.hwnd)
-    instancesByHwnd.delete(instance.hwnd)
+    if (DEBUG) console.log('[reconciler] detachDeletedInstance hwnd:', instance.hwnd, 'type:', instance.type)
+    if (instance.hwnd !== null) instancesByHwnd.delete(instance.hwnd)
   },
   
   // 添加必需方法

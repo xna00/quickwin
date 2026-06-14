@@ -1,13 +1,10 @@
 import '../lib/polyfill.js'
 import * as gui from 'gui'
-import * as os from 'os'
-
-
 import { useState } from 'react'
 import { render } from '../lib/react-qw/index.js'
 import { Button } from '../lib/react-qw/components/Button.js'
 import { Tab } from '../lib/react-qw/components/Tab.js'
-import { ListBox } from '../lib/react-qw/components/ListBox.js'
+import { ListView } from '../lib/react-qw/components/ListView.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -24,9 +21,17 @@ const CLIPCHILDREN = gui.WindowStyle.CLIPCHILDREN
 function App() {
   const [count, setCount] = useState(0)
   const [disabled, setDisabled] = useState(true)
-  const [tabIndex, setTabIndex] = useState(0)
-  const [listSel, setListSel] = useState(-1)
-  const [listItems, setListItems] = useState(['Apple', 'Banana', 'Cherry', 'Date', 'Elderberry', 'Fig', 'Grape'])
+  const [tabIndex, setTabIndex] = useState(1)  // ListView tab for testing
+  const [listSel, setListSel] = useState(0)
+  const [listItems, setListItems] = useState([
+    ['Apple', 'Red', 'China'],
+    ['Banana', 'Yellow', 'Philippines'],
+    ['Cherry', 'Dark Red', 'USA'],
+    ['Date', 'Brown', 'Middle East'],
+    ['Elderberry', 'Purple', 'Europe'],
+    ['Fig', 'Purple', 'Turkey'],
+    ['Grape', 'Green', 'Italy'],
+  ])
   const [newItemCount, setNewItemCount] = useState(0)
 
   return (
@@ -50,12 +55,12 @@ function App() {
       <Tab
         tabs={[
           { title: 'Buttons', content: <Button>Inside Tab 1</Button> },
-          { title: 'ListBox', content: (
+          { title: 'ListView', content: (
             <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:4}}>
-              <ListBox items={listItems} selectedIndex={listSel} onChange={(i) => setListSel(i)} style={{flexGrow:1}} />
+              <ListView columns={['Name', 'Color', 'Origin']} items={listItems} selectedIndex={listSel} onChange={(i) => setListSel(i)} style={{flexGrow:1}} />
               <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:4, alignItems:'stretch', height:30}}>
-                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={listSel >= 0 ? `Selected: ${listItems[listSel]}` : '(none selected)'} />
-                <Button onClick={() => { setListItems(items => [...items, 'Item ' + String(newItemCount + 1)]); setNewItemCount(c => c + 1) }} style={{width:120}}>
+                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={listSel >= 0 ? `Selected: ${listItems[listSel][0]}` : '(none selected)'} />
+                <Button onClick={() => { setListItems(items => [...items, ['Item ' + String(newItemCount + 1), '', '']]); setNewItemCount(c => c + 1) }} style={{width:120}}>
                   Add Item
                 </Button>
               </w>
@@ -76,28 +81,7 @@ const hwnd = gui.CreateWindow(
   100, 100, 640, 640, null, null
 )
 
-function dumpRects(): void {
-  function dumpChild(parent: gui.HWND, indent: string): void {
-    var ch = gui.GetWindow(parent, 5)
-    var n = 0
-    while (ch) {
-      n++
-      var wr = gui.GetWindowRect(ch)
-      var cr = gui.GetClientRect(ch)
-      var txt = String(gui.GetWindowText(ch) || '').slice(0, 16)
-      console.log(indent + '[' + n + '] hwnd=' + String(ch) + ' txt="' + txt + '" wr=' + JSON.stringify(wr) + ' cr=' + JSON.stringify(cr))
-      dumpChild(ch, indent + '  ')
-      ch = gui.GetWindow(ch, 2)
-    }
-    if (n === 0) console.log(indent + '(no children)')
-  }
-  console.log('--- dump rects ---')
-  if (hwnd) dumpChild(hwnd, '')
-  os.setTimeout(dumpRects, 3000)
-}
-
 if (hwnd) {
   gui.ShowWindow(hwnd)
   render(<App />, hwnd)
-  os.setTimeout(dumpRects, 3000)
 }

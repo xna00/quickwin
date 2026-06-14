@@ -9,28 +9,32 @@ export function applyProps(
   newProps: Record<string, any>,
   _oldProps: Record<string, any>,
 ) {
+  const hwnd = instance.hwnd!
   instance.props = newProps
 
-  if ('text' in newProps) {
-    // SetWindowText on EDIT resets cursor to position 0; save and restore it
+  const textVal = 'text' in newProps ? newProps.text : (
+    typeof newProps.children === 'string' ? newProps.children :
+    typeof newProps.children === 'number' ? String(newProps.children) : undefined
+  )
+  if (textVal !== undefined) {
     let cursor = -1
     if (instance.type === 'EDIT') {
-      const sel = gui.SendMessage(instance.hwnd, EM_GETSEL, 0, 0)
-      cursor = sel >>> 16 // caret position is in HIWORD
+      const sel = gui.SendMessage(hwnd, EM_GETSEL, 0, 0)
+      cursor = sel >>> 16
     }
-    gui.SetWindowText(instance.hwnd, newProps.text ?? '')
+    gui.SetWindowText(hwnd, textVal)
     if (instance.type === 'EDIT' && cursor >= 0) {
-      gui.SendMessage(instance.hwnd, EM_SETSEL, cursor, cursor)
+      gui.SendMessage(hwnd, EM_SETSEL, cursor, cursor)
     }
   }
   if ('disabled' in newProps) {
-    gui.EnableWindow(instance.hwnd, !newProps.disabled)
+    gui.EnableWindow(hwnd, !newProps.disabled)
   }
   if ('hidden' in newProps) {
-    gui.ShowWindow(instance.hwnd, newProps.hidden ? 0 : 5)
+    gui.ShowWindow(hwnd, newProps.hidden ? 0 : 5)
   }
   if ('visible' in newProps) {
-    gui.ShowWindow(instance.hwnd, newProps.visible)
+    gui.ShowWindow(hwnd, newProps.visible)
   }
   const s = newProps.style
   if (s && ('x' in s || 'y' in s || 'width' in s || 'height' in s)) {
@@ -40,7 +44,7 @@ export function applyProps(
     const newW = 'width' in s ? s.width : cur.w
     const newH = 'height' in s ? s.height : cur.h
     if (newX !== cur.x || newY !== cur.y || newW !== cur.w || newH !== cur.h) {
-      gui.SetWindowPos(instance.hwnd, 0, newX, newY, newW, newH, gui.SetWindowPosFlag.SWP_NOZORDER)
+      gui.SetWindowPos(hwnd, 0, newX, newY, newW, newH, gui.SetWindowPosFlag.SWP_NOZORDER)
       instance.lastRect = { x: newX, y: newY, w: newW, h: newH }
     }
   }

@@ -631,6 +631,12 @@ declare module "gui" {
         INSERTITEMW = 0x104D,
         SETITEMW = 0x104C,
         ENSUREVISIBLE = 0x1013,
+        SETCOLUMNWIDTH = 0x101C,
+    }
+
+    // ListView 通知码 (List-View Notification Codes)
+    export const enum LvNotifyCode {
+        ITEMCHANGED = -101,
     }
 
     // ShowWindow 命令 (ShowWindow nCmdShow)
