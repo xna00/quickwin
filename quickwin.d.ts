@@ -413,6 +413,11 @@ declare module "gui" {
     /** Sets scroll info; returns current scroll box position. Signature matches Win32 SetScrollInfo. */
     function SetScrollInfo(hwnd: HWND, bar: number, info: { pos?: number; page?: number; min?: number; max?: number }, redraw?: boolean): number;
 
+    /** Gets scroll info. Signature matches Win32 GetScrollInfo. */
+    function GetScrollInfo(hwnd: HWND, bar: number): { pos: number; page: number; min: number; max: number; trackPos: number };
+
+    /** Shows or hides a scroll bar. Signature matches Win32 ShowScrollBar. */
+    function ShowScrollBar(hwnd: HWND, bar: number, show: boolean): boolean;
 
 
 

@@ -11,6 +11,7 @@ import { Tab } from '../lib/react-qw/components/Tab.js'
 import { ListView } from '../lib/react-qw/components/ListView.js'
 import type { Column } from '../lib/react-qw/components/ListView.js'
 import { ListBox } from '../lib/react-qw/components/ListBox.js'
+import { ScrollView } from '../lib/react-qw/components/ScrollView.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -137,27 +138,43 @@ function App() {
         style={{height:60}}
       />
 
-      {/* ===== 下半区: ListView ===== */}
-      <w type="STATIC" ws={VISIBLE} text={`ListView (sel=${listSel >= 0 ? listData[listSel].name : 'none'})`} style={{height:20}} />
+      {/* ===== 下半区: ListView + ScrollView ===== */}
       <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:2}}>
-        <ListView<Fruit>
-          columns={listCols}
-          data={listData}
-          selectedIndex={listSel}
-          onChange={(i) => setListSel(i)}
-          style={{flexGrow:1}}
-        />
-        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, width:100}}>
-          <Button onClick={() => { setListData(d => [...d, { name: 'NewItem ' + String(newItemCount + 1), color: '', origin: '' }]); setNewItemCount(c => c + 1) }} style={{height:28}}>
-            Add
-          </Button>
-          <Button onClick={() => {
-            const n = colNewCount + 1
-            setListCols(cols => [...cols, { name: 'Col' + n, dataIndex: 'name' as keyof Fruit }])
-            setColNewCount(n)
-          }} style={{height:28}}>
-            +Column
-          </Button>
+        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:4, flexGrow:1}}>
+          <w type="STATIC" ws={VISIBLE} text={`ListView (sel=${listSel >= 0 ? listData[listSel].name : 'none'})`} style={{height:20}} />
+          <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:1}}>
+            <ListView<Fruit>
+              columns={listCols}
+              data={listData}
+              selectedIndex={listSel}
+              onChange={(i) => setListSel(i)}
+              style={{flexGrow:1}}
+            />
+            <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, width:100}}>
+              <Button onClick={() => { setListData(d => [...d, { name: 'NewItem ' + String(newItemCount + 1), color: '', origin: '' }]); setNewItemCount(c => c + 1) }} style={{height:28}}>
+                Add
+              </Button>
+              <Button onClick={() => {
+                const n = colNewCount + 1
+                setListCols(cols => [...cols, { name: 'Col' + n, dataIndex: 'name' as keyof Fruit }])
+                setColNewCount(n)
+              }} style={{height:28}}>
+                +Column
+              </Button>
+            </w>
+          </w>
+        </w>
+        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:4, flexGrow:1}}>
+          <w type="STATIC" ws={VISIBLE} text="ScrollView (scrollable)" style={{height:20}} />
+          <ScrollView style={{flexGrow:1}}>
+            {Array.from({ length: 20 }, (_, i) => (
+              <w type="STATIC" ws={VISIBLE}
+                key={i}
+                text={`Item ${i + 1}`}
+                style={{height:28}}
+              />
+            ))}
+          </ScrollView>
         </w>
       </w>
     </w>
@@ -167,7 +184,7 @@ function App() {
 const hwnd = gui.CreateWindow(
   'Gallery', 'Component Gallery',
   gui.WindowStyle.OVERLAPPEDWINDOW,
-  100, 100, 840, 720, null, null
+  100, 100, 840, 820, null, null
 )
 
 if (hwnd) {

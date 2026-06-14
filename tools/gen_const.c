@@ -84,6 +84,8 @@ static void print_enums(void) {
     DEC(VSCROLL, WM_VSCROLL);
     DEC(MOUSEWHEEL, WM_MOUSEWHEEL);
     DEC(NOTIFY, WM_NOTIFY);
+    DEC(NCHITTEST, WM_NCHITTEST);
+    DEC(NCLBUTTONDOWN, WM_NCLBUTTONDOWN);
     printf("    }\n\n");
 
     printf("    export const enum ScrollBar {\n");

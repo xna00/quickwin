@@ -742,6 +742,37 @@ static JSValue js_setScrollInfo(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_NewInt32(ctx, SetScrollInfo((HWND)hwnd, bar, &si, redraw));
 }
 
+static JSValue js_getScrollInfo(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    int64_t hwnd;
+    int32_t bar;
+    JS_ToInt64(ctx, &hwnd, argv[0]);
+    JS_ToInt32(ctx, &bar, argv[1]);
+    SCROLLINFO si;
+    memset(&si, 0, sizeof(si));
+    si.cbSize = sizeof(SCROLLINFO);
+    si.fMask = SIF_ALL;
+    GetScrollInfo((HWND)hwnd, bar, &si);
+    JSValue obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, obj, "pos",      JS_NewInt32(ctx, si.nPos));
+    JS_SetPropertyStr(ctx, obj, "page",     JS_NewInt32(ctx, si.nPage));
+    JS_SetPropertyStr(ctx, obj, "min",      JS_NewInt32(ctx, si.nMin));
+    JS_SetPropertyStr(ctx, obj, "max",      JS_NewInt32(ctx, si.nMax));
+    JS_SetPropertyStr(ctx, obj, "trackPos", JS_NewInt32(ctx, si.nTrackPos));
+    return obj;
+}
+
+static JSValue js_showScrollBar(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    int64_t hwnd;
+    int32_t bar;
+    BOOL show;
+    JS_ToInt64(ctx, &hwnd, argv[0]);
+    JS_ToInt32(ctx, &bar, argv[1]);
+    show = JS_ToBool(ctx, argv[2]);
+    return JS_NewBool(ctx, ShowScrollBar((HWND)hwnd, bar, show));
+}
+
 /* ─── Win32 parent/position/state ───────────────────────────── */
 
 static JSValue js_setParent(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
@@ -807,6 +838,8 @@ static const JSCFunctionListEntry gui_funcs[] = {
     JS_CFUNC_DEF("InvalidateRect", 3, js_invalidateRect),
     JS_CFUNC_DEF("IsWindow", 1, js_isWindow),
     JS_CFUNC_DEF("SetScrollInfo", 4, js_setScrollInfo),
+    JS_CFUNC_DEF("GetScrollInfo", 2, js_getScrollInfo),
+    JS_CFUNC_DEF("ShowScrollBar", 3, js_showScrollBar),
     JS_CFUNC_DEF("SetParent", 2, js_setParent),
     JS_CFUNC_DEF("EnableWindow", 2, js_enableWindow),
     JS_CFUNC_DEF("SetWindowPos", 7, js_setWindowPos),

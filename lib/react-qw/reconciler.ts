@@ -34,8 +34,8 @@ function setupWindowProc(instance: Instance, hwnd: gui.HWND) {
   instancesByHwnd.set(hwnd, instance)
   gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
     const result = gui.CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
-    instance.props.onEvent?.({ hwnd, msg, wParam, lParam })
-    return result
+    const override = instance.props.onEvent?.({ hwnd, msg, wParam, lParam })
+    return Number.isInteger(override) ? override : result
   })
 }
 

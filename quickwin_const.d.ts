@@ -72,6 +72,8 @@ declare module "gui" {
         VSCROLL = 277, // 0x115
         MOUSEWHEEL = 522, // 0x20A
         NOTIFY = 78, // 0x4E
+        NCHITTEST = 132, // 0x84
+        NCLBUTTONDOWN = 161, // 0xA1
     }
 
     export const enum ScrollBar {
