@@ -18,30 +18,14 @@ export const ListBox = forwardRef<gui.HWND, ListBoxProps>(
     const [internalIndex, setInternalIndex] = useState(defaultSelectedIndex)
     const isControlled = controlledIndex !== undefined
     const sel = isControlled ? controlledIndex : internalIndex
-    const wrapperRef = useRef<gui.HWND>(null)
-    const lbHwnd = useRef<gui.HWND>(null)
-    const dpiFont = gui.CreateSystemDpiFont()
+    const lbRef = useRef<gui.HWND>(null)
 
-    // LISTBOX 在 SetParent 后会把 WM_COMMAND 发给原父窗口而非当前父窗口，
-    // 所以不能走 reconciler 的 createInstance(rootContainer) → SetParent 链路。
-    // 改为直接 CreateWindow 挂到 wrapper（STATIC）下，绕过 reconciler，
-    // 保证 WM_COMMAND 直达 wrapper 的 onEvent。
-    useEffect(() => {
-      const parent = wrapperRef.current
-      if (!parent) return
-      let ws = gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle.VSCROLL | gui.WindowStyle.CHILD
-      ws |= gui.ListBoxStyle.HASSTRINGS | gui.ListBoxStyle.NOTIFY | gui.ListBoxStyle.NOINTEGRALHEIGHT
-      if (sort) ws |= gui.ListBoxStyle.SORT
-      const rect = gui.GetClientRect(parent)
-      const lb = gui.CreateWindow('LISTBOX', '', ws, 0, 0, rect ? rect.right : 100, rect ? rect.bottom : 100, parent, null)
-      if (!lb) return
-      if (dpiFont) gui.SendMessage(lb, gui.WmMsg.SETFONT, dpiFont, 1)
-      lbHwnd.current = lb
-      return () => { gui.DestroyWindow(lb); lbHwnd.current = null }
-    }, [])
+    const lbWs = gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle.VSCROLL
+      | gui.ListBoxStyle.HASSTRINGS | gui.ListBoxStyle.NOTIFY | gui.ListBoxStyle.NOINTEGRALHEIGHT
+      | (sort ? gui.ListBoxStyle.SORT : 0)
 
     useEffect(() => {
-      const h = lbHwnd.current
+      const h = lbRef.current
       if (!h) return
       gui.SendMessage(h, gui.LbMsg.RESETCONTENT, 0, 0)
       for (const item of items)
@@ -51,7 +35,7 @@ export const ListBox = forwardRef<gui.HWND, ListBoxProps>(
     }, [items])
 
     useEffect(() => {
-      const h = lbHwnd.current
+      const h = lbRef.current
       if (h) gui.SendMessage(h, gui.LbMsg.SETCURSEL, sel, 0)
     }, [sel])
 
@@ -60,25 +44,12 @@ export const ListBox = forwardRef<gui.HWND, ListBoxProps>(
         type="STATIC"
         ws={gui.WindowStyle.VISIBLE | gui.WindowStyle.CLIPCHILDREN}
         style={{ ...style, flexDirection: 'column', alignItems: 'stretch' }}
-        ref={(h: gui.HWND) => {
-          wrapperRef.current = h
-          if (typeof ref === 'function') ref(h)
-          else if (ref) ref.current = h
-        }}
+        ref={ref}
         onEvent={(e) => {
-          if (e.msg === gui.WmMsg.SIZE) {
-            const h = lbHwnd.current
-            if (h) {
-              const lp = e.lParam
-              const w = lp & 0xFFFF
-              const hh = (lp >> 16) & 0xFFFF
-              gui.SetWindowPos(h, 0, 0, 0, w, hh, 0)
-            }
-          }
           if (e.msg !== gui.WmMsg.COMMAND) return
           const code = (e.wParam >> 16) & 0xFFFF
           if (code === gui.LbnCode.SELCHANGE) {
-            const h = lbHwnd.current
+            const h = lbRef.current
             if (!h) return
             const newSel = gui.SendMessage(h, gui.LbMsg.GETCURSEL, 0, 0)
             if (newSel !== sel && newSel >= 0) {
@@ -87,7 +58,14 @@ export const ListBox = forwardRef<gui.HWND, ListBoxProps>(
             }
           }
         }}
-      />
+      >
+        <w type="LISTBOX" ws={lbWs}
+          style={{flexGrow:1}}
+          ref={(h: gui.HWND) => {
+            lbRef.current = h
+          }}
+        />
+      </w>
     )
   }
 )

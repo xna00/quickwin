@@ -5,6 +5,7 @@ import { render } from '../lib/react-qw/index.js'
 import { Button } from '../lib/react-qw/components/Button.js'
 import { Tab } from '../lib/react-qw/components/Tab.js'
 import { ListView } from '../lib/react-qw/components/ListView.js'
+import { ListBox } from '../lib/react-qw/components/ListBox.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -33,6 +34,9 @@ function App() {
     ['Grape', 'Green', 'Italy'],
   ])
   const [newItemCount, setNewItemCount] = useState(0)
+  const [lbItems, setLbItems] = useState(['Apple', 'Banana', 'Cherry', 'Date', 'Elderberry', 'Fig', 'Grape'])
+  const [lbSel, setLbSel] = useState(0)
+  const [lbNewCount, setLbNewCount] = useState(0)
 
   return (
     <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:10, width:560, height:540, x:20, y:20}}>
@@ -61,6 +65,17 @@ function App() {
               <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:4, alignItems:'stretch', height:30}}>
                 <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={listSel >= 0 ? `Selected: ${listItems[listSel][0]}` : '(none selected)'} />
                 <Button onClick={() => { setListItems(items => [...items, ['Item ' + String(newItemCount + 1), '', '']]); setNewItemCount(c => c + 1) }} style={{width:120}}>
+                  Add Item
+                </Button>
+              </w>
+            </w>
+          ) },
+          { title: 'ListBox', content: (
+            <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:4}}>
+              <ListBox items={lbItems} selectedIndex={lbSel} onChange={(i) => setLbSel(i)} style={{flexGrow:1}} />
+              <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:4, alignItems:'stretch', height:30}}>
+                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={lbSel >= 0 ? `Selected: ${lbItems[lbSel]}` : '(none selected)'} />
+                <Button onClick={() => { setLbItems(items => [...items, 'Item ' + String(lbNewCount + 1)]); setLbNewCount(c => c + 1) }} style={{width:120}}>
                   Add Item
                 </Button>
               </w>
