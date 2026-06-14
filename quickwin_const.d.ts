@@ -42,6 +42,7 @@ declare module "gui" {
     export const enum WindowStyle {
         OVERLAPPEDWINDOW = 13565952, // 0xCF0000
         CHILD = 1073741824, // 0x40000000
+        POPUP = -2147483648, // 0x80000000
         VISIBLE = 268435456, // 0x10000000
         BORDER = 8388608, // 0x800000
         HSCROLL = 1048576, // 0x100000
@@ -397,6 +398,35 @@ declare module "gui" {
         IGNORERETURN = 2, // 0x2
         TRANSPARENT = 1, // 0x1
         USEVISUALSTYLE = 8, // 0x8
+    }
+
+    export const enum TtMsg {
+        ACTIVATE = 1025, // 0x401
+        ADDTOOLW = 1074, // 0x432
+        DELTOOLW = 1075, // 0x433
+        SETTOOLINFOW = 1078, // 0x436
+        UPDATETIPTEXTW = 1081, // 0x439
+        SETMAXTIPWIDTH = 1048, // 0x418
+        SETDELAYTIME = 1027, // 0x403
+        POPUP = 1058, // 0x422
+    }
+
+    export const enum TooltipStyle {
+        ALWAYSTIP = 1, // 0x1
+        NOPREFIX = 2, // 0x2
+        BALLOON = 64, // 0x40
+        CLOSE = 128, // 0x80
+        USEVISUALSTYLE = 256, // 0x100
+    }
+
+    export const enum TtToolFlag {
+        SUBCLASS = 16, // 0x10
+        IDISHWND = 1, // 0x1
+        CENTERTIP = 2, // 0x2
+        TRACK = 32, // 0x20
+        ABSOLUTE = 128, // 0x80
+        TRANSPARENT = 256, // 0x100
+        DI_SETITEM = 32768, // 0x8000
     }
 
 }

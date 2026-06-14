@@ -17,6 +17,8 @@ import { Slider } from '../lib/react-qw/components/Slider.js'
 import { TreeView, type TreeNode } from '../lib/react-qw/components/TreeView.js'
 import { DateTimePicker } from '../lib/react-qw/components/DateTimePicker.js'
 import { Link } from '../lib/react-qw/components/Link.js'
+import { Tooltip } from '../lib/react-qw/components/Tooltip.js'
+import { startDumpRects } from '../lib/dumpRects.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -104,9 +106,11 @@ function App() {
         <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, flexGrow:1}}>
           <w type="STATIC" ws={VISIBLE} text="Buttons" style={{height:20}} />
           <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', height:30}}>
-            <Button onClick={() => setCount(c => c + 1)} style={{flexGrow:1}}>
-              {`Clicked ${count} times`}
-            </Button>
+            <Tooltip text="Click to increment counter" balloon>
+              <Button onClick={() => setCount(c => c + 1)} style={{flexGrow:1}}>
+                {`Clicked ${count} times`}
+              </Button>
+            </Tooltip>
             <Button onClick={() => setCount(0)} style={{width:70}}>
               Reset
             </Button>
@@ -252,4 +256,5 @@ const hwnd = gui.CreateWindow(
 if (hwnd) {
   render(<App />, hwnd)
   gui.ShowWindow(hwnd)
+  startDumpRects(hwnd)
 }

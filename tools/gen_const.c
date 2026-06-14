@@ -54,6 +54,7 @@ static void print_enums(void) {
     printf("    export const enum WindowStyle {\n");
     DEC(OVERLAPPEDWINDOW, WS_OVERLAPPEDWINDOW);
     DEC(CHILD, WS_CHILD);
+    DEC(POPUP, WS_POPUP);
     DEC(VISIBLE, WS_VISIBLE);
     DEC(BORDER, WS_BORDER);
     DEC(HSCROLL, WS_HSCROLL);
@@ -409,6 +410,35 @@ static void print_enums(void) {
     DEC(IGNORERETURN, LWS_IGNORERETURN);
     DEC(TRANSPARENT, LWS_TRANSPARENT);
     DEC(USEVISUALSTYLE, LWS_USEVISUALSTYLE);
+    printf("    }\n\n");
+
+    printf("    export const enum TtMsg {\n");
+    DEC(ACTIVATE, TTM_ACTIVATE);
+    DEC(ADDTOOLW, TTM_ADDTOOLW);
+    DEC(DELTOOLW, TTM_DELTOOLW);
+    DEC(SETTOOLINFOW, TTM_SETTOOLINFOW);
+    DEC(UPDATETIPTEXTW, TTM_UPDATETIPTEXTW);
+    DEC(SETMAXTIPWIDTH, TTM_SETMAXTIPWIDTH);
+    DEC(SETDELAYTIME, TTM_SETDELAYTIME);
+    DEC(POPUP, TTM_POPUP);
+    printf("    }\n\n");
+
+    printf("    export const enum TooltipStyle {\n");
+    DEC(ALWAYSTIP, TTS_ALWAYSTIP);
+    DEC(NOPREFIX, TTS_NOPREFIX);
+    DEC(BALLOON, TTS_BALLOON);
+    DEC(CLOSE, TTS_CLOSE);
+    DEC(USEVISUALSTYLE, TTS_USEVISUALSTYLE);
+    printf("    }\n\n");
+
+    printf("    export const enum TtToolFlag {\n");
+    DEC(SUBCLASS, TTF_SUBCLASS);
+    DEC(IDISHWND, TTF_IDISHWND);
+    DEC(CENTERTIP, TTF_CENTERTIP);
+    DEC(TRACK, TTF_TRACK);
+    DEC(ABSOLUTE, TTF_ABSOLUTE);
+    DEC(TRANSPARENT, TTF_TRANSPARENT);
+    DEC(DI_SETITEM, TTF_DI_SETITEM);
     printf("    }\n\n");
 
     printf("}\n\n");
