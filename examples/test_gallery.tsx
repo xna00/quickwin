@@ -14,6 +14,7 @@ import { ListBox } from '../lib/react-qw/components/ListBox.js'
 import { ScrollView } from '../lib/react-qw/components/ScrollView.js'
 import { RadioButton } from '../lib/react-qw/components/RadioButton.js'
 import { Slider } from '../lib/react-qw/components/Slider.js'
+import { TreeView, type TreeNode } from '../lib/react-qw/components/TreeView.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -33,6 +34,32 @@ interface Fruit {
   origin: string
 }
 
+const treeData: TreeNode[] = [
+  {
+    key: 'fruits', label: 'Fruits',
+    children: [
+      { key: 'apple', label: 'Apple' },
+      { key: 'banana', label: 'Banana' },
+      { key: 'cherry', label: 'Cherry' },
+    ],
+  },
+  {
+    key: 'veggies', label: 'Vegetables',
+    children: [
+      { key: 'carrot', label: 'Carrot' },
+      { key: 'broccoli', label: 'Broccoli' },
+    ],
+  },
+  {
+    key: 'meats', label: 'Meats',
+    children: [
+      { key: 'chicken', label: 'Chicken' },
+      { key: 'beef', label: 'Beef' },
+      { key: 'pork', label: 'Pork' },
+    ],
+  },
+]
+
 function App() {
   const [count, setCount] = useState(0)
   const [disabled, setDisabled] = useState(true)
@@ -45,6 +72,7 @@ function App() {
   const [cbSel, setCbSel] = useState(-1)
   const [radio, setRadio] = useState('a')
   const [sliderVal, setSliderVal] = useState(50)
+  const [treeSel, setTreeSel] = useState<TreeNode | null>(null)
   const [listData, setListData] = useState<Fruit[]>([
     { name: 'Apple', color: 'Red', origin: 'China' },
     { name: 'Banana', color: 'Yellow', origin: 'Philippines' },
@@ -148,7 +176,7 @@ function App() {
         style={{height:60}}
       />
 
-      {/* ===== 下半区: ListView + ScrollView ===== */}
+      {/* ===== 下半区: ListView + ScrollView + TreeView ===== */}
       <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:3}}>
         <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:4, flexGrow:1}}>
           <w type="STATIC" ws={VISIBLE} text={`ListView (sel=${listSel >= 0 ? listData[listSel].name : 'none'})`} style={{height:20}} />
@@ -185,6 +213,10 @@ function App() {
               />
             ))}
           </ScrollView>
+        </w>
+        <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:4, flexGrow:1}}>
+          <w type="STATIC" ws={VISIBLE} text={`TreeView (sel=${treeSel?.label ?? 'none'})`} style={{height:20}} />
+          <TreeView data={treeData} onSelect={setTreeSel} style={{flexGrow:1}} />
         </w>
       </w>
     </w>

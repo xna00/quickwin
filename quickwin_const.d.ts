@@ -287,6 +287,69 @@ declare module "gui" {
         SETPAGESIZE = 1045, // 0x415
     }
 
+    export const enum TreeViewStyle {
+        HASBUTTONS = 1, // 0x1
+        HASLINES = 2, // 0x2
+        LINESATROOT = 4, // 0x4
+        SHOWSELALWAYS = 32, // 0x20
+        CHECKBOXES = 256, // 0x100
+        NOTOOLTIPS = 128, // 0x80
+        TRACKSELECT = 512, // 0x200
+    }
+
+    export const enum TvMsg {
+        INSERTITEMW = 4402, // 0x1132
+        DELETEITEM = 4353, // 0x1101
+        EXPAND = 4354, // 0x1102
+        GETNEXTITEM = 4362, // 0x110A
+        SELECTITEM = 4363, // 0x110B
+        GETITEMW = 4414, // 0x113E
+        SETITEMW = 4415, // 0x113F
+        GETCOUNT = 4357, // 0x1105
+        ENSUREVISIBLE = 4372, // 0x1114
+        SETITEMHEIGHT = 4379, // 0x111B
+        SETEXTENDEDSTYLE = 4396, // 0x112C
+    }
+
+    export const enum TvExStyle {
+        DOUBLEBUFFER = 4, // 0x4
+    }
+
+    export const enum TvNotifyCode {
+        SELCHANGEDW = -451, // 0xFFFFFE3D
+        ITEMEXPANDEDW = -455, // 0xFFFFFE39
+        ITEMEXPANDINGW = -454, // 0xFFFFFE3A
+    }
+
+    export const enum TvExpandCmd {
+        COLLAPSE = 1, // 0x1
+        EXPAND = 2, // 0x2
+        TOGGLE = 3, // 0x3
+        COLLAPSERESET = 32768, // 0x8000
+    }
+
+    export const enum TvIfFlag {
+        TEXT = 1, // 0x1
+        IMAGE = 2, // 0x2
+        SELECTEDIMAGE = 32, // 0x20
+        STATE = 8, // 0x8
+        CHILDREN = 64, // 0x40
+        PARAM = 4, // 0x4
+        HANDLE = 16, // 0x10
+    }
+
+    export const enum TvGnRelative {
+        ROOT = 0, // 0x0
+        NEXT = 1, // 0x1
+        PREVIOUS = 2, // 0x2
+        PARENT = 3, // 0x3
+        CHILD = 4, // 0x4
+        FIRSTVISIBLE = 5, // 0x5
+        LASTVISIBLE = 10, // 0xA
+        CARET = 9, // 0x9
+        DROPHILITE = 8, // 0x8
+    }
+
     export const enum Gwlp {
         WNDPROC = -4, // 0xFFFFFFFC
         HINSTANCE = -6, // 0xFFFFFFFA

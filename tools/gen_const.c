@@ -299,6 +299,69 @@ static void print_enums(void) {
     DEC(SETPAGESIZE, TBM_SETPAGESIZE);
     printf("    }\n\n");
 
+    printf("    export const enum TreeViewStyle {\n");
+    DEC(HASBUTTONS, TVS_HASBUTTONS);
+    DEC(HASLINES, TVS_HASLINES);
+    DEC(LINESATROOT, TVS_LINESATROOT);
+    DEC(SHOWSELALWAYS, TVS_SHOWSELALWAYS);
+    DEC(CHECKBOXES, TVS_CHECKBOXES);
+    DEC(NOTOOLTIPS, TVS_NOTOOLTIPS);
+    DEC(TRACKSELECT, TVS_TRACKSELECT);
+    printf("    }\n\n");
+
+    printf("    export const enum TvMsg {\n");
+    DEC(INSERTITEMW, TVM_INSERTITEMW);
+    DEC(DELETEITEM, TVM_DELETEITEM);
+    DEC(EXPAND, TVM_EXPAND);
+    DEC(GETNEXTITEM, TVM_GETNEXTITEM);
+    DEC(SELECTITEM, TVM_SELECTITEM);
+    DEC(GETITEMW, TVM_GETITEMW);
+    DEC(SETITEMW, TVM_SETITEMW);
+    DEC(GETCOUNT, TVM_GETCOUNT);
+    DEC(ENSUREVISIBLE, TVM_ENSUREVISIBLE);
+    DEC(SETITEMHEIGHT, TVM_SETITEMHEIGHT);
+    DEC(SETEXTENDEDSTYLE, TVM_SETEXTENDEDSTYLE);
+    printf("    }\n\n");
+
+    printf("    export const enum TvExStyle {\n");
+    DEC(DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
+    printf("    }\n\n");
+
+    printf("    export const enum TvNotifyCode {\n");
+    DEC(SELCHANGEDW, TVN_SELCHANGEDW);
+    DEC(ITEMEXPANDEDW, TVN_ITEMEXPANDEDW);
+    DEC(ITEMEXPANDINGW, TVN_ITEMEXPANDINGW);
+    printf("    }\n\n");
+
+    printf("    export const enum TvExpandCmd {\n");
+    DEC(COLLAPSE, TVE_COLLAPSE);
+    DEC(EXPAND, TVE_EXPAND);
+    DEC(TOGGLE, TVE_TOGGLE);
+    DEC(COLLAPSERESET, TVE_COLLAPSERESET);
+    printf("    }\n\n");
+
+    printf("    export const enum TvIfFlag {\n");
+    DEC(TEXT, TVIF_TEXT);
+    DEC(IMAGE, TVIF_IMAGE);
+    DEC(SELECTEDIMAGE, TVIF_SELECTEDIMAGE);
+    DEC(STATE, TVIF_STATE);
+    DEC(CHILDREN, TVIF_CHILDREN);
+    DEC(PARAM, TVIF_PARAM);
+    DEC(HANDLE, TVIF_HANDLE);
+    printf("    }\n\n");
+
+    printf("    export const enum TvGnRelative {\n");
+    DEC(ROOT, TVGN_ROOT);
+    DEC(NEXT, TVGN_NEXT);
+    DEC(PREVIOUS, TVGN_PREVIOUS);
+    DEC(PARENT, TVGN_PARENT);
+    DEC(CHILD, TVGN_CHILD);
+    DEC(FIRSTVISIBLE, TVGN_FIRSTVISIBLE);
+    DEC(LASTVISIBLE, TVGN_LASTVISIBLE);
+    DEC(CARET, TVGN_CARET);
+    DEC(DROPHILITE, TVGN_DROPHILITE);
+    printf("    }\n\n");
+
     printf("    export const enum Gwlp {\n");
     DEC(WNDPROC, GWLP_WNDPROC);
     DEC(HINSTANCE, GWLP_HINSTANCE);
