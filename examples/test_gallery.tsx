@@ -16,6 +16,7 @@ import { RadioButton } from '../lib/react-qw/components/RadioButton.js'
 import { Slider } from '../lib/react-qw/components/Slider.js'
 import { TreeView, type TreeNode } from '../lib/react-qw/components/TreeView.js'
 import { DateTimePicker } from '../lib/react-qw/components/DateTimePicker.js'
+import { Link } from '../lib/react-qw/components/Link.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -186,6 +187,15 @@ function App() {
         <DateTimePicker value={dtDate} onChange={setDtDate} format="time" style={{flexGrow:1}} />
       </w>
 
+      {/* ===== SysLink ===== */}
+      <w type="STATIC" ws={VISIBLE} text="SysLink" style={{height:20}} />
+      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:8, alignItems:'stretch', height:28}}>
+        <Link href="https://example.com" onClick={(url) => console.log('Link clicked:', url)} style={{flexGrow:1}}>
+          Example Link
+        </Link>
+        <Link href="https://github.com" onClick={(url) => console.log('Link clicked:', url)} style={{flexGrow:1}} />
+      </w>
+
       {/* ===== 下半区: ListView + ScrollView + TreeView ===== */}
       <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:3}}>
         <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:4, flexGrow:1}}>
@@ -240,6 +250,6 @@ const hwnd = gui.CreateWindow(
 )
 
 if (hwnd) {
-  gui.ShowWindow(hwnd)
   render(<App />, hwnd)
+  gui.ShowWindow(hwnd)
 }

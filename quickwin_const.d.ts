@@ -381,6 +381,24 @@ declare module "gui" {
         ID = -12, // 0xFFFFFFF4
     }
 
+    export const enum SysLinkMsg {
+        GETIDEALHEIGHT = 1793, // 0x701
+        SETITEM = 1794, // 0x702
+        GETITEM = 1795, // 0x703
+        HITTEST = 1792, // 0x700
+    }
+
+    export const enum SysLinkNotifyCode {
+        CLICK = -2, // 0xFFFFFFFE
+        RETURN = -4, // 0xFFFFFFFC
+    }
+
+    export const enum LinkStyle {
+        IGNORERETURN = 2, // 0x2
+        TRANSPARENT = 1, // 0x1
+        USEVISUALSTYLE = 8, // 0x8
+    }
+
 }
 
 declare module "sock" {

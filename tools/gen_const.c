@@ -393,6 +393,24 @@ static void print_enums(void) {
     DEC(ID, GWLP_ID);
     printf("    }\n\n");
 
+    printf("    export const enum SysLinkMsg {\n");
+    DEC(GETIDEALHEIGHT, LM_GETIDEALHEIGHT);
+    DEC(SETITEM, LM_SETITEM);
+    DEC(GETITEM, LM_GETITEM);
+    DEC(HITTEST, LM_HITTEST);
+    printf("    }\n\n");
+
+    printf("    export const enum SysLinkNotifyCode {\n");
+    DEC(CLICK, NM_CLICK);
+    DEC(RETURN, NM_RETURN);
+    printf("    }\n\n");
+
+    printf("    export const enum LinkStyle {\n");
+    DEC(IGNORERETURN, LWS_IGNORERETURN);
+    DEC(TRANSPARENT, LWS_TRANSPARENT);
+    DEC(USEVISUALSTYLE, LWS_USEVISUALSTYLE);
+    printf("    }\n\n");
+
     printf("}\n\n");
 
     /* sock */
