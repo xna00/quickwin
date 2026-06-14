@@ -3,6 +3,7 @@ import * as gui from 'gui'
 import { useState } from 'react'
 import { render } from '../lib/react-qw/index.js'
 import { Button } from '../lib/react-qw/components/Button.js'
+import { Input } from '../lib/react-qw/components/Input.js'
 import { Tab } from '../lib/react-qw/components/Tab.js'
 import { ListView } from '../lib/react-qw/components/ListView.js'
 import type { Column } from '../lib/react-qw/components/ListView.js'
@@ -50,6 +51,7 @@ function App() {
     { name: 'Origin', dataIndex: 'origin' },
   ])
   const [colNewCount, setColNewCount] = useState(3)
+  const [inputText, setInputText] = useState('')
 
   return (
     <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:10, width:560, height:540, x:20, y:20}}>
@@ -99,6 +101,19 @@ function App() {
                   Add Item
                 </Button>
               </w>
+            </w>
+          ) },
+          { title: 'Input', content: (
+            <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:6}}>
+              <w type="STATIC" ws={VISIBLE} text="Controlled:" style={{height:24}} />
+              <Input value={inputText} onChange={setInputText} style={{height:28}} />
+              <w type="STATIC" ws={VISIBLE} text={`You typed: ${inputText || '(empty)'}`} style={{height:24}} />
+              <w type="STATIC" ws={VISIBLE} text="Password:" style={{height:24}} />
+              <Input placeholder="Enter password" password style={{height:28}} />
+              <w type="STATIC" ws={VISIBLE} text="Number only:" style={{height:24}} />
+              <Input placeholder="123" number style={{height:28}} />
+              <w type="STATIC" ws={VISIBLE} text="Read only:" style={{height:24}} />
+              <Input value="This is read-only" readonly style={{height:28}} />
             </w>
           ) },
         ]}

@@ -223,8 +223,14 @@ declare module "gui" {
     }
 
     export const enum EditMsg {
+        GETSEL = 176, // 0xB0
+        SETSEL = 177, // 0xB1
         SETCUEBANNER = 5377, // 0x1501
         SETPASSWORDCHAR = 204, // 0xCC
+    }
+
+    export const enum EditNotify {
+        CHANGE = 768, // 0x300
     }
 
     export const enum ComboBoxMsg {

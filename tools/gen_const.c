@@ -235,8 +235,14 @@ static void print_enums(void) {
     printf("    }\n\n");
 
     printf("    export const enum EditMsg {\n");
+    DEC(GETSEL, EM_GETSEL);
+    DEC(SETSEL, EM_SETSEL);
     DEC(SETCUEBANNER, EM_SETCUEBANNER);
     DEC(SETPASSWORDCHAR, EM_SETPASSWORDCHAR);
+    printf("    }\n\n");
+
+    printf("    export const enum EditNotify {\n");
+    DEC(CHANGE, EN_CHANGE);
     printf("    }\n\n");
 
     printf("    export const enum ComboBoxMsg {\n");

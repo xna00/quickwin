@@ -197,8 +197,6 @@ function EffectLogger({ x, y }: { x: number; y: number }) {
   )
 }
 
-const WM_CHAR = 0x0102
-
 function ControlledInput({ x, y }: { x: number; y: number }) {
   const [value, setValue] = useState('')
 
@@ -210,7 +208,7 @@ function ControlledInput({ x, y }: { x: number; y: number }) {
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER}
         style={{x, y, width:200, height:24}}
         onEvent={(e: any) => {
-          if (e.msg === WM_CHAR) {
+          if (e.msg === gui.WmMsg.CHAR) {
             setValue(gui.GetWindowText(e.hwnd))
           }
         }}

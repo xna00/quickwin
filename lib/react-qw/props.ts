@@ -1,9 +1,6 @@
 import * as gui from 'gui'
 import type { Instance } from './reconciler.js'
 
-const EM_GETSEL = 0x00B0
-const EM_SETSEL = 0x00B1
-
 export function applyProps(
   instance: Instance,
   newProps: Record<string, any>,
@@ -19,12 +16,12 @@ export function applyProps(
   if (textVal !== undefined) {
     let cursor = -1
     if (instance.type === 'EDIT') {
-      const sel = gui.SendMessage(hwnd, EM_GETSEL, 0, 0)
+      const sel = gui.SendMessage(hwnd, gui.EditMsg.GETSEL, 0, 0)
       cursor = sel >>> 16
     }
     gui.SetWindowText(hwnd, textVal)
     if (instance.type === 'EDIT' && cursor >= 0) {
-      gui.SendMessage(hwnd, EM_SETSEL, cursor, cursor)
+      gui.SendMessage(hwnd, gui.EditMsg.SETSEL, cursor, cursor)
     }
   }
   if ('disabled' in newProps) {
