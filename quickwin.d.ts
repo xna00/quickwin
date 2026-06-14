@@ -631,7 +631,8 @@ declare module "gui" {
         INSERTITEMW = 0x104D,
         SETITEMW = 0x104C,
         ENSUREVISIBLE = 0x1013,
-        SETCOLUMNWIDTH = 0x101C,
+        SETCOLUMNWIDTH = 0x101E,
+        DELETECOLUMN = 0x101C,
     }
 
     // ListView 通知码 (List-View Notification Codes)

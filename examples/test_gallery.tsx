@@ -5,6 +5,7 @@ import { render } from '../lib/react-qw/index.js'
 import { Button } from '../lib/react-qw/components/Button.js'
 import { Tab } from '../lib/react-qw/components/Tab.js'
 import { ListView } from '../lib/react-qw/components/ListView.js'
+import type { Column } from '../lib/react-qw/components/ListView.js'
 import { ListBox } from '../lib/react-qw/components/ListBox.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
@@ -19,24 +20,36 @@ gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
 const VISIBLE = gui.WindowStyle.VISIBLE
 const CLIPCHILDREN = gui.WindowStyle.CLIPCHILDREN
 
+interface Fruit {
+  name: string
+  color: string
+  origin: string
+}
+
 function App() {
   const [count, setCount] = useState(0)
   const [disabled, setDisabled] = useState(true)
   const [tabIndex, setTabIndex] = useState(1)  // ListView tab for testing
   const [listSel, setListSel] = useState(0)
-  const [listItems, setListItems] = useState([
-    ['Apple', 'Red', 'China'],
-    ['Banana', 'Yellow', 'Philippines'],
-    ['Cherry', 'Dark Red', 'USA'],
-    ['Date', 'Brown', 'Middle East'],
-    ['Elderberry', 'Purple', 'Europe'],
-    ['Fig', 'Purple', 'Turkey'],
-    ['Grape', 'Green', 'Italy'],
+  const [listData, setListData] = useState<Fruit[]>([
+    { name: 'Apple', color: 'Red', origin: 'China' },
+    { name: 'Banana', color: 'Yellow', origin: 'Philippines' },
+    { name: 'Cherry', color: 'Dark Red', origin: 'USA' },
+    { name: 'Date', color: 'Brown', origin: 'Middle East' },
+    { name: 'Elderberry', color: 'Purple', origin: 'Europe' },
+    { name: 'Fig', color: 'Purple', origin: 'Turkey' },
+    { name: 'Grape', color: 'Green', origin: 'Italy' },
   ])
   const [newItemCount, setNewItemCount] = useState(0)
   const [lbItems, setLbItems] = useState(['Apple', 'Banana', 'Cherry', 'Date', 'Elderberry', 'Fig', 'Grape'])
   const [lbSel, setLbSel] = useState(0)
   const [lbNewCount, setLbNewCount] = useState(0)
+  const [listCols, setListCols] = useState<Column<Fruit>[]>([
+    { name: 'Name', dataIndex: 'name' },
+    { name: 'Color', dataIndex: 'color' },
+    { name: 'Origin', dataIndex: 'origin' },
+  ])
+  const [colNewCount, setColNewCount] = useState(3)
 
   return (
     <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:10, width:560, height:540, x:20, y:20}}>
@@ -61,11 +74,18 @@ function App() {
           { title: 'Buttons', content: <Button>Inside Tab 1</Button> },
           { title: 'ListView', content: (
             <w type="STATIC" ws={VISIBLE} style={{flexGrow:1, flexDirection:'column', gap:4}}>
-              <ListView columns={['Name', 'Color', 'Origin']} items={listItems} selectedIndex={listSel} onChange={(i) => setListSel(i)} style={{flexGrow:1}} />
+              <ListView<Fruit> columns={listCols} data={listData} selectedIndex={listSel} onChange={(i) => setListSel(i)} style={{flexGrow:1}} />
               <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:4, alignItems:'stretch', height:30}}>
-                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={listSel >= 0 ? `Selected: ${listItems[listSel][0]}` : '(none selected)'} />
-                <Button onClick={() => { setListItems(items => [...items, ['Item ' + String(newItemCount + 1), '', '']]); setNewItemCount(c => c + 1) }} style={{width:120}}>
+                <w type="STATIC" ws={VISIBLE} style={{flexGrow:1}} text={listSel >= 0 ? `Selected: ${listData[listSel].name}` : '(none selected)'} />
+                <Button onClick={() => { setListData(d => [...d, { name: 'Item ' + String(newItemCount + 1), color: '', origin: '' }]); setNewItemCount(c => c + 1) }} style={{width:90}}>
                   Add Item
+                </Button>
+                <Button onClick={() => {
+                  const n = colNewCount + 1
+                  setListCols(cols => [...cols, { name: 'Col ' + n, dataIndex: 'name' as keyof Fruit }])
+                  setColNewCount(n)
+                }} style={{width:90}}>
+                  Add Column
                 </Button>
               </w>
             </w>
