@@ -287,6 +287,29 @@ declare module "gui" {
         SETPAGESIZE = 1045, // 0x415
     }
 
+    export const enum DtStyle {
+        SHORTDATEFORMAT = 0, // 0x0
+        LONGDATEFORMAT = 4, // 0x4
+        TIMEFORMAT = 9, // 0x9
+        UPDOWN = 1, // 0x1
+        SHOWNONE = 2, // 0x2
+    }
+
+    export const enum DtMsg {
+        GETSYSTEMTIME = 4097, // 0x1001
+        SETSYSTEMTIME = 4098, // 0x1002
+        SETFORMATW = 4146, // 0x1032
+    }
+
+    export const enum DtNotifyCode {
+        DATETIMECHANGE = -759, // 0xFFFFFD09
+    }
+
+    export const enum DtFlag {
+        GDT_VALID = 0, // 0x0
+        GDT_NONE = 1, // 0x1
+    }
+
     export const enum TreeViewStyle {
         HASBUTTONS = 1, // 0x1
         HASLINES = 2, // 0x2

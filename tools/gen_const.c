@@ -299,6 +299,29 @@ static void print_enums(void) {
     DEC(SETPAGESIZE, TBM_SETPAGESIZE);
     printf("    }\n\n");
 
+    printf("    export const enum DtStyle {\n");
+    DEC(SHORTDATEFORMAT, DTS_SHORTDATEFORMAT);
+    DEC(LONGDATEFORMAT, DTS_LONGDATEFORMAT);
+    DEC(TIMEFORMAT, DTS_TIMEFORMAT);
+    DEC(UPDOWN, DTS_UPDOWN);
+    DEC(SHOWNONE, DTS_SHOWNONE);
+    printf("    }\n\n");
+
+    printf("    export const enum DtMsg {\n");
+    DEC(GETSYSTEMTIME, DTM_GETSYSTEMTIME);
+    DEC(SETSYSTEMTIME, DTM_SETSYSTEMTIME);
+    DEC(SETFORMATW, DTM_SETFORMATW);
+    printf("    }\n\n");
+
+    printf("    export const enum DtNotifyCode {\n");
+    DEC(DATETIMECHANGE, DTN_DATETIMECHANGE);
+    printf("    }\n\n");
+
+    printf("    export const enum DtFlag {\n");
+    DEC(GDT_VALID, GDT_VALID);
+    DEC(GDT_NONE, GDT_NONE);
+    printf("    }\n\n");
+
     printf("    export const enum TreeViewStyle {\n");
     DEC(HASBUTTONS, TVS_HASBUTTONS);
     DEC(HASLINES, TVS_HASLINES);

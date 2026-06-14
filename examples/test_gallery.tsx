@@ -15,6 +15,7 @@ import { ScrollView } from '../lib/react-qw/components/ScrollView.js'
 import { RadioButton } from '../lib/react-qw/components/RadioButton.js'
 import { Slider } from '../lib/react-qw/components/Slider.js'
 import { TreeView, type TreeNode } from '../lib/react-qw/components/TreeView.js'
+import { DateTimePicker } from '../lib/react-qw/components/DateTimePicker.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -73,6 +74,7 @@ function App() {
   const [radio, setRadio] = useState('a')
   const [sliderVal, setSliderVal] = useState(50)
   const [treeSel, setTreeSel] = useState<TreeNode | null>(null)
+  const [dtDate, setDtDate] = useState<Date | null>(new Date())
   const [listData, setListData] = useState<Fruit[]>([
     { name: 'Apple', color: 'Red', origin: 'China' },
     { name: 'Banana', color: 'Yellow', origin: 'Philippines' },
@@ -175,6 +177,14 @@ function App() {
         ]}
         style={{height:60}}
       />
+
+      {/* ===== DateTimePicker ===== */}
+      <w type="STATIC" ws={VISIBLE} text={`DateTimePicker (${dtDate ? `${dtDate.getFullYear()}-${String(dtDate.getMonth()+1).padStart(2,'0')}-${String(dtDate.getDate()).padStart(2,'0')}` : 'none'})`} style={{height:20}} />
+      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:8, alignItems:'stretch', height:28}}>
+        <DateTimePicker value={dtDate} onChange={setDtDate} style={{flexGrow:1}} />
+        <DateTimePicker value={dtDate} onChange={setDtDate} format="long" style={{flexGrow:1}} />
+        <DateTimePicker value={dtDate} onChange={setDtDate} format="time" style={{flexGrow:1}} />
+      </w>
 
       {/* ===== 下半区: ListView + ScrollView + TreeView ===== */}
       <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:3}}>
