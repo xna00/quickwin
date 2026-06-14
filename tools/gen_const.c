@@ -60,6 +60,7 @@ static void print_enums(void) {
     DEC(VSCROLL, WS_VSCROLL);
     DEC(CLIPCHILDREN, WS_CLIPCHILDREN);
     DEC(TABSTOP, WS_TABSTOP);
+    DEC(GROUP, WS_GROUP);
     printf("    }\n\n");
 
     printf("    export const enum WmMsg {\n");
@@ -99,6 +100,9 @@ static void print_enums(void) {
     DEC(PAGEUP, SB_PAGEUP);
     DEC(PAGEDOWN, SB_PAGEDOWN);
     DEC(THUMBTRACK, SB_THUMBTRACK);
+    DEC(TOP, SB_TOP);
+    DEC(BOTTOM, SB_BOTTOM);
+    DEC(ENDSCROLL, SB_ENDSCROLL);
     printf("    }\n\n");
 
     printf("    export const enum ScrollInfoFlag {\n");
@@ -118,6 +122,7 @@ static void print_enums(void) {
     DEC(DEFPUSHBUTTON, BS_DEFPUSHBUTTON);
     DEC(CHECKBOX, BS_CHECKBOX);
     DEC(AUTOCHECKBOX, BS_AUTOCHECKBOX);
+    DEC(AUTORADIOBUTTON, BS_AUTORADIOBUTTON);
     DEC(GROUPBOX, BS_GROUPBOX);
     printf("    }\n\n");
 
@@ -274,6 +279,24 @@ static void print_enums(void) {
 
     printf("    export const enum ProgressStyle {\n");
     DEC(SMOOTH, PBS_SMOOTH);
+    printf("    }\n\n");
+
+    printf("    export const enum TrackBarStyle {\n");
+    DEC(HORZ, TBS_HORZ);
+    DEC(VERT, TBS_VERT);
+    DEC(AUTOTICKS, TBS_AUTOTICKS);
+    DEC(TOOLTIPS, TBS_TOOLTIPS);
+    DEC(NOTICKS, TBS_NOTICKS);
+    printf("    }\n\n");
+
+    printf("    export const enum TbMsg {\n");
+    DEC(GETPOS, TBM_GETPOS);
+    DEC(SETPOS, TBM_SETPOS);
+    DEC(GETRANGEMIN, TBM_GETRANGEMIN);
+    DEC(GETRANGEMAX, TBM_GETRANGEMAX);
+    DEC(SETRANGE, TBM_SETRANGE);
+    DEC(SETLINESIZE, TBM_SETLINESIZE);
+    DEC(SETPAGESIZE, TBM_SETPAGESIZE);
     printf("    }\n\n");
 
     printf("    export const enum Gwlp {\n");

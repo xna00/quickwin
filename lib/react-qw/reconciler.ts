@@ -22,7 +22,7 @@ export interface Instance {
   lastRect?: { x: number; y: number; w: number; h: number }
 }
 
-const DELAYED_CONTROLS = new Set(['SysListView32', 'SysTreeView32', 'LISTBOX', 'COMBOBOX'])
+const DELAYED_CONTROLS = new Set(['SysListView32', 'SysTreeView32', 'LISTBOX', 'COMBOBOX', 'msctls_trackbar32'])
 
 function isDelayedControl(winClass: string): boolean {
   return DELAYED_CONTROLS.has(winClass)

@@ -48,6 +48,7 @@ declare module "gui" {
         VSCROLL = 2097152, // 0x200000
         CLIPCHILDREN = 33554432, // 0x2000000
         TABSTOP = 65536, // 0x10000
+        GROUP = 131072, // 0x20000
     }
 
     export const enum WmMsg {
@@ -87,6 +88,9 @@ declare module "gui" {
         PAGEUP = 2, // 0x2
         PAGEDOWN = 3, // 0x3
         THUMBTRACK = 5, // 0x5
+        TOP = 6, // 0x6
+        BOTTOM = 7, // 0x7
+        ENDSCROLL = 8, // 0x8
     }
 
     export const enum ScrollInfoFlag {
@@ -106,6 +110,7 @@ declare module "gui" {
         DEFPUSHBUTTON = 1, // 0x1
         CHECKBOX = 2, // 0x2
         AUTOCHECKBOX = 3, // 0x3
+        AUTORADIOBUTTON = 9, // 0x9
         GROUPBOX = 7, // 0x7
     }
 
@@ -262,6 +267,24 @@ declare module "gui" {
 
     export const enum ProgressStyle {
         SMOOTH = 1, // 0x1
+    }
+
+    export const enum TrackBarStyle {
+        HORZ = 0, // 0x0
+        VERT = 2, // 0x2
+        AUTOTICKS = 1, // 0x1
+        TOOLTIPS = 256, // 0x100
+        NOTICKS = 16, // 0x10
+    }
+
+    export const enum TbMsg {
+        GETPOS = 1024, // 0x400
+        SETPOS = 1029, // 0x405
+        GETRANGEMIN = 1025, // 0x401
+        GETRANGEMAX = 1026, // 0x402
+        SETRANGE = 1030, // 0x406
+        SETLINESIZE = 1047, // 0x417
+        SETPAGESIZE = 1045, // 0x415
     }
 
     export const enum Gwlp {

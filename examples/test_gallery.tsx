@@ -12,6 +12,8 @@ import { ListView } from '../lib/react-qw/components/ListView.js'
 import type { Column } from '../lib/react-qw/components/ListView.js'
 import { ListBox } from '../lib/react-qw/components/ListBox.js'
 import { ScrollView } from '../lib/react-qw/components/ScrollView.js'
+import { RadioButton } from '../lib/react-qw/components/RadioButton.js'
+import { Slider } from '../lib/react-qw/components/Slider.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -41,6 +43,8 @@ function App() {
   const [listSel, setListSel] = useState(0)
   const [lbSel, setLbSel] = useState(0)
   const [cbSel, setCbSel] = useState(-1)
+  const [radio, setRadio] = useState('a')
+  const [sliderVal, setSliderVal] = useState(50)
   const [listData, setListData] = useState<Fruit[]>([
     { name: 'Apple', color: 'Red', origin: 'China' },
     { name: 'Banana', color: 'Yellow', origin: 'Philippines' },
@@ -61,9 +65,9 @@ function App() {
   const cbItems = ['Red', 'Green', 'Blue', 'Yellow', 'Purple', 'Orange']
 
   return (
-    <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:8, width:780, height:660, x:20, y:20}}>
+    <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:8, width:780, height:940, x:20, y:20}}>
       {/* ===== 三列上半区 ===== */}
-      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:10, flexGrow:1}}>
+      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:10, flexGrow:2}}>
 
         {/* --- 左列: Buttons + CheckBoxes --- */}
         <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:6, flexGrow:1}}>
@@ -88,6 +92,10 @@ function App() {
           <CheckBox checked={checkA} onChange={setCheckA} label={`Option A (${String(checkA)})`} style={{height:26}} />
           <CheckBox checked={checkB} onChange={setCheckB} label={`Option B (${String(checkB)})`} style={{height:26}} />
           <CheckBox label="Disabled checkbox" disabled style={{height:26}} />
+          <w type="STATIC" ws={VISIBLE} text={`RadioButtons (${radio})`} style={{height:20}} />
+          <RadioButton checked={radio === 'a'} onChange={() => setRadio('a')} label="Option A" style={{height:24}} />
+          <RadioButton checked={radio === 'b'} onChange={() => setRadio('b')} label="Option B" style={{height:24}} />
+          <RadioButton checked={radio === 'c'} onChange={() => setRadio('c')} label="Option C" style={{height:24}} />
         </w>
 
         {/* --- 中列: Input + ProgressBar --- */}
@@ -114,6 +122,8 @@ function App() {
               0
             </Button>
           </w>
+          <w type="STATIC" ws={VISIBLE} text={`Slider (${sliderVal})`} style={{height:20}} />
+          <Slider value={sliderVal} onChange={setSliderVal} min={0} max={100} style={{height:30}} />
         </w>
 
         {/* --- 右列: ListBox + ComboBox --- */}
@@ -139,7 +149,7 @@ function App() {
       />
 
       {/* ===== 下半区: ListView + ScrollView ===== */}
-      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:2}}>
+      <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:3}}>
         <w type="STATIC" ws={VISIBLE | CLIPCHILDREN} style={{flexDirection:'column', gap:4, flexGrow:1}}>
           <w type="STATIC" ws={VISIBLE} text={`ListView (sel=${listSel >= 0 ? listData[listSel].name : 'none'})`} style={{height:20}} />
           <w type="STATIC" ws={VISIBLE} style={{flexDirection:'row', gap:6, alignItems:'stretch', flexGrow:1}}>
@@ -184,7 +194,7 @@ function App() {
 const hwnd = gui.CreateWindow(
   'Gallery', 'Component Gallery',
   gui.WindowStyle.OVERLAPPEDWINDOW,
-  100, 100, 840, 820, null, null
+  100, 100, 840, 1060, null, null
 )
 
 if (hwnd) {
