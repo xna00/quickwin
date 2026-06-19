@@ -79,7 +79,7 @@ function insertItems(
     const textBuf = textToUtf16(node.label)
     const itemBuf = buildTvItem(bufPtr(textBuf), cChildren)
     const tvins = buildTvInsertStruct(parentHandle, TVI_ROOT, itemBuf)
-    const hItem = gui.SendMessage(hTree, gui.TvMsg.INSERTITEMW, 0, bufPtr(tvins)) as any as number
+    const hItem = gui.SendMessage(hTree, gui.TvMsg.INSERTITEMW, 0, bufPtr(tvins))
     hItemMap.set(hItem, node)
     if (node.key) keyMap.set(node.key, hItem)
     if (node.children && node.children.length > 0) {
@@ -90,14 +90,14 @@ function insertItems(
 }
 
 function deleteAllItems(hTree: gui.HWND): void {
-  const n = gui.SendMessage(hTree, gui.TvMsg.GETCOUNT, 0, 0) as any as number
+  const n = gui.SendMessage(hTree, gui.TvMsg.GETCOUNT, 0, 0)
   if (n > 0)
     gui.SendMessage(hTree, gui.TvMsg.DELETEITEM, 1, TVI_ROOT)
 }
 
 const TreeView = forwardRef(function TreeViewInner<D>(
   { data, onSelect, defaultSelectedKey, selectedKey: controlledKey, style }: TreeViewProps<D>,
-  ref: any
+  ref: React.Ref<gui.HWND>
 ) {
   const [internalKey, setInternalKey] = useState<string | null>(defaultSelectedKey ?? null)
   const isControlled = controlledKey !== undefined
@@ -151,7 +151,7 @@ const TreeView = forwardRef(function TreeViewInner<D>(
           if (code === gui.TvNotifyCode.SELCHANGEDW) {
             const h = tvRef.current
             if (!h) return
-            const hCaret = gui.SendMessage(h, gui.TvMsg.GETNEXTITEM, gui.TvGnRelative.CARET, 0) as any as number
+            const hCaret =             gui.SendMessage(h, gui.TvMsg.GETNEXTITEM, gui.TvGnRelative.CARET, 0)
             const node = hItemMapRef.current.get(hCaret) ?? null
             const key = node?.key ?? null
             if (!isControlled) setInternalKey(key)
