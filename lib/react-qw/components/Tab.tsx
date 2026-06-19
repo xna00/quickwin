@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useEffect, useState } from 'react'
+import { forwardRef, useRef, useEffect, useState, type ReactNode } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
 import type { WStyle } from '../jsx.d.ts'
@@ -17,7 +17,7 @@ function readI32(ptr: number, offset: number): number {
 }
 
 export interface TabProps {
-  tabs: { title: string; content: any }[]
+  tabs: { title: string; content: ReactNode }[]
   selectedIndex?: number
   defaultSelectedIndex?: number
   onChange?: (index: number) => void
@@ -84,7 +84,7 @@ export const Tab = forwardRef<gui.HWND, TabProps>(
         />
         <w type="STATIC" 
         ws={gui.WindowStyle.VISIBLE | gui.WindowStyle.CLIPCHILDREN} 
-        style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'stretch' } as any}>
+        style={{ flexGrow: 1, flexDirection: 'column', alignItems: 'stretch' }}>
           {tabs[sel]?.content}
         </w>
       </w>

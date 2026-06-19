@@ -39,7 +39,7 @@ export const CheckBox = forwardRef<gui.HWND, CheckBoxProps>(
         }}
         onEvent={(e) => {
           if (e.msg === gui.WmMsg.LBUTTONUP) {
-            const newChecked = (gui.SendMessage(e.hwnd, gui.ButtonMsg.GETCHECK, 0, 0) as any as number) !== 0
+            const newChecked = gui.SendMessage(e.hwnd, gui.ButtonMsg.GETCHECK, 0, 0) !== 0
             if (newChecked !== displayChecked) {
               if (!isControlled) setInternalChecked(newChecked)
               onChange?.(newChecked)

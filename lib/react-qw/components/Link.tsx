@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useEffect } from 'react'
+import { forwardRef, useRef, useEffect, type Ref } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
 import type { WStyle } from '../jsx.d.ts'
@@ -29,7 +29,7 @@ function readUtf16(ptr: number, offset: number, maxWords: number): string {
 
 const Link = forwardRef(function Link(
   { href, children, onClick, style }: LinkProps,
-  ref: any
+  ref: Ref<gui.HWND>
 ) {
   const displayText = children != null ? String(children) : (href ?? '')
   const linkText = href ? `<A HREF="${href}">${displayText}</A>` : displayText

@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useEffect, useState } from 'react'
+import { forwardRef, useRef, useEffect, useState, type Ref } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
 import type { WStyle } from '../jsx.d.ts'
@@ -42,7 +42,7 @@ function dateToSysTimeBuf(d: Date): ArrayBuffer {
 
 const DateTimePicker = forwardRef(function DateTimePicker(
   { value, onChange, defaultValue, format = 'short', allowNone, updown, style }: DateTimePickerProps,
-  ref: any
+  ref: Ref<gui.HWND>
 ) {
   const [internalDate, setInternalDate] = useState<Date | null>(defaultValue ?? null)
   const isControlled = value !== undefined

@@ -53,7 +53,7 @@ export const Slider = forwardRef<gui.HWND, SliderProps>(
           if (e.msg === gui.WmMsg.HSCROLL || e.msg === gui.WmMsg.VSCROLL) {
             const h = sliderRef.current
             if (!h) return 0
-            const pos = gui.SendMessage(h, gui.TbMsg.GETPOS, 0, 0) as any as number
+            const pos = gui.SendMessage(h, gui.TbMsg.GETPOS, 0, 0)
             onChange?.(pos)
             return 0
           }
