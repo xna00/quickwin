@@ -3,7 +3,7 @@ import * as gui from 'gui'
 import * as ffi from 'ffi'
 import type { WStyle } from '../jsx.d.ts'
 
-interface DateTimePickerProps {
+export interface DateTimePickerProps {
   value?: Date | null
   onChange?: (date: Date | null) => void
   defaultValue?: Date
@@ -121,4 +121,3 @@ const DateTimePicker = forwardRef(function DateTimePicker(
 ) => React.ReactElement
 
 export { DateTimePicker }
-export type { DateTimePickerProps }

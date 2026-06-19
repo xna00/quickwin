@@ -9,7 +9,7 @@ export interface TreeNode<D = any> {
   children?: TreeNode<D>[]
 }
 
-interface TreeViewProps<D> {
+export interface TreeViewProps<D> {
   data: TreeNode<D>[]
   onSelect?: (node: TreeNode<D> | null) => void
   defaultSelectedKey?: string

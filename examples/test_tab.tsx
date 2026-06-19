@@ -1,9 +1,7 @@
 import '../lib/polyfill.js'
 import * as gui from 'gui'
 import { useState } from 'react'
-import { render } from '../lib/react-qw/index.js'
-import { Button } from '../lib/react-qw/components/Button.js'
-import { Tab } from '../lib/react-qw/components/Tab.js'
+import { render, Button, Tab } from '../lib/react-qw/index.js'
 
 gui.RegisterClass('TabDemo', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)

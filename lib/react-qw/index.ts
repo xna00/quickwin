@@ -18,6 +18,8 @@ export function createRoot(containerHwnd: gui.HWND) {
   }
 }
 
+export * from './components/index.js'
+
 export function render(element: any, containerHwnd: gui.HWND, callback?: () => void) {
   const root = createRoot(containerHwnd)
   root.render(element)

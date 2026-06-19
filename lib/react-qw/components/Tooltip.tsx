@@ -2,7 +2,7 @@ import { useRef, useEffect, Children, cloneElement } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
 
-interface TooltipProps {
+export interface TooltipProps {
   text: string
   children: React.ReactElement
   balloon?: boolean
@@ -78,4 +78,3 @@ function Tooltip({ text, children, balloon }: TooltipProps) {
 }
 
 export { Tooltip }
-export type { TooltipProps }

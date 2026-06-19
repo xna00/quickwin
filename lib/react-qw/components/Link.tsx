@@ -3,7 +3,7 @@ import * as gui from 'gui'
 import * as ffi from 'ffi'
 import type { WStyle } from '../jsx.d.ts'
 
-interface LinkProps {
+export interface LinkProps {
   href?: string
   children?: string
   onClick?: (url: string) => void
@@ -70,4 +70,3 @@ const Link = forwardRef(function Link(
 ) => React.ReactElement
 
 export { Link }
-export type { LinkProps }

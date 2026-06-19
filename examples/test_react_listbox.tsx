@@ -1,8 +1,7 @@
 import '../lib/polyfill.js'
 import * as gui from 'gui'
 import { useState } from 'react'
-import { ListBox } from '../lib/react-qw/components/ListBox.js'
-import { render } from '../lib/react-qw/index.js'
+import { render, ListBox } from '../lib/react-qw/index.js'
 
 let itemCounter = 10
 

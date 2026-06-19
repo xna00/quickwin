@@ -1,23 +1,11 @@
 import '../lib/polyfill.js'
 import * as gui from 'gui'
 import { useState } from 'react'
-import { render } from '../lib/react-qw/index.js'
-import { Button } from '../lib/react-qw/components/Button.js'
-import { Input } from '../lib/react-qw/components/Input.js'
-import { CheckBox } from '../lib/react-qw/components/CheckBox.js'
-import { ProgressBar } from '../lib/react-qw/components/ProgressBar.js'
-import { ComboBox } from '../lib/react-qw/components/ComboBox.js'
-import { Tab } from '../lib/react-qw/components/Tab.js'
-import { ListView } from '../lib/react-qw/components/ListView.js'
-import type { Column } from '../lib/react-qw/components/ListView.js'
-import { ListBox } from '../lib/react-qw/components/ListBox.js'
-import { ScrollView } from '../lib/react-qw/components/ScrollView.js'
-import { RadioButton } from '../lib/react-qw/components/RadioButton.js'
-import { Slider } from '../lib/react-qw/components/Slider.js'
-import { TreeView, type TreeNode } from '../lib/react-qw/components/TreeView.js'
-import { DateTimePicker } from '../lib/react-qw/components/DateTimePicker.js'
-import { Link } from '../lib/react-qw/components/Link.js'
-import { Tooltip } from '../lib/react-qw/components/Tooltip.js'
+import {
+  render, Button, Input, CheckBox, ProgressBar, ComboBox, Tab,
+  ListView, type Column, ListBox, ScrollView, RadioButton, Slider,
+  TreeView, type TreeNode, DateTimePicker, Link, Tooltip,
+} from '../lib/react-qw/index.js'
 
 gui.RegisterClass('Gallery', (hwnd, msg, wParam, lParam) => {
   if (!hwnd) return gui.DefWindowProc(hwnd, msg, wParam, lParam)
@@ -256,5 +244,7 @@ const hwnd = gui.CreateWindow(
 
 if (hwnd) {
   render(<App />, hwnd)
-  gui.ShowWindow(hwnd)
+  setTimeout(() => {
+    gui.ShowWindow(hwnd)
+  }, 0)
 }
