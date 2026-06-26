@@ -47,7 +47,6 @@ jobs:
             ${{ matrix.arch }}-cmake
             ${{ matrix.arch }}-brotli
             ${{ matrix.arch }}-libffi
-            ${{ matrix.arch }}-ninja
             upx
 
       - name: Build WAMR
