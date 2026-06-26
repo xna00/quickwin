@@ -207,7 +207,7 @@ wamr:
 
 wolfsmin:
 	@echo "Building minimal wolfSSL..."
-	git submodule update --init --depth 1 $(WOLFSSL_DIR)
+	if [ ! -f "$(WOLFSSL_DIR)/README.md" ]; then git submodule update --init --depth 1 $(WOLFSSL_DIR); fi
 	@mkdir -p $(WOLFSSL_BUILD_DIR) $(WOLFSSL_DIR)/lib
 	cd $(WOLFSSL_DIR) && cmake -B build \
 		-DCMAKE_BUILD_TYPE=Release \
