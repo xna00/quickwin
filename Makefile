@@ -136,7 +136,7 @@ ifeq ($(MINIMAL), 1)
 endif
 	@echo "Build complete: $@"
 
-$(BUILD_DIR)/%.o: %.c
+$(BUILD_DIR)/%.o: %.c | $(WOLFSSL_LIB_STATIC)
 	@echo "Compiling $<..."
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -145,7 +145,7 @@ $(BUILD_DIR)/%.d: %.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -MM -MT '$(BUILD_DIR)/$*.o' $< > $@
 
-$(BUILD_DIR)/app.o: app.rc
+$(BUILD_DIR)/app.o: app.rc | $(WOLFSSL_LIB_STATIC)
 	@echo "Compiling resource $<..."
 	mkdir -p $(BUILD_DIR)
 	$(WINDRES) $< -o $@
