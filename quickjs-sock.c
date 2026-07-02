@@ -36,6 +36,8 @@ typedef struct {
 static SockRuntime *g_sock_runtimes = NULL;
 static int g_nsock_runtimes = 0;
 static int g_runtimes_capacity = 0;
+static CRITICAL_SECTION g_sock_lock;
+static int g_sock_lock_init = 0;
 
 static SockRuntime *find_runtime(JSRuntime *rt)
 {
@@ -50,10 +52,15 @@ static SockRuntime *find_runtime(JSRuntime *rt)
 
 void js_sock_init(JSRuntime *rt)
 {
+    if (!g_sock_lock_init) {
+        InitializeCriticalSection(&g_sock_lock);
+        g_sock_lock_init = 1;
+    }
+    EnterCriticalSection(&g_sock_lock);
     if (g_nsock_runtimes >= g_runtimes_capacity) {
         int newCap = g_runtimes_capacity ? g_runtimes_capacity * 2 : 4;
         SockRuntime *p = realloc(g_sock_runtimes, newCap * sizeof(SockRuntime));
-        if (!p) return;
+        if (!p) { LeaveCriticalSection(&g_sock_lock); return; }
         g_sock_runtimes = p;
         g_runtimes_capacity = newCap;
     }
@@ -65,44 +72,58 @@ void js_sock_init(JSRuntime *rt)
     r->slots = malloc(r->slots_capacity * sizeof(SockHandle));
     if (!r->slots) {
         r->slots_capacity = 0;
+        LeaveCriticalSection(&g_sock_lock);
         return;
     }
     g_nsock_runtimes++;
+    LeaveCriticalSection(&g_sock_lock);
     for (int i = 0; i < r->slots_capacity; i++)
         r->slots[i].fd = -1;
 }
 
 void js_sock_remove_runtime(JSRuntime *rt)
 {
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(rt);
-    if (!r) return;
+    if (!r) { LeaveCriticalSection(&g_sock_lock); return; }
     free(r->slots);
     int idx = r - g_sock_runtimes;
     g_nsock_runtimes--;
     if (idx < g_nsock_runtimes)
         g_sock_runtimes[idx] = g_sock_runtimes[g_nsock_runtimes];
+    LeaveCriticalSection(&g_sock_lock);
 }
 
 void js_sock_cleanup(void)
 {
+    EnterCriticalSection(&g_sock_lock);
     free(g_sock_runtimes);
     g_sock_runtimes = NULL;
     g_nsock_runtimes = 0;
     g_runtimes_capacity = 0;
+    LeaveCriticalSection(&g_sock_lock);
+    DeleteCriticalSection(&g_sock_lock);
 }
 
 int js_sock_slot_count(JSRuntime *rt)
 {
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(rt);
-    return r ? r->slot_count : 0;
+    int count = r ? r->slot_count : 0;
+    LeaveCriticalSection(&g_sock_lock);
+    return count;
 }
 
 void js_sock_collect_handles(JSRuntime *rt, HANDLE *handles, int max, int *count)
 {
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(rt);
-    if (!r) return;
-    for (int i = 0; i < r->slots_capacity; i++) {
-        SockHandle *s = &r->slots[i];
+    if (!r) { LeaveCriticalSection(&g_sock_lock); return; }
+    SockHandle *slots = r->slots;
+    int slots_capacity = r->slots_capacity;
+    LeaveCriticalSection(&g_sock_lock);
+    for (int i = 0; i < slots_capacity; i++) {
+        SockHandle *s = &slots[i];
         if (s->fd >= 0 && *count < max) {
             handles[*count] = (HANDLE)s->event;
             (*count)++;
@@ -112,10 +133,14 @@ void js_sock_collect_handles(JSRuntime *rt, HANDLE *handles, int max, int *count
 
 int js_sock_handle_event(JSRuntime *rt, HANDLE triggered)
 {
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(rt);
-    if (!r) return 0;
-    for (int i = 0; i < r->slots_capacity; i++) {
-        SockHandle *s = &r->slots[i];
+    if (!r) { LeaveCriticalSection(&g_sock_lock); return 0; }
+    SockHandle *slots = r->slots;
+    int slots_capacity = r->slots_capacity;
+    LeaveCriticalSection(&g_sock_lock);
+    for (int i = 0; i < slots_capacity; i++) {
+        SockHandle *s = &slots[i];
         if (s->fd < 0) continue;
         if ((HANDLE)s->event == triggered) {
             WSANETWORKEVENTS events;
@@ -152,10 +177,15 @@ int js_sock_handle_event(JSRuntime *rt, HANDLE triggered)
 
 void js_sock_free_handles(JSRuntime *rt)
 {
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(rt);
-    if (!r) return;
-    for (int i = 0; i < r->slots_capacity; i++) {
-        SockHandle *s = &r->slots[i];
+    if (!r) { LeaveCriticalSection(&g_sock_lock); return; }
+    SockHandle *slots = r->slots;
+    int slots_capacity = r->slots_capacity;
+    r->slot_count = 0;
+    LeaveCriticalSection(&g_sock_lock);
+    for (int i = 0; i < slots_capacity; i++) {
+        SockHandle *s = &slots[i];
         if (s->fd < 0) continue;
         if (!JS_IsUndefined(s->on_event))
             JS_FreeValueRT(rt, s->on_event);
@@ -165,7 +195,6 @@ void js_sock_free_handles(JSRuntime *rt)
             closesocket(s->fd);
         s->fd = -1;
     }
-    r->slot_count = 0;
 }
 
 /* ─── Internal helpers ──────────────────────────────────────── */
@@ -175,10 +204,14 @@ static SockHandle *get_sock(JSContext *ctx, JSValueConst val)
     int idx;
     if (JS_ToInt32(ctx, &idx, val))
         return NULL;
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(JS_GetRuntime(ctx));
-    if (!r || idx < 0 || idx >= r->slots_capacity || r->slots[idx].fd < 0)
+    SockHandle *slots = r ? r->slots : NULL;
+    int slots_capacity = r ? r->slots_capacity : 0;
+    LeaveCriticalSection(&g_sock_lock);
+    if (!slots || idx < 0 || idx >= slots_capacity || slots[idx].fd < 0)
         return NULL;
-    return &r->slots[idx];
+    return &slots[idx];
 }
 
 static int find_free_slot(SockRuntime *r)
@@ -239,8 +272,10 @@ static JSValue js_socket(JSContext *ctx, JSValueConst this_val, int argc, JSValu
         return JS_NewInt32(ctx, -1);
     }
 
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(JS_GetRuntime(ctx));
     if (!r) {
+        LeaveCriticalSection(&g_sock_lock);
         WSACloseEvent(event);
         closesocket(fd);
         return JS_NewInt32(ctx, -1);
@@ -248,6 +283,7 @@ static JSValue js_socket(JSContext *ctx, JSValueConst this_val, int argc, JSValu
 
     SockHandle *sock = make_slot(r, JS_GetRuntime(ctx));
     if (!sock) {
+        LeaveCriticalSection(&g_sock_lock);
         WSACloseEvent(event);
         closesocket(fd);
         return JS_NewInt32(ctx, -1);
@@ -259,7 +295,9 @@ static JSValue js_socket(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     sock->js_ctx = ctx;
     r->slot_count++;
 
-    return JS_NewInt32(ctx, sock - r->slots);
+    int slot_idx = sock - r->slots;
+    LeaveCriticalSection(&g_sock_lock);
+    return JS_NewInt32(ctx, slot_idx);
 }
 
 static JSValue js_connect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
@@ -400,8 +438,10 @@ static JSValue js_closesocket(JSContext *ctx, JSValueConst this_val, int argc, J
         sock->on_event = JS_UNDEFINED;
     }
 
+    EnterCriticalSection(&g_sock_lock);
     SockRuntime *r = find_runtime(JS_GetRuntime(ctx));
     if (r && r->slot_count > 0) r->slot_count--;
+    LeaveCriticalSection(&g_sock_lock);
 
     return JS_UNDEFINED;
 }
