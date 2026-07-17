@@ -1,49 +1,10 @@
 export {} // make this a module so declare global works
 
 declare global {
-    interface URLSearchParams {
-        append(key: string, value: string): void
-        delete(key: string): void
-        get(key: string): string | null
-        getAll(key: string): string[]
-        has(key: string): boolean
-        set(key: string, value: string): void
-        sort(): void
-        forEach(fn: (value: string, key: string) => void): void
-        keys(): IterableIterator<string>
-        values(): IterableIterator<string>
-        entries(): IterableIterator<[string, string]>
-        toString(): string
-        readonly size: number
-        [Symbol.iterator](): IterableIterator<[string, string]>
-    }
-
-    var URLSearchParams: {
-        new(init?: string | [string, string][] | Record<string, string>): URLSearchParams
-        prototype: URLSearchParams
-    }
-
-    interface URL {
-        href: string
-        protocol: string
-        hostname: string
-        port: string
-        pathname: string
-        search: string
-        hash: string
-        host: string
-        origin: string
-        username: string
-        password: string
-        searchParams: URLSearchParams
-        toString(): string
-        toJSON(): string
-    }
-
-    var URL: {
-        new(url: string, base?: string): URL
-        prototype: URL
-    }
+    interface URLSearchParams extends URLSearchParamsImpl {}
+    var URLSearchParams: typeof URLSearchParamsImpl
+    interface URL extends URLImpl {}
+    var URL: typeof URLImpl
 }
 
 function _encode(s: string): string { return encodeURIComponent(s) }
@@ -235,7 +196,6 @@ class URLImpl {
 
     toJSON(): string { return this.toString() }
 }
-
 if (typeof globalThis.URL === 'undefined') {
     globalThis.URL = URLImpl
 }
