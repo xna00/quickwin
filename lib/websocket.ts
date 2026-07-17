@@ -503,7 +503,7 @@ class WebSocket {
         else if (type === 'message' && this.onmessage) this.onmessage(event as MessageEvent)
     }
 
-    private _fireError(err: Error): void {
+    private _fireError(_err: Error): void {
         this._dispatchEvent('error', new Event('error'))
     }
 

@@ -79,7 +79,7 @@ export function createRoot(container: gui.HWND | RootWindowConfig) {
 
 export * from './components/index.js'
 
-export function render(element: React.ReactNode, containerOrConfig?: gui.HWND | RootWindowConfig | null, callback?: () => void) {
+export function render(element: React.ReactNode, containerOrConfig?: gui.HWND | RootWindowConfig | null, _callback?: () => void) {
   if (containerOrConfig == null) {
     throw new Error('render() requires a window handle or RootWindowConfig as second argument')
   }

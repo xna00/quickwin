@@ -20,7 +20,7 @@ export const suite = {
                 env: {
                     offset: new WebAssembly.Global({ value: 'i32', mutable: false }, 42),
                     factor: new WebAssembly.Global({ value: 'f64', mutable: false }, 3.14),
-                    log: function (x: number) { /* noop */ }
+                    log: function (_x: number) { /* noop */ }
                 }
             })
         } catch (e) {
@@ -35,7 +35,7 @@ export const suite = {
             env: {
                 offset: new WebAssembly.Global({ value: 'i32', mutable: false }, 100),
                 factor: new WebAssembly.Global({ value: 'f64', mutable: false }, 2.0),
-                log: function (x: number) { /* noop */ }
+                log: function (_x: number) { /* noop */ }
             }
         })
         t.check('instance2 get_offset()', 100, giInst2.exports.get_offset())

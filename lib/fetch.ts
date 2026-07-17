@@ -118,7 +118,7 @@ class _QuickReadableStream implements _ReadableStream {
         return new _QuickReader(this)
     }
 
-    cancel(reason?: unknown): void {
+    cancel(_reason?: unknown): void {
         if (this._state !== 'readable') return
         this._state = 'closed'
         this._locked = false
@@ -213,7 +213,7 @@ class _PreloadedStream implements _ReadableStream {
                 }
                 return Promise.resolve({ done: true })
             },
-            cancel(reason?: unknown): void {
+            cancel(_reason?: unknown): void {
                 stream._state = 'closed'
                 stream._locked = false
             },
@@ -223,7 +223,7 @@ class _PreloadedStream implements _ReadableStream {
         }
     }
 
-    cancel(reason?: unknown): void {
+    cancel(_reason?: unknown): void {
         this._state = 'closed'
         this._locked = false
     }
