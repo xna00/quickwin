@@ -160,7 +160,7 @@ interface WebSocketOptions {
 
 
 
-class WebSocket {
+class WebSocketImpl {
     readonly url: string
     readyState: number = State.CONNECTING
     onopen: ((event: Event) => void) | null = null
@@ -555,26 +555,10 @@ function _ab2str(buf: ArrayBuffer): string {
 // ── Global declarations ──
 
 declare global {
-    interface WebSocket {
-        url: string
-        readyState: number
-        onopen: ((event: Event) => void) | null
-        onclose: ((event: CloseEvent) => void) | null
-        onerror: ((event: Event) => void) | null
-        onmessage: ((event: MessageEvent) => void) | null
-        send(data: string | ArrayBuffer | Uint8Array): void
-        close(code?: number, reason?: string): void
-    }
-
-    var WebSocket: {
-        new(url: string, options?: WebSocketOptions): WebSocket
-        readonly CONNECTING: number
-        readonly OPEN: number
-        readonly CLOSING: number
-        readonly CLOSED: number
-    }
+    interface WebSocket extends WebSocketImpl {}
+    var WebSocket: typeof WebSocketImpl
 }
 
 // ── Register globals ──
 
-globalThis.WebSocket = WebSocket
+globalThis.WebSocket = WebSocketImpl
