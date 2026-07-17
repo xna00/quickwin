@@ -1,25 +1,11 @@
 export {} // make this a module so declare global works
 
 declare global {
-    interface TextDecoder<T extends _Label | undefined = _Label | undefined> {
-        readonly encoding: T extends _Label ? typeof _labelMap[T] : 'utf-8'
-        readonly fatal: boolean
-        readonly ignoreBOM: boolean
-        decode(buffer?: ArrayBufferView | ArrayBuffer | null): string
-    }
-    var TextDecoder: {
-        new<T extends _Label | undefined = _Label | undefined>(label?: T, options?: { fatal?: boolean, ignoreBOM?: boolean }): TextDecoder<T>
-        prototype: TextDecoder<_Label | undefined>
-    }
+    interface TextDecoder<T extends _Label | undefined = _Label | undefined> extends TextDecoderImpl<T> {}
+    var TextDecoder: typeof TextDecoderImpl
 
-    interface TextEncoder<T extends _Label | undefined = _Label | undefined> {
-        readonly encoding: T extends _Label ? typeof _labelMap[T] : 'utf-8'
-        encode(input?: string): Uint8Array<ArrayBuffer>
-    }
-    var TextEncoder: {
-        new<T extends _Label | undefined = _Label | undefined>(label?: T): TextEncoder<T>
-        prototype: TextEncoder<_Label | undefined>
-    }
+    interface TextEncoder<T extends _Label | undefined = _Label | undefined> extends TextEncoderImpl<T> {}
+    var TextEncoder: typeof TextEncoderImpl
 }
 
 const _labelMap = {
@@ -102,80 +88,83 @@ function _decodeUTF16(buf: Uint8Array, le: boolean, fatal: boolean): string {
     return out
 }
 
-if (typeof globalThis.TextDecoder === 'undefined') {
-    globalThis.TextDecoder = class TextDecoder<T extends _Label | undefined = _Label | undefined> {
-        _encoding: _Encoding
-        _fatal: boolean
-        _ignoreBOM: boolean
+class TextDecoderImpl<T extends _Label | undefined = _Label | undefined> {
+    _encoding: _Encoding
+    _fatal: boolean
+    _ignoreBOM: boolean
 
-        constructor(label?: T, options?: { fatal?: boolean, ignoreBOM?: boolean }) {
-            this._encoding = _normalizeLabel(label)
-            this._fatal = options?.fatal ?? false
-            this._ignoreBOM = options?.ignoreBOM ?? false
+    constructor(label?: T, options?: { fatal?: boolean, ignoreBOM?: boolean }) {
+        this._encoding = _normalizeLabel(label)
+        this._fatal = options?.fatal ?? false
+        this._ignoreBOM = options?.ignoreBOM ?? false
+    }
+
+    get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any }
+    get fatal(): boolean { return this._fatal }
+    get ignoreBOM(): boolean { return this._ignoreBOM }
+
+    decode(buffer?: ArrayBufferView | ArrayBuffer | null): string {
+        if (!buffer) return ''
+        const arr = buffer instanceof Uint8Array ? buffer
+            : buffer instanceof ArrayBuffer ? new Uint8Array(buffer)
+            : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+
+        if (this._encoding === 'utf-8') {
+            return _decodeUTF8(arr, this._fatal)
         }
 
-        get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any } // conditional type requires cast
-        get fatal(): boolean { return this._fatal }
-        get ignoreBOM(): boolean { return this._ignoreBOM }
+        const le = this._encoding === 'utf-16le'
+        let offset = 0
 
-        decode(buffer?: ArrayBufferView | ArrayBuffer | null): string {
-            if (!buffer) return ''
-            const arr = buffer instanceof Uint8Array ? buffer
-                : buffer instanceof ArrayBuffer ? new Uint8Array(buffer)
-                : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-
-            if (this._encoding === 'utf-8') {
-                return _decodeUTF8(arr, this._fatal)
+        if (arr.length >= 2 && !this._ignoreBOM) {
+            const bomLo = le ? arr[0]! : arr[1]!
+            const bomHi = le ? arr[1]! : arr[0]!
+            const bom = (bomHi << 8) | bomLo
+            if (bom === 0xFEFF || bom === 0xFFFE) {
+                offset = 2
             }
-
-            const le = this._encoding === 'utf-16le'
-            let offset = 0
-
-            if (arr.length >= 2 && !this._ignoreBOM) {
-                const bomLo = le ? arr[0]! : arr[1]!
-                const bomHi = le ? arr[1]! : arr[0]!
-                const bom = (bomHi << 8) | bomLo
-                if (bom === 0xFEFF || bom === 0xFFFE) {
-                    offset = 2
-                }
-            }
-
-            return _decodeUTF16(arr.slice(offset), le, this._fatal)
         }
+
+        return _decodeUTF16(arr.slice(offset), le, this._fatal)
     }
 }
 
-if (typeof globalThis.TextEncoder === 'undefined') {
-    globalThis.TextEncoder = class TextEncoder<T extends _Label | undefined = _Label | undefined> {
-        _encoding: _Encoding
+class TextEncoderImpl<T extends _Label | undefined = _Label | undefined> {
+    _encoding: _Encoding
 
-        constructor(label?: T) {
-            this._encoding = _normalizeLabel(label)
-        }
-
-        get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any } // conditional type requires cast
-
-        encode(input?: string): Uint8Array<ArrayBuffer> {
-            if (!input) return new Uint8Array(0)
-
-            if (this._encoding === 'utf-8') {
-                const bytes: number[] = []
-                for (let i = 0; i < input.length; i++) {
-                    let c = input.charCodeAt(i)
-                    if (c < 0x80) { bytes.push(c) }
-                    else if (c < 0x800) { bytes.push(0xC0 | (c >> 6), 0x80 | (c & 0x3F)) }
-                    else if (c < 0xD800 || c >= 0xE000) { bytes.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F)) }
-                    else { i++; const c2 = input.charCodeAt(i); c = 0x10000 + ((c & 0x3FF) << 10) | (c2 & 0x3FF); bytes.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F)) }
-                }
-                return new Uint8Array(bytes)
-            }
-
-            const le = this._encoding === 'utf-16le'
-            const buf = new ArrayBuffer(input.length * 2)
-            const dv = new DataView(buf)
-            for (let i = 0; i < input.length; i++) dv.setUint16(i * 2, input.charCodeAt(i), le)
-            return new Uint8Array(buf)
-        }
-
+    constructor(label?: T) {
+        this._encoding = _normalizeLabel(label)
     }
+
+    get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any }
+
+    encode(input?: string): Uint8Array<ArrayBuffer> {
+        if (!input) return new Uint8Array(0)
+
+        if (this._encoding === 'utf-8') {
+            const bytes: number[] = []
+            for (let i = 0; i < input.length; i++) {
+                let c = input.charCodeAt(i)
+                if (c < 0x80) { bytes.push(c) }
+                else if (c < 0x800) { bytes.push(0xC0 | (c >> 6), 0x80 | (c & 0x3F)) }
+                else if (c < 0xD800 || c >= 0xE000) { bytes.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F)) }
+                else { i++; const c2 = input.charCodeAt(i); c = 0x10000 + ((c & 0x3FF) << 10) | (c2 & 0x3FF); bytes.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F)) }
+            }
+            return new Uint8Array(bytes)
+        }
+
+        const le = this._encoding === 'utf-16le'
+        const buf = new ArrayBuffer(input.length * 2)
+        const dv = new DataView(buf)
+        for (let i = 0; i < input.length; i++) dv.setUint16(i * 2, input.charCodeAt(i), le)
+        return new Uint8Array(buf)
+    }
+}
+
+if (typeof globalThis.TextDecoder === 'undefined') {
+    globalThis.TextDecoder = TextDecoderImpl
+}
+
+if (typeof globalThis.TextEncoder === 'undefined') {
+    globalThis.TextEncoder = TextEncoderImpl
 }
