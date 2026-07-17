@@ -9,16 +9,16 @@ declare global {
     }
     var TextDecoder: {
         new<T extends _Label | undefined = _Label | undefined>(label?: T, options?: { fatal?: boolean, ignoreBOM?: boolean }): TextDecoder<T>
-        prototype: TextDecoder<any>
+        prototype: TextDecoder<_Label | undefined>
     }
 
     interface TextEncoder<T extends _Label | undefined = _Label | undefined> {
         readonly encoding: T extends _Label ? typeof _labelMap[T] : 'utf-8'
-        encode(input?: string): Uint8Array
+        encode(input?: string): Uint8Array<ArrayBuffer>
     }
     var TextEncoder: {
         new<T extends _Label | undefined = _Label | undefined>(label?: T): TextEncoder<T>
-        prototype: TextEncoder<any>
+        prototype: TextEncoder<_Label | undefined>
     }
 }
 
@@ -35,34 +35,34 @@ type _Label = keyof typeof _labelMap
 type _Encoding = typeof _labelMap[_Label]
 
 function _normalizeLabel<T extends _Label | undefined>(label: T): T extends _Label ? typeof _labelMap[T] : 'utf-8' {
-    if (!label) return 'utf-8' as any
+    if (!label) return 'utf-8' as any // conditional type requires cast
     const result = _labelMap[label.trim().toLowerCase() as _Label]
-    if (result) return result as any
+    if (result) return result as any // conditional type requires cast
     throw new RangeError(`The encoding label "${label}" is not supported`)
 }
 
 function _decodeUTF8(buf: Uint8Array, fatal: boolean): string {
     let out = ''
     for (let i = 0; i < buf.length; ) {
-        const b = buf[i++]
+        const b = buf[i++]!
         if (b < 0x80) { out += String.fromCharCode(b); continue }
         if (b < 0xC0) { out += fatal ? (() => { throw new TypeError('unexpected continuation byte') })() : '\uFFFD'; continue }
         let c: number, min: number
         if (b < 0xE0) {
             if (i >= buf.length) { out += fatal ? (() => { throw new TypeError('incomplete utf-8') })() : '\uFFFD'; break }
-            const b2 = buf[i++]
+            const b2 = buf[i++]!
             if ((b2 & 0xC0) !== 0x80) { out += '\uFFFD'; continue }
             c = ((b & 0x1F) << 6) | (b2 & 0x3F)
             min = 0x80
         } else if (b < 0xF0) {
             if (i + 1 >= buf.length) { out += fatal ? (() => { throw new TypeError('incomplete utf-8') })() : '\uFFFD'; break }
-            const b2 = buf[i++]; const b3 = buf[i++]
+            const b2 = buf[i++]!; const b3 = buf[i++]!
             if (((b2 & 0xC0) !== 0x80) || ((b3 & 0xC0) !== 0x80)) { out += '\uFFFD'; continue }
             c = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
             min = 0x800
         } else if (b < 0xF8) {
             if (i + 2 >= buf.length) { out += fatal ? (() => { throw new TypeError('incomplete utf-8') })() : '\uFFFD'; break }
-            const b2 = buf[i++]; const b3 = buf[i++]; const b4 = buf[i++]
+            const b2 = buf[i++]!; const b3 = buf[i++]!; const b4 = buf[i++]!
             if (((b2 & 0xC0) !== 0x80) || ((b3 & 0xC0) !== 0x80) || ((b4 & 0xC0) !== 0x80)) { out += '\uFFFD'; continue }
             c = ((b & 0x07) << 18) | ((b2 & 0x3F) << 12) | ((b3 & 0x3F) << 6) | (b4 & 0x3F)
             min = 0x10000
@@ -114,13 +114,15 @@ if (typeof globalThis.TextDecoder === 'undefined') {
             this._ignoreBOM = options?.ignoreBOM ?? false
         }
 
-        get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any }
+        get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any } // conditional type requires cast
         get fatal(): boolean { return this._fatal }
         get ignoreBOM(): boolean { return this._ignoreBOM }
 
         decode(buffer?: ArrayBufferView | ArrayBuffer | null): string {
             if (!buffer) return ''
-            const arr = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer as any)
+            const arr = buffer instanceof Uint8Array ? buffer
+                : buffer instanceof ArrayBuffer ? new Uint8Array(buffer)
+                : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
 
             if (this._encoding === 'utf-8') {
                 return _decodeUTF8(arr, this._fatal)
@@ -130,8 +132,8 @@ if (typeof globalThis.TextDecoder === 'undefined') {
             let offset = 0
 
             if (arr.length >= 2 && !this._ignoreBOM) {
-                const bomLo = le ? arr[0] : arr[1]
-                const bomHi = le ? arr[1] : arr[0]
+                const bomLo = le ? arr[0]! : arr[1]!
+                const bomHi = le ? arr[1]! : arr[0]!
                 const bom = (bomHi << 8) | bomLo
                 if (bom === 0xFEFF || bom === 0xFFFE) {
                     offset = 2
@@ -151,9 +153,9 @@ if (typeof globalThis.TextEncoder === 'undefined') {
             this._encoding = _normalizeLabel(label)
         }
 
-        get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any }
+        get encoding(): T extends _Label ? typeof _labelMap[T] : 'utf-8' { return this._encoding as any } // conditional type requires cast
 
-        encode(input?: string): Uint8Array {
+        encode(input?: string): Uint8Array<ArrayBuffer> {
             if (!input) return new Uint8Array(0)
 
             if (this._encoding === 'utf-8') {

@@ -17,7 +17,7 @@ interface RequestOptions {
     maxRedirects?: number
 }
 
-function _concat(parts: Uint8Array[]): Uint8Array {
+function _concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
     if (parts.length === 0) return new Uint8Array(0)
     let totalLen = 0
     for (const p of parts) totalLen += p.length
@@ -45,7 +45,7 @@ function decodeChunked(data: Uint8Array): Uint8Array {
 
         let size = 0
         for (let i = pos; i < crlf; i++) {
-            const b = data[i]
+            const b = data[i]!
             if (b >= 0x30 && b <= 0x39) size = size * 16 + (b - 0x30)
             else if (b >= 0x41 && b <= 0x46) size = size * 16 + (b - 0x37)
             else if (b >= 0x61 && b <= 0x66) size = size * 16 + (b - 0x57)
@@ -80,14 +80,14 @@ type PendingRead = { resolve: (result: ReadResult) => void, reject: (err: Error)
 
 interface _Reader {
     read(): Promise<ReadResult>
-    cancel(reason?: any): void
+    cancel(reason?: unknown): void
     releaseLock(): void
 }
 
 interface _ReadableStream {
     readonly locked: boolean
     getReader(): _Reader
-    cancel(reason?: any): void
+    cancel(reason?: unknown): void
 }
 
 class _QuickReadableStream implements _ReadableStream {
@@ -118,7 +118,7 @@ class _QuickReadableStream implements _ReadableStream {
         return new _QuickReader(this)
     }
 
-    cancel(reason?: any): void {
+    cancel(reason?: unknown): void {
         if (this._state !== 'readable') return
         this._state = 'closed'
         this._locked = false
@@ -213,7 +213,7 @@ class _PreloadedStream implements _ReadableStream {
                 }
                 return Promise.resolve({ done: true })
             },
-            cancel(reason?: any): void {
+            cancel(reason?: unknown): void {
                 stream._state = 'closed'
                 stream._locked = false
             },
@@ -223,7 +223,7 @@ class _PreloadedStream implements _ReadableStream {
         }
     }
 
-    cancel(reason?: any): void {
+    cancel(reason?: unknown): void {
         this._state = 'closed'
         this._locked = false
     }
@@ -257,7 +257,7 @@ class _QuickReader {
         })
     }
 
-    cancel(reason?: any): void {
+    cancel(reason?: unknown): void {
         if (this._stream) {
             this._stream.cancel(reason)
             this._stream = null
@@ -284,7 +284,7 @@ class FetchHeaders {
                 }
             } else if (typeof init === 'object') {
                 for (const key in init) {
-                    this._headers[key.toLowerCase()] = init[key]
+                    this._headers[key.toLowerCase()] = (init as Record<string, string>)[key]!
                 }
             }
         }
@@ -317,14 +317,14 @@ class FetchHeaders {
 
     forEach(callback: (value: string, name: string, headers: FetchHeaders) => void): void {
         for (const key in this._headers) {
-            callback(this._headers[key], key, this)
+            callback(this._headers[key]!, key, this)
         }
     }
 
     entries(): IterableIterator<[string, string]> {
         const entries: [string, string][] = []
         for (const key in this._headers) {
-            entries.push([key, this._headers[key]])
+            entries.push([key, this._headers[key]!])
         }
         return entries[Symbol.iterator]()
     }
@@ -336,7 +336,7 @@ class FetchHeaders {
     values(): IterableIterator<string> {
         const values: string[] = []
         for (const key in this._headers) {
-            values.push(this._headers[key])
+            values.push(this._headers[key]!)
         }
         return values[Symbol.iterator]()
     }
@@ -390,7 +390,7 @@ class FetchRequest {
 
     async arrayBuffer(): Promise<ArrayBuffer> {
         if (this.body === null) return new ArrayBuffer(0)
-        return new TextEncoder().encode(this.body).buffer as ArrayBuffer
+        return new TextEncoder().encode(this.body).buffer
     }
 
     async blob(): Promise<Blob> {
@@ -498,7 +498,7 @@ class FetchResponse {
             chunks.push(value)
         }
         const combined = _concat(chunks)
-        return combined.buffer as ArrayBuffer
+        return combined.buffer
     }
 
     /** Replace body/headers after brotli decompression. */
@@ -524,19 +524,19 @@ function parseHeaders(data: string): ParsedResponse | null {
 
     const headerPart = data.slice(0, headerEnd)
     const lines = headerPart.split('\r\n')
-    const statusLine = lines[0]
+    const statusLine = lines[0]!
     const match = statusLine.match(/^HTTP\/\d\.\d\s+(\d+)\s+(.*)$/)
     if (!match) throw new Error('Invalid HTTP response: ' + statusLine)
 
-    const status = parseInt(match[1], 10)
-    const statusText = match[2]
+    const status = parseInt(match[1]!, 10)
+    const statusText = match[2]!
 
     const headers = new FetchHeaders()
     for (let i = 1; i < lines.length; i++) {
-        const colonIndex = lines[i].indexOf(':')
+        const colonIndex = lines[i]!.indexOf(':')
         if (colonIndex > 0) {
-            const name = lines[i].slice(0, colonIndex).trim()
-            const value = lines[i].slice(colonIndex + 1).trim()
+            const name = lines[i]!.slice(0, colonIndex).trim()
+            const value = lines[i]!.slice(colonIndex + 1).trim()
             headers.append(name, value)
         }
     }
@@ -584,7 +584,7 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
         const requestBytes = new TextEncoder().encode(request)
         const httpRequest = _concat(
             bodyBytes ? [requestBytes, bodyBytes] : [requestBytes]
-        ).buffer as ArrayBuffer
+        ).buffer
 
         let s: number | null = null
         let ssl: number | null = null
@@ -817,7 +817,7 @@ function normalizeHeaders(headers: HeadersInit | undefined): Record<string, stri
 
 function parseMaxAge(cc: string): number {
     const m = cc.match(/max-age=(\d+)/)
-    return m ? parseInt(m[1], 10) : 0
+    return m ? parseInt(m[1]!, 10) : 0
 }
 
 interface CacheMeta {
@@ -847,7 +847,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
             maxRedirects: init.maxRedirects || req.maxRedirects,
         }
     } else {
-        currentUrl = url as string
+        currentUrl = typeof url === 'string' ? url : url.url
         options = {
             method: init.method,
             headers: init.headers,
@@ -906,7 +906,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
         const mergedOptions: RequestOptions = { ...options }
         const mergedHeaders = normalizeHeaders(options.headers)
         for (const key in conditionalHeaders) {
-            mergedHeaders[key] = conditionalHeaders[key]
+            mergedHeaders[key] = conditionalHeaders[key]!
         }
         if (Object.keys(mergedHeaders).length > 0) mergedOptions.headers = mergedHeaders
 
@@ -1040,7 +1040,7 @@ declare global {
 
     interface AbortSignal {
         readonly aborted: boolean;
-        readonly reason: any;
+        readonly reason: unknown;
         onabort: ((event: Event) => void) | null;
         throwIfAborted(): void;
     }

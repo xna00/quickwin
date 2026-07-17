@@ -78,13 +78,13 @@ function createFrame(opcode: number, payload: Uint8Array): ArrayBuffer {
         view[off++] = lo & 0xFF
     }
 
-    view[off++] = maskingKey[0]
-    view[off++] = maskingKey[1]
-    view[off++] = maskingKey[2]
-    view[off++] = maskingKey[3]
+    view[off++] = maskingKey[0]!
+    view[off++] = maskingKey[1]!
+    view[off++] = maskingKey[2]!
+    view[off++] = maskingKey[3]!
 
     for (let i = 0; i < payload.length; i++) {
-        view[off++] = payload[i] ^ maskingKey[i % 4]
+        view[off++] = payload[i]! ^ maskingKey[i % 4]!
     }
 
     return buf
@@ -112,8 +112,8 @@ interface ParsedFrame {
 function tryParseFrame(buffer: Uint8Array): ParsedFrame | null {
     if (buffer.length < 2) return null
 
-    const b0 = buffer[0]
-    const b1 = buffer[1]
+    const b0 = buffer[0]!
+    const b1 = buffer[1]!
     const fin = (b0 & 0x80) !== 0
     const opcode = b0 & 0x0F
     const masked = (b1 & 0x80) !== 0
@@ -122,13 +122,13 @@ function tryParseFrame(buffer: Uint8Array): ParsedFrame | null {
 
     if (payloadLen === 126) {
         if (buffer.length < 4) return null
-        payloadLen = (buffer[2] << 8) | buffer[3]
+        payloadLen = (buffer[2]! << 8) | buffer[3]!
         offset = 4
     } else if (payloadLen === 127) {
         if (buffer.length < 10) return null
         let hi = 0, lo = 0
-        for (let i = 0; i < 4; i++) hi = (hi * 256 + buffer[offset + i]) >>> 0
-        for (let i = 4; i < 8; i++) lo = (lo * 256 + buffer[offset + i]) >>> 0
+        for (let i = 0; i < 4; i++) hi = (hi * 256 + buffer[offset + i]!) >>> 0
+        for (let i = 4; i < 8; i++) lo = (lo * 256 + buffer[offset + i]!) >>> 0
         payloadLen = hi * 0x100000000 + lo
         offset = 10
     }
@@ -143,7 +143,7 @@ function tryParseFrame(buffer: Uint8Array): ParsedFrame | null {
         const maskKey = buffer.slice(offset - 4, offset)
         payload = new Uint8Array(payloadLen)
         for (let i = 0; i < payloadLen; i++) {
-            payload[i] = buffer[offset + i] ^ maskKey[i % 4]
+            payload[i] = buffer[offset + i]! ^ maskKey[i % 4]!
         }
     } else {
         payload = buffer.slice(offset, offset + payloadLen)
@@ -372,9 +372,9 @@ class WebSocket {
                         if (headerEnd >= 0) {
                             const headerPart = headerBuffer.slice(0, headerEnd)
                             const lines = headerPart.split('\r\n')
-                            const statusLine = lines[0]
+                            const statusLine = lines[0]!
                             const statusParts = statusLine.split(' ')
-                            const statusCode = parseInt(statusParts[1], 10)
+                            const statusCode = parseInt(statusParts[1]!, 10)
                             if (statusCode !== 101) {
                                 doError(new Error('WebSocket handshake failed: HTTP ' + statusCode))
                                 return
@@ -382,7 +382,7 @@ class WebSocket {
 
                             let acceptHeader = ''
                             for (let i = 1; i < lines.length; i++) {
-                                const line = lines[i]
+                                const line = lines[i]!
                                 const colonIdx2 = line.indexOf(':')
                                 if (colonIdx2 >= 0) {
                                     const name = line.slice(0, colonIdx2).toLowerCase().trim()
@@ -480,7 +480,7 @@ class WebSocket {
                 } else if (frame.opcode === Opcode.PONG) {
                 } else if (frame.opcode === Opcode.CLOSE) {
                     if (frame.payload.length >= 2) {
-                        this._closeCode = (frame.payload[0] << 8) | frame.payload[1]
+                        this._closeCode = (frame.payload[0]! << 8) | frame.payload[1]!
                         this._closeReason = _ab2str(frame.payload.slice(2).buffer)
                     }
                     this._cleanup()
@@ -526,13 +526,13 @@ class WebSocket {
 
 class Event {
     readonly type: string
-    constructor(type: string, _init?: any) { this.type = type }
+    constructor(type: string, _init?: unknown) { this.type = type }
 }
 
 class MessageEvent {
     readonly type: string
-    readonly data: any
-    constructor(type: string, init: { data: any }) {
+    readonly data: unknown
+    constructor(type: string, init: { data: unknown }) {
         this.type = type
         this.data = init.data
     }
@@ -556,7 +556,7 @@ class CloseEvent {
 function _ab2str(buf: ArrayBuffer): string {
     const view = new Uint8Array(buf)
     let str = ''
-    for (let i = 0; i < view.length; i++) str += String.fromCharCode(view[i])
+    for (let i = 0; i < view.length; i++) str += String.fromCharCode(view[i]!)
     return str
 }
 

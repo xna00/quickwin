@@ -27,7 +27,7 @@ function ensureDlls(): boolean {
 }
 
 function strToWide(s: string): ArrayBuffer {
-  return new TextEncoder('utf-16le').encode(s + '\0').buffer as ArrayBuffer
+  return new TextEncoder('utf-16le').encode(s + '\0').buffer
 }
 
 const _decoder = new TextDecoder('utf-16le')

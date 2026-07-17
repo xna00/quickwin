@@ -21,7 +21,7 @@ function SimpleComponent() {
 }
 
 const LazySimple = lazy(async () => {
-  await new Promise(r => setTimeout(r, 500))
+  await new Promise(r => setTimeout(r, 500, undefined))
   return { default: SimpleComponent }
 })
 
@@ -34,7 +34,7 @@ function App() {
         text={show ? 'Hide Lazy' : 'Show Lazy'}
         ws={gui.WindowStyle.CHILD | gui.WindowStyle.VISIBLE}
         style={{width:150, height:30}}
-        onEvent={(e: any) => {
+        onEvent={(e: { msg: number; wParam: number; lParam: number }) => {
           if (e.msg === 0x0202) setShow(!show)
         }}
       />

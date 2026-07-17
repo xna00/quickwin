@@ -6,24 +6,26 @@ interface ImportMeta {
 /** Provides the command line arguments. The first argument is the script name. */
 declare var scriptArgs: string[];
 /** Print the arguments separated by spaces and a trailing newline. */
-declare function print(...args: any[]): void;
+declare function print(...args: unknown[]): void;
 /** Same as print(). */
 declare const console: Console
 
 interface Console {
     /** Same as print(). */
-    log: (...args: any) => void
+    log: (...args: unknown[]) => void
 }
 
 
+type UnknownRecord = Record<string, unknown>
+
 declare namespace WebAssembly {
     interface Module { }
-    interface Instance {
-        exports: { [key: string]: any }
+    interface Instance<E extends UnknownRecord = UnknownRecord> {
+        exports: E
     }
     interface Global {
-        value: any
-        valueOf(): any
+        value: unknown
+        valueOf(): unknown
     }
     interface GlobalDescriptor {
         value: 'i32' | 'i64' | 'f32' | 'f64'
@@ -42,8 +44,8 @@ declare namespace WebAssembly {
 declare const WebAssembly: {
     validate(buffer: ArrayBuffer): boolean
     compile(buffer: ArrayBuffer): Promise<WebAssembly.Module>
-    instantiate(buffer: ArrayBuffer, importObject?: any): Promise<{ module: WebAssembly.Module; instance: WebAssembly.Instance }>
-    instantiate(module: WebAssembly.Module, importObject?: any): Promise<WebAssembly.Instance>
+    instantiate<E extends UnknownRecord = UnknownRecord>(buffer: ArrayBuffer, importObject?: unknown): Promise<{ module: WebAssembly.Module; instance: WebAssembly.Instance<E> }>
+    instantiate<E extends UnknownRecord = UnknownRecord>(module: WebAssembly.Module, importObject?: unknown): Promise<WebAssembly.Instance<E>>
     Module: {
         new(buffer: ArrayBuffer): WebAssembly.Module
         exports(module: WebAssembly.Module): { name: string; kind: string }[]
@@ -55,10 +57,10 @@ declare const WebAssembly: {
          * - 导入的 Global 在实例化时会 snapshot 值，之后无法与宿主或其他实例共享
          * - 不支持 mutable imported global 的实时同步
          */
-        new(module: WebAssembly.Module, importObject?: any): WebAssembly.Instance
+        new<E extends UnknownRecord = UnknownRecord>(module: WebAssembly.Module, importObject?: unknown): WebAssembly.Instance<E>
     }
     Global: {
-        new(descriptor: WebAssembly.GlobalDescriptor, value?: any): WebAssembly.Global
+        new(descriptor: WebAssembly.GlobalDescriptor, value?: unknown): WebAssembly.Global
     }
     Memory: {
         new(descriptor: WebAssembly.MemoryDescriptor): WebAssembly.Memory
@@ -71,7 +73,7 @@ interface Event {
 
 interface MessageEvent {
     readonly type: string;
-    readonly data: any;
+    readonly data: unknown;
 }
 
 interface CloseEvent {
@@ -83,14 +85,14 @@ interface CloseEvent {
 
 interface ReadableStreamReader {
     read(): Promise<{ done: false; value: Uint8Array } | { done: true; value?: undefined }>;
-    cancel(reason?: any): void;
+    cancel(reason?: unknown): void;
     releaseLock(): void;
 }
 
 interface ReadableStream {
     readonly locked: boolean;
     getReader(): ReadableStreamReader;
-    cancel(reason?: any): void;
+    cancel(reason?: unknown): void;
 }
 
 declare module "std" {
@@ -105,7 +107,7 @@ declare module "std" {
          * Integer format types (e.g. `%d`) truncate the Numbers or BigInts to 32 bits.
          * Use the `l` modifier (e.g. `%ld`) to truncate to 64 bits.
          */
-        printf(fmt: string, ...args: any[]): void;
+        printf(fmt: string, ...args: unknown[]): void;
         /** Flush the buffered file. */
         flush(): void;
         /** Seek to a give file position (whence is `std.SEEK_*`). `offset` can be a number or a bigint. Return 0 if OK or `-errno` in case of I/O error. */
@@ -159,9 +161,9 @@ declare module "std" {
     /** Exit the process. */
     function exit(n: number): never;
     /** Evaluate the string `str` as a script (global eval). */
-    function evalScript(str: string, options?: EvalScriptOptions): any;
+    function evalScript(str: string, options?: EvalScriptOptions): unknown;
     /** Evaluate the file `filename` as a script (global eval). */
-    function loadScript(filename: string): any;
+    function loadScript(filename: string): unknown;
     /** Load the file `filename` and return it as a string assuming UTF-8 encoding. Return `null` in case of I/O error. */
     function loadFile(filename: string): string | null;
     /** Open a file (wrapper to the libc `fopen()`). Return the FILE object or `null` in case of I/O error. If `errorObj` is not undefined, set its `errno` property to the error code or to 0 if no error occured. */
@@ -175,9 +177,9 @@ declare module "std" {
     /** Equivalent to `std.out.puts(str)`. */
     function puts(str: string): void;
     /** Equivalent to `std.out.printf(fmt, ...args)`. */
-    function printf(fmt: string, ...args: any[]): void;
+    function printf(fmt: string, ...args: unknown[]): void;
     /** Equivalent to the libc sprintf(). */
-    function sprintf(fmt: string, ...args: any[]): string;
+    function sprintf(fmt: string, ...args: unknown[]): string;
 
     /** Wrappers to the libc file `stdout`. */
     const out: FILE;
@@ -206,8 +208,8 @@ declare module "std" {
      * Parse `str` using a superset of `JSON.parse`. The superset is very close to the JSON5 specification.
      * Extensions: comments, unquoted properties, trailing comma, single quoted strings, hex/octal/binary integers, NaN, Infinity, etc.
      */
-    function parseExtJSON(str: string): any;
-    function __printObject(val: any): void;
+    function parseExtJSON(str: string): unknown;
+    function __printObject(val: unknown): void;
     /** Return a string that describes the error `errno`. */
     function strerror(errno: number): string;
     /** Manually invoke the cycle removal algorithm. The cycle removal algorithm is automatically started when needed, so this function is useful in case of specific memory constraints or for testing. */
@@ -335,9 +337,9 @@ declare module "os" {
         /** Constructor to create a new thread (worker) with an API close to the `WebWorkers`. `module_filename` is a string specifying the module filename which is executed in the newly created thread. */
         constructor(module_filename: string);
         /** Send a message to the corresponding worker. `msg` is cloned in the destination worker using an algorithm similar to the `HTML` structured clone algorithm. */
-        postMessage(msg: any): void;
+        postMessage(msg: unknown): void;
         /** Getter and setter. Set a function which is called each time a message is received. The function is called with a single argument. It is an object with a `data` property containing the received message. */
-        onmessage: ((event: { data: any }) => void) | null;
+        onmessage: ((event: { data: unknown }) => void) | null;
         /** In the created worker, `Worker.parent` represents the parent worker and is used to send or receive messages. */
         static parent: Worker;
     }

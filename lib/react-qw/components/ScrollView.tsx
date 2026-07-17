@@ -125,7 +125,7 @@ export const ScrollView = forwardRef<gui.HWND, ScrollViewProps>(
         ref={(h: gui.HWND) => {
           svRef.current = h
           if (typeof ref === 'function') ref(h)
-          else if (ref) (ref as React.RefObject<gui.HWND | null>).current = h
+          else if (ref) ref.current = h
         }}
         onEvent={{
           fn: (e) => {

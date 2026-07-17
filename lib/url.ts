@@ -80,7 +80,7 @@ function _parseURL(url: string): { scheme: string; user: string; pass: string; h
     const qi = url.indexOf('?')
     if (qi >= 0) { r.query = url.slice(qi + 1); url = url.slice(0, qi) }
     const sm = url.match(/^([a-zA-Z][a-zA-Z0-9+\-.]*):(.*)$/)
-    if (sm) { r.scheme = sm[1].toLowerCase(); url = sm[2] }
+    if (sm) { r.scheme = sm[1]!.toLowerCase(); url = sm[2]! }
     if (url.startsWith('//')) {
         url = url.slice(2)
         const si = url.indexOf('/')
@@ -135,7 +135,7 @@ class URLSearchParamsImpl {
     set(key: string, value: string): void {
         let f = false
         for (let i = 0; i < this._list.length; i++) {
-            if (this._list[i][0] === key) { if (!f) { this._list[i][1] = value; f = true } else { this._list.splice(i, 1); i-- } }
+            if (this._list[i]![0] === key) { if (!f) { this._list[i]![1] = value; f = true } else { this._list.splice(i, 1); i-- } }
         }
         if (!f) this._list.push([key, value])
     }
@@ -152,7 +152,7 @@ class URLSearchParamsImpl {
 }
 
 if (typeof globalThis.URLSearchParams === 'undefined') {
-    globalThis.URLSearchParams = URLSearchParamsImpl as any
+    globalThis.URLSearchParams = URLSearchParamsImpl
 }
 
 class URLImpl {
@@ -237,5 +237,5 @@ class URLImpl {
 }
 
 if (typeof globalThis.URL === 'undefined') {
-    globalThis.URL = URLImpl as any
+    globalThis.URL = URLImpl
 }

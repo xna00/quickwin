@@ -86,7 +86,7 @@ export const suite = {
         if (bodyAb) {
             const view = new Uint8Array(bodyAb)
             let str = ''
-            for (let i = 0; i < view.length; i++) str += String.fromCharCode(view[i])
+            for (let i = 0; i < view.length; i++) str += String.fromCharCode(view[i]!)
             assert('body content correct', str === testBody)
         }
 
@@ -118,7 +118,7 @@ export const suite = {
         if (afterMeta) {
             const ini1 = parseIni(afterMeta)
             assert('lastAccess present after update', typeof ini1.meta.lastAccess === 'string' && ini1.meta.lastAccess.length > 0)
-            assert('lastAccess is numeric', /^\d+$/.test(ini1.meta.lastAccess))
+            assert('lastAccess is numeric', /^\d+$/.test(ini1.meta.lastAccess!))
             assert('meta preserved after lastAccess', ini1.meta.maxAge === '300')
             assert('no headers leaked', Object.keys(ini1.headers).length === 0)
         }
