@@ -7,6 +7,7 @@ import {
 
 import { printf } from 'std'
 import  './lib/polyfill.js'
+import  './lib/fetch.js'
 
 const scaleFactor = GetScaleFactor();
 const dpiFont = CreateSystemDpiFont();
