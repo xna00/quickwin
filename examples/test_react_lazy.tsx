@@ -1,6 +1,6 @@
 import '../lib/polyfill.js'
 import * as gui from 'gui'
-import React, { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { render } from '../lib/react-qw/index.js'
 
 gui.RegisterClass('LazyTest', (hwnd, msg, wParam, lParam) => {

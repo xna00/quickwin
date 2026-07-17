@@ -4,9 +4,6 @@ import { useState } from 'react'
 import { createRoot } from '../lib/react-qw/index.js'
 import { Tester } from './test_helper.js'
 
-const WS_CHILD = 0x40000000
-const WS_VISIBLE = 0x10000000
-
 let __setItems: ((v: any) => void) | null = null
 
 gui.RegisterClass('FlexTest', (hwnd, msg, wParam, lParam) => {

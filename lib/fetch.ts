@@ -548,7 +548,6 @@ function parseHeaders(data: string): ParsedResponse | null {
 
 const ST_CONNECTING = 0
 const ST_HANDSHAKE = 1
-const ST_SEND = 2
 const ST_RECV_HEADERS = 3
 const ST_RECV_BODY = 4
 const ST_DONE = 5

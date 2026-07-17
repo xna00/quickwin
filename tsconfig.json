@@ -9,6 +9,8 @@
     "noImplicitReturns": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
+    "noUncheckedSideEffectImports": true,
+    "noUnusedLocals": true,
     "esModuleInterop": true,
     // "skipLibCheck": true,
     "allowJs": false,

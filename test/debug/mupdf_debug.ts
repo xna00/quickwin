@@ -21,7 +21,7 @@ function setupMupdfModule(wasmPath: string) {
 }
 
 setupMupdfModule('./vendor/mupdf-wasm/mupdf-wasm.wasm')
-const mupdf = await import('../../vendor/mupdf-wasm/mupdf.js')
+await import('../../vendor/mupdf-wasm/mupdf.js')
 
 // Debug the instance exports
 const inst = (globalThis as any)["$wasm_inst"]

@@ -162,10 +162,7 @@ export const suite = {
         const timingUrl = 'http://localhost:18923/cache/60?t=' + String(Date.now())
         trackedUrls.push(timingUrl)
 
-        const t0 = Date.now()
         const rNet = await fetch(timingUrl)
-        const t1 = Date.now()
-        const timeNet = t1 - t0
         assert('network fetch ok', rNet.ok)
         const bodyNet = await rNet.text()
         assert('network body non-empty', bodyNet.length > 0)

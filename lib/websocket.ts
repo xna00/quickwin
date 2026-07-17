@@ -158,12 +158,7 @@ interface WebSocketOptions {
     headers?: Record<string, string>
 }
 
-interface WSEventMap {
-    open: Event
-    message: MessageEvent
-    close: CloseEvent
-    error: Event
-}
+
 
 class WebSocket {
     readonly url: string
@@ -179,7 +174,6 @@ class WebSocket {
     private _ctx: number | null = null
     private _readBuffer: Uint8Array = new Uint8Array(0)
     private _state: State = State.CONNECTING
-    private _resolveOpen: (() => void) | null = null
     private _processingHandshake: boolean = false
     static readonly CONNECTING = State.CONNECTING
     static readonly OPEN = State.OPEN
@@ -188,7 +182,6 @@ class WebSocket {
 
     private _closeCode: number = 1005
     private _closeReason: string = ''
-    private _requestKey: string = ''
 
     constructor(url: string, options?: WebSocketOptions) {
         this.url = url
@@ -257,7 +250,6 @@ class WebSocket {
         const path = url.pathname + (url.search || '')
 
         const requestKey = generateKey()
-        this._requestKey = requestKey
 
         let customHeaders = ''
         if (this._options.headers) {
