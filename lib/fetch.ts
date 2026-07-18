@@ -189,8 +189,7 @@ class RequestImpl {
     }
 
     async arrayBuffer(): Promise<ArrayBuffer> {
-        if (this.body === null) return new ArrayBuffer(0)
-        return new TextEncoder().encode(this.body).buffer
+        return new TextEncoder().encode(this.body ?? undefined).buffer
     }
 
     async blob(): Promise<Blob> {
