@@ -60,74 +60,85 @@ function decodeChunked(data: Uint8Array): Uint8Array {
 
 // ── Headers ──
 
+// Flat array storage: [name0, value0, name1, value1, ...]
+// Pairs at even/odd indices. Strings are immutable, so [...this._headers] is a correct deep copy.
+
 class HeadersImpl {
-    private _headers: { [key: string]: string } = {}
+    private _headers: string[] = []
 
     constructor(init?: HeadersInit) {
         if (init) {
             if (init instanceof HeadersImpl) {
-                this._headers = { ...init._headers }
+                this._headers = [...init._headers]
             } else if (Array.isArray(init)) {
-                for (const [key, val] of init) {
-                    this._headers[key.toLowerCase()] = val
-                }
+                this._headers = init.flatMap(([k, v]) => [k.toLowerCase(), v])
             } else if (typeof init === 'object') {
-                for (const key in init) {
-                    this._headers[key.toLowerCase()] = (init as Record<string, string>)[key]!
-                }
+                this._headers = Object.entries(init).flatMap(([k, v]) => [k.toLowerCase(), v])
             }
         }
     }
 
     append(name: string, value: string): void {
-        const key = name.toLowerCase()
-        if (this._headers[key]) {
-            this._headers[key] += ', ' + value
-        } else {
-            this._headers[key] = value
-        }
+        this._headers.push(name.toLowerCase(), value)
     }
 
     delete(name: string): void {
-        delete this._headers[name.toLowerCase()]
+        const key = name.toLowerCase()
+        const h = this._headers
+        let i = h.length - 2
+        while (i >= 0) {
+            if (h[i] === key) { h.splice(i, 2); i -= 2 } else i -= 2
+        }
     }
 
     get(name: string): string | null {
-        return this._headers[name.toLowerCase()] || null
+        const key = name.toLowerCase()
+        const matches = [...this.entries()].filter(([k]) => k === key).map(([, v]) => v)
+        return matches.length ? matches.join(', ') : null
     }
 
     has(name: string): boolean {
-        return name.toLowerCase() in this._headers
+        return [...this.keys()].includes(name.toLowerCase())
     }
 
     set(name: string, value: string): void {
-        this._headers[name.toLowerCase()] = value
+        const key = name.toLowerCase()
+        const h = this._headers
+        let found = false
+        let i = h.length - 2
+        while (i >= 0) {
+            if (h[i] === key) {
+                if (!found) {
+                    h[i + 1] = value
+                    found = true
+                } else {
+                    h.splice(i, 2)
+                }
+            }
+            i -= 2
+        }
+        if (!found) h.push(key, value)
     }
 
     forEach(callback: (value: string, name: string, headers: HeadersImpl) => void): void {
-        for (const key in this._headers) {
-            callback(this._headers[key]!, key, this)
+        for (const [name, value] of this) {
+            callback(value, name, this)
         }
     }
 
-    entries(): IterableIterator<[string, string]> {
-        const entries: [string, string][] = []
-        for (const key in this._headers) {
-            entries.push([key, this._headers[key]!])
+    *entries(): IterableIterator<[string, string]> {
+        const h = this._headers
+        for (let i = 0; i < h.length; i += 2) {
+            yield [h[i]!, h[i + 1]!]
         }
-        return entries[Symbol.iterator]()
     }
 
-    keys(): IterableIterator<string> {
-        return Object.keys(this._headers)[Symbol.iterator]()
+    *keys(): IterableIterator<string> {
+        for (const [k] of this) yield k
     }
 
-    values(): IterableIterator<string> {
-        const values: string[] = []
-        for (const key in this._headers) {
-            values.push(this._headers[key]!)
-        }
-        return values[Symbol.iterator]()
+    *values(): IterableIterator<string> {
+        for (const [, v] of this) yield v
     }
 
     [Symbol.iterator](): IterableIterator<[string, string]> {
