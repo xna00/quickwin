@@ -83,18 +83,6 @@ interface CloseEvent {
     readonly wasClean: boolean;
 }
 
-interface ReadableStreamReader {
-    read(): Promise<{ done: false; value: Uint8Array } | { done: true; value?: undefined }>;
-    cancel(reason?: unknown): void;
-    releaseLock(): void;
-}
-
-interface ReadableStream {
-    readonly locked: boolean;
-    getReader(): ReadableStreamReader;
-    cancel(reason?: unknown): void;
-}
-
 declare module "std" {
     interface FILE {
         /** Close the file. Return 0 if OK or `-errno` in case of I/O error. */

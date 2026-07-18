@@ -1,4 +1,5 @@
 import '../lib/polyfill.js'
+import './stream.js'
 import * as sock from 'sock'
 import * as wolfssl from 'wolfssl'
 import * as os from 'os'
@@ -68,205 +69,6 @@ function decodeChunked(data: Uint8Array): Uint8Array {
         pos = dataStart + size + 2
     }
     return _concat(chunks)
-}
-
-// ── ReadableStream implementation ──
-
-type ReadResult =
-    | { done: true; value?: undefined }
-    | { done: false; value: Uint8Array }
-
-type PendingRead = { resolve: (result: ReadResult) => void, reject: (err: Error) => void }
-
-interface _Reader {
-    read(): Promise<ReadResult>
-    cancel(reason?: unknown): void
-    releaseLock(): void
-}
-
-interface _ReadableStream {
-    readonly locked: boolean
-    getReader(): _Reader
-    cancel(reason?: unknown): void
-}
-
-class _QuickReadableStream implements _ReadableStream {
-    _chunks: Uint8Array[] = []
-    _state: 'readable' | 'closed' | 'errored' = 'readable'
-    _pendingRead: PendingRead | null = null
-    _locked: boolean = false
-    _sock: number | null
-    _ssl: number | null
-    _isHTTPS: boolean
-    _cleanup: (() => void) | null
-    _contentLength: number
-    _receivedBytes: number = 0
-
-    constructor(sock: number, ssl: number | null, isHTTPS: boolean, cleanup: () => void, contentLength: number = 0) {
-        this._sock = sock
-        this._ssl = ssl
-        this._isHTTPS = isHTTPS
-        this._cleanup = cleanup
-        this._contentLength = contentLength
-    }
-
-    get locked(): boolean { return this._locked }
-
-    getReader(): _Reader {
-        if (this._locked) throw new TypeError('ReadableStream is locked')
-        this._locked = true
-        return new _QuickReader(this)
-    }
-
-    cancel(_reason?: unknown): void {
-        if (this._state !== 'readable') return
-        this._state = 'closed'
-        this._locked = false
-        if (this._cleanup) {
-            this._cleanup()
-            this._cleanup = null
-        }
-        if (this._pendingRead) {
-            const pr = this._pendingRead
-            this._pendingRead = null
-            pr.resolve({ done: true })
-        }
-    }
-
-    // ── Internal methods called by socket handler ──
-
-    _pushChunk(chunk: Uint8Array): void {
-        if (this._state !== 'readable') return
-        this._receivedBytes += chunk.length
-        if (this._pendingRead) {
-            const pr = this._pendingRead
-            this._pendingRead = null
-            pr.resolve({ done: false, value: chunk })
-        } else {
-            this._chunks.push(chunk)
-        }
-        // Auto-close if Content-Length is satisfied
-        if (this._contentLength > 0 && this._receivedBytes >= this._contentLength) {
-            this._close()
-        }
-    }
-
-    _close(): void {
-        if (this._state !== 'readable') return
-        this._state = 'closed'
-        if (this._cleanup) {
-            this._cleanup()
-            this._cleanup = null
-        }
-        if (this._pendingRead) {
-            const pr = this._pendingRead
-            this._pendingRead = null
-            pr.resolve({ done: true })
-        }
-    }
-
-    _error(err: Error): void {
-        if (this._state !== 'readable') return
-        this._state = 'errored'
-        if (this._pendingRead) {
-            const pr = this._pendingRead
-            this._pendingRead = null
-            pr.reject(err)
-        }
-    }
-
-    _tryRead(): Promise<ReadResult> | null {
-        if (this._chunks.length > 0) {
-            const chunk = this._chunks.shift()!
-            return Promise.resolve({ done: false, value: chunk })
-        }
-        if (this._state === 'closed') return Promise.resolve({ done: true })
-        if (this._state === 'errored') return Promise.reject(new Error('Stream errored'))
-        return null
-    }
-}
-
-class _PreloadedStream implements _ReadableStream {
-    _buffer: Uint8Array
-    _offset: number = 0
-    _state: 'readable' | 'closed' = 'readable'
-    _pendingRead: PendingRead | null = null
-    _locked: boolean = false
-
-    constructor(buffer: ArrayBuffer) {
-        this._buffer = new Uint8Array(buffer)
-    }
-
-    get locked(): boolean { return this._locked }
-
-    getReader(): _Reader {
-        if (this._locked) throw new TypeError('ReadableStream is locked')
-        this._locked = true
-        const stream = this
-        return {
-            read(): Promise<ReadResult> {
-                if (stream._offset < stream._buffer.length) {
-                    const end = stream._offset + 8192 < stream._buffer.length ? stream._offset + 8192 : stream._buffer.length
-                    const chunk = stream._buffer.subarray(stream._offset, end)
-                    stream._offset = end
-                    return Promise.resolve({ done: false, value: chunk })
-                }
-                return Promise.resolve({ done: true })
-            },
-            cancel(_reason?: unknown): void {
-                stream._state = 'closed'
-                stream._locked = false
-            },
-            releaseLock(): void {
-                // no-op
-            }
-        }
-    }
-
-    cancel(_reason?: unknown): void {
-        this._state = 'closed'
-        this._locked = false
-    }
-
-    _tryRead(): Promise<ReadResult> | null {
-        if (this._offset < this._buffer.length) {
-            const end = this._offset + 8192 < this._buffer.length ? this._offset + 8192 : this._buffer.length
-            const chunk = this._buffer.subarray(this._offset, end)
-            this._offset = end
-            return Promise.resolve({ done: false, value: chunk })
-        }
-        if (this._state === 'closed') return Promise.resolve({ done: true })
-        return null
-    }
-}
-
-class _QuickReader {
-    _stream: _QuickReadableStream | null
-
-    constructor(stream: _QuickReadableStream) {
-        this._stream = stream
-    }
-
-    read(): Promise<ReadResult> {
-        if (!this._stream) throw new TypeError('Reader released')
-        const result = this._stream._tryRead()
-        if (result) return result
-        return new Promise((resolve, reject) => {
-            if (!this._stream) { reject(new TypeError('Reader released')); return }
-            this._stream._pendingRead = { resolve, reject }
-        })
-    }
-
-    cancel(reason?: unknown): void {
-        if (this._stream) {
-            this._stream.cancel(reason)
-            this._stream = null
-        }
-    }
-
-    releaseLock(): void {
-        this._stream = null
-    }
 }
 
 // ── Headers ──
@@ -432,7 +234,7 @@ class FetchResponse {
     redirected: boolean
     type: ResponseType
     url: string
-    body: _ReadableStream
+    body: ReadableStream
     private _bodyConsumed: boolean = false
     _preloadedBody: ArrayBuffer | null = null
 
@@ -440,7 +242,7 @@ class FetchResponse {
         return this._bodyConsumed || this.body.locked
     }
 
-    constructor(status: number, statusText: string, headers: FetchHeaders, bodyStream: _ReadableStream) {
+    constructor(status: number, statusText: string, headers: FetchHeaders, bodyStream: ReadableStream) {
         this.status = status
         this.statusText = statusText
         this.headers = headers
@@ -502,7 +304,7 @@ class FetchResponse {
     }
 
     /** Replace body/headers after brotli decompression. */
-    _applyDecompressedBody(stream: _ReadableStream, body: ArrayBuffer, newHeaders: FetchHeaders): void {
+    _applyDecompressedBody(stream: ReadableStream, body: ArrayBuffer, newHeaders: FetchHeaders): void {
         this._preloadedBody = body
         this._bodyConsumed = false
         this.body = stream
@@ -591,10 +393,13 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
         let state = ST_CONNECTING
         let resolved = false
         let timerId: number | undefined
-        let stream: _QuickReadableStream | null = null
+        let stream: ReadableStream | null = null
+        let _controller: ReadableStreamDefaultController | null = null
         let headerRaw: Uint8Array = new Uint8Array(0)
         let isChunked = false
+        let contentLength = 0
         let chunkedParts: Uint8Array[] = []
+        let receivedBytes = 0
 
         const cleanupSocket = (): void => {
             state = ST_DONE
@@ -613,11 +418,6 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
 
         const doReject = (error: Error): void => {
             if (!resolved) { resolved = true; cleanup(); cleanupSocket(); reject(error) }
-        }
-
-        const streamCleanup = (): void => {
-            cleanup()
-            cleanupSocket()
         }
 
         timerId = setTimeout(() => {
@@ -694,21 +494,29 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
                             const trailingBodyBytes = headerRaw.subarray(headerEnd + 4)
 
                             isChunked = (parsed.headers.get('transfer-encoding') || '').toLowerCase().includes('chunked')
-                            const contentLength = isChunked ? 0 : parseInt(
+                            contentLength = isChunked ? 0 : parseInt(
                                 parsed.headers.get('content-length') || '0', 10
                             )
-                            stream = new _QuickReadableStream(fd, ssl, isHTTPS, streamCleanup, contentLength)
+                            _controller = null
+                            stream = new ReadableStream({
+                                start(ctrl: ReadableStreamDefaultController<Uint8Array>) { _controller = ctrl },
+                                cancel() { cleanup(); cleanupSocket() }
+                            })
                             if (trailingBodyBytes.length > 0) {
                                 if (isChunked) {
                                     chunkedParts = [trailingBodyBytes]
                                     if (_hasChunkedEnd(trailingBodyBytes)) {
                                         const decoded = decodeChunked(trailingBodyBytes)
-                                        stream._pushChunk(decoded)
-                                        stream._close()
+                                        _controller!.enqueue(decoded)
+                                        _controller!.close()
                                         state = ST_DONE
                                     }
                                 } else {
-                                    stream._pushChunk(trailingBodyBytes)
+                                    receivedBytes += trailingBodyBytes.length
+                                    _controller!.enqueue(trailingBodyBytes)
+                                    if (contentLength > 0 && receivedBytes >= contentLength) {
+                                        _controller!.close()
+                                    }
                                 }
                             }
 
@@ -741,14 +549,18 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
                             const combined = _concat(chunkedParts)
                             if (_hasChunkedEnd(combined)) {
                                 const decoded = decodeChunked(combined)
-                                stream._pushChunk(decoded)
-                                stream._close()
+                                _controller!.enqueue(decoded)
+                                _controller!.close()
                                 stream = null
                                 state = ST_DONE
                                 break
                             }
                         } else {
-                            stream._pushChunk(new Uint8Array(data))
+                            receivedBytes += data.byteLength
+                            _controller!.enqueue(new Uint8Array(data))
+                            if (contentLength > 0 && receivedBytes >= contentLength) {
+                                _controller!.close()
+                            }
                         }
                     }
                 }
@@ -775,11 +587,11 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
                     if (isChunked) {
                         chunkedParts.push(...remainingParts)
                         const decoded = decodeChunked(_concat(chunkedParts))
-                        stream._pushChunk(decoded)
+                        _controller!.enqueue(decoded)
                     } else if (remainingParts.length > 0) {
-                        stream._pushChunk(_concat(remainingParts))
+                        _controller!.enqueue(_concat(remainingParts))
                     }
-                    stream._close()
+                    _controller!.close()
                     stream = null
                     state = ST_DONE
                 }
@@ -889,7 +701,12 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
                     const resp = new FetchResponse(
                         cachedMeta.status, cachedMeta.statusText,
                         new FetchHeaders(cachedMeta.headers || {}),
-                        new _PreloadedStream(body)
+                        new ReadableStream({
+                                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
+                                    ctrl.enqueue(new Uint8Array(body));
+                                    ctrl.close();
+                                }
+                            })
                     )
                     resp.url = currentUrl
                     resp._preloadedBody = body
@@ -926,7 +743,12 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
                 if (k !== 'content-encoding') newHeaders.set(k, v)
             })
             newHeaders.set('content-length', String(decompressedBody.byteLength))
-            const stream = new _PreloadedStream(decompressedBody)
+            const stream = new ReadableStream({
+                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
+                    ctrl.enqueue(new Uint8Array(decompressedBody));
+                    ctrl.close();
+                }
+            })
             response._applyDecompressedBody(stream, decompressedBody, newHeaders)
         }
 
@@ -951,7 +773,12 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
                 const resp = new FetchResponse(
                     cachedMeta.status, cachedMeta.statusText,
                     new FetchHeaders(cachedMeta.headers),
-                    new _PreloadedStream(body)
+                    new ReadableStream({
+                                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
+                                    ctrl.enqueue(new Uint8Array(body));
+                                    ctrl.close();
+                                }
+                            })
                 )
                 resp.url = currentUrl
                 resp._preloadedBody = body
@@ -980,7 +807,12 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
             }
             const resp = new FetchResponse(
                 response.status, response.statusText,
-                response.headers, new _PreloadedStream(body)
+                response.headers, new ReadableStream({
+                                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
+                                    ctrl.enqueue(new Uint8Array(body));
+                                    ctrl.close();
+                                }
+                            })
             )
             resp.url = currentUrl
             resp._preloadedBody = body
