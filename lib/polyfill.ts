@@ -10,7 +10,9 @@ declare global {
 
     var window: typeof globalThis
 
-    function setTimeout<P extends unknown[]>(fn: (...argsf: P) => void, ms?: number, ...argsr: P): number
+    type TimerId = os.TimerId
+    function setTimeout<P extends unknown[]>(fn: (...argsf: P) => void, ms?: number, ...argsr: P): TimerId
+    function clearTimeout(id: TimerId): void
 
     function btoa(data: string): string
     function atob(data: string): string
@@ -36,6 +38,11 @@ if (typeof globalThis.setTimeout === 'undefined') {
     globalThis.setTimeout = ((fn, ms, ...args) => {
         return os.setTimeout(() => fn(...args), ms ?? 0)
     }) satisfies typeof setTimeout
+}
+
+// 2b. clearTimeout polyfill — bridge to os.clearTimeout
+if (typeof globalThis.clearTimeout === 'undefined') {
+    globalThis.clearTimeout = os.clearTimeout
 }
 
 // 3. console.error polyfill — QuickJS only has console.log

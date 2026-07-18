@@ -292,7 +292,7 @@ const hostConfig: QuickWinHostConfig = {
     return os.setTimeout(fn, delay)
   },
 
-  cancelTimeout(id: number) {
+  cancelTimeout(id: os.TimerId) {
     os.clearTimeout?.(id)
   },
 

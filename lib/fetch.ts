@@ -2,21 +2,8 @@ import '../lib/polyfill.js'
 import './stream.js'
 import * as sock from 'sock'
 import * as wolfssl from 'wolfssl'
-import * as os from 'os'
 import * as brotli from 'brotli'
 import { parseIni, toIni } from '../lib/cache-utils.js'
-
-const setTimeout = os.setTimeout
-const clearTimeout = os.clearTimeout
-
-interface RequestOptions {
-    method?: string
-    headers?: HeadersInit
-    body?: string
-    timeout?: number
-    redirect?: RequestRedirect
-    maxRedirects?: number
-}
 
 function _concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
     if (parts.length === 0) return new Uint8Array(0)
@@ -73,12 +60,12 @@ function decodeChunked(data: Uint8Array): Uint8Array {
 
 // ── Headers ──
 
-class FetchHeaders {
+class HeadersImpl {
     private _headers: { [key: string]: string } = {}
 
     constructor(init?: HeadersInit) {
         if (init) {
-            if (init instanceof FetchHeaders) {
+            if (init instanceof HeadersImpl) {
                 this._headers = { ...init._headers }
             } else if (Array.isArray(init)) {
                 for (const [key, val] of init) {
@@ -117,7 +104,7 @@ class FetchHeaders {
         this._headers[name.toLowerCase()] = value
     }
 
-    forEach(callback: (value: string, name: string, headers: FetchHeaders) => void): void {
+    forEach(callback: (value: string, name: string, headers: HeadersImpl) => void): void {
         for (const key in this._headers) {
             callback(this._headers[key]!, key, this)
         }
@@ -150,10 +137,10 @@ class FetchHeaders {
 
 // ── Request ──
 
-class FetchRequest {
+class RequestImpl {
     readonly url: string
     readonly method: string
-    readonly headers: FetchHeaders
+    readonly headers: HeadersImpl
     readonly body: string | null
     readonly redirect: RequestRedirect
     readonly timeout: number
@@ -169,12 +156,12 @@ class FetchRequest {
     readonly signal: AbortSignal | null = null
     readonly destination: string = ''
 
-    constructor(input: string | FetchRequest, init: RequestInit = {}) {
+    constructor(input: string | RequestImpl, init: RequestInit = {}) {
         const bodyStr = typeof init.body === 'string' ? init.body : undefined
-        if (input instanceof FetchRequest) {
+        if (input instanceof RequestImpl) {
             this.url = input.url
             this.method = init.method || input.method
-            this.headers = new FetchHeaders(init.headers || input.headers)
+            this.headers = new HeadersImpl(init.headers || input.headers)
             this.body = bodyStr !== undefined ? bodyStr : input.body
             this.redirect = init.redirect || input.redirect
             this.timeout = init.timeout || input.timeout
@@ -182,7 +169,7 @@ class FetchRequest {
         } else {
             this.url = input
             this.method = init.method || 'GET'
-            this.headers = new FetchHeaders(init.headers)
+            this.headers = new HeadersImpl(init.headers)
             this.body = bodyStr || null
             this.redirect = init.redirect || 'follow'
             this.timeout = init.timeout || 30000
@@ -212,8 +199,8 @@ class FetchRequest {
         return this.body || ''
     }
 
-    clone(): FetchRequest {
-        return new FetchRequest(this.url, {
+    clone(): RequestImpl {
+        return new RequestImpl(this.url, {
             method: this.method,
             headers: this.headers,
             body: this.body || undefined,
@@ -226,10 +213,10 @@ class FetchRequest {
 
 // ── Response ──
 
-class FetchResponse {
+class ResponseImpl {
     readonly status: number
     readonly statusText: string
-    headers: FetchHeaders
+    headers: HeadersImpl
     readonly ok: boolean
     redirected: boolean
     type: ResponseType
@@ -242,7 +229,7 @@ class FetchResponse {
         return this._bodyConsumed || this.body.locked
     }
 
-    constructor(status: number, statusText: string, headers: FetchHeaders, bodyStream: ReadableStream) {
+    constructor(status: number, statusText: string, headers: HeadersImpl, bodyStream: ReadableStream) {
         this.status = status
         this.statusText = statusText
         this.headers = headers
@@ -304,7 +291,7 @@ class FetchResponse {
     }
 
     /** Replace body/headers after brotli decompression. */
-    _applyDecompressedBody(stream: ReadableStream, body: ArrayBuffer, newHeaders: FetchHeaders): void {
+    _applyDecompressedBody(stream: ReadableStream, body: ArrayBuffer, newHeaders: HeadersImpl): void {
         this._preloadedBody = body
         this._bodyConsumed = false
         this.body = stream
@@ -317,7 +304,7 @@ class FetchResponse {
 interface ParsedResponse {
     status: number
     statusText: string
-    headers: FetchHeaders
+    headers: HeadersImpl
 }
 
 function parseHeaders(data: string): ParsedResponse | null {
@@ -333,7 +320,7 @@ function parseHeaders(data: string): ParsedResponse | null {
     const status = parseInt(match[1]!, 10)
     const statusText = match[2]!
 
-    const headers = new FetchHeaders()
+    const headers = new HeadersImpl()
     for (let i = 1; i < lines.length; i++) {
         const colonIndex = lines[i]!.indexOf(':')
         if (colonIndex > 0) {
@@ -356,11 +343,11 @@ const ST_DONE = 5
 
 // ── Main fetch request ──
 
-function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: string; pathname: string; search?: string }, options: RequestOptions): Promise<FetchResponse> {
+function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: string; pathname: string; search?: string }, options: RequestInit): Promise<ResponseImpl> {
     return new Promise((resolve, reject) => {
         const method = options.method || 'GET'
-        const headers = new FetchHeaders(options.headers)
-        const body = options.body || null
+        const headers = new HeadersImpl(options.headers)
+        const body = typeof options.body === 'string' ? options.body : null
         const timeout = options.timeout || 30000
         const isHTTPS = parsedUrl.protocol === 'https:'
 
@@ -392,7 +379,7 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
         let ctx: number | null = null
         let state = ST_CONNECTING
         let resolved = false
-        let timerId: number | undefined
+        let timerId: TimerId | undefined
         let stream: ReadableStream | null = null
         let _controller: ReadableStreamDefaultController | null = null
         let headerRaw: Uint8Array = new Uint8Array(0)
@@ -412,7 +399,7 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
             if (timerId) { clearTimeout(timerId); timerId = undefined }
         }
 
-        const doResolve = (response: FetchResponse): void => {
+        const doResolve = (response: ResponseImpl): void => {
             if (!resolved) { resolved = true; cleanup(); resolve(response) }
         }
 
@@ -520,7 +507,7 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
                                 }
                             }
 
-                            const response = new FetchResponse(
+                            const response = new ResponseImpl(
                                 parsed.status, parsed.statusText, parsed.headers, stream
                             )
                             if (state !== ST_DONE) {
@@ -609,7 +596,7 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
 
 // ── Public fetch (with redirect handling and caching) ──
 
-function headersToObj(headers: FetchHeaders): { [key: string]: string } {
+function headersToObj(headers: HeadersImpl): { [key: string]: string } {
     const obj: { [key: string]: string } = {}
     headers.forEach((value: string, name: string) => { obj[name] = value })
     return obj
@@ -617,7 +604,7 @@ function headersToObj(headers: FetchHeaders): { [key: string]: string } {
 
 function normalizeHeaders(headers: HeadersInit | undefined): Record<string, string> {
     if (!headers) return {}
-    if (headers instanceof FetchHeaders) return headersToObj(headers)
+    if (headers instanceof HeadersImpl) return headersToObj(headers)
     if (Array.isArray(headers)) {
         const obj: Record<string, string> = {}
         for (const [key, val] of headers) obj[key.toLowerCase()] = val
@@ -641,12 +628,12 @@ interface CacheMeta {
     lastModified?: string;
 }
 
-async function fetch(url: string | Request, init: RequestInit = {}): Promise<FetchResponse> {
+async function fetch(url: string | Request, init: RequestInit = {}): Promise<ResponseImpl> {
     // Normalize: if first arg is a Request, unwrap it
     let currentUrl: string
-    let options: RequestOptions
+    let options: RequestInit
     const bodyStr = typeof init.body === 'string' ? init.body : undefined
-    if (url instanceof FetchRequest) {
+    if (url instanceof RequestImpl) {
         const req = url
         currentUrl = req.url
         options = {
@@ -658,7 +645,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
             maxRedirects: init.maxRedirects || req.maxRedirects,
         }
     } else {
-        currentUrl = typeof url === 'string' ? url : url.url
+        currentUrl = url
         options = {
             method: init.method,
             headers: init.headers,
@@ -698,9 +685,9 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
                 if (body) {
                     ini.meta.lastAccess = String(Math.floor(Date.now() / 1000))
                     cache.writeMeta(currentUrl, toIni(ini.headers, ini.meta))
-                    const resp = new FetchResponse(
+                    const resp = new ResponseImpl(
                         cachedMeta.status, cachedMeta.statusText,
-                        new FetchHeaders(cachedMeta.headers || {}),
+                        new HeadersImpl(cachedMeta.headers || {}),
                         new ReadableStream({
                                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
                                     ctrl.enqueue(new Uint8Array(body));
@@ -719,7 +706,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
     }
 
     while (true) {
-        const mergedOptions: RequestOptions = { ...options }
+        const mergedOptions: RequestInit = { ...options }
         const mergedHeaders = normalizeHeaders(options.headers)
         for (const key in conditionalHeaders) {
             mergedHeaders[key] = conditionalHeaders[key]!
@@ -738,7 +725,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
         if (contentEncoding.includes('br')) {
             const compressedBody = await response.arrayBuffer()
             const decompressedBody = brotli.decompress(compressedBody)
-            const newHeaders = new FetchHeaders()
+            const newHeaders = new HeadersImpl()
             response.headers.forEach((v: string, k: string) => {
                 if (k !== 'content-encoding') newHeaders.set(k, v)
             })
@@ -770,9 +757,9 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
                     statusText: cachedMeta.statusText,
                 }
                 cache.writeMeta(currentUrl, toIni(cachedMeta.headers, iniMeta))
-                const resp = new FetchResponse(
+                const resp = new ResponseImpl(
                     cachedMeta.status, cachedMeta.statusText,
-                    new FetchHeaders(cachedMeta.headers),
+                    new HeadersImpl(cachedMeta.headers),
                     new ReadableStream({
                                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
                                     ctrl.enqueue(new Uint8Array(body));
@@ -805,7 +792,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
                 cache.writeBodyOnly(currentUrl, body)
                 cache.writeMeta(currentUrl, toIni(resHeaders, iniMeta))
             }
-            const resp = new FetchResponse(
+            const resp = new ResponseImpl(
                 response.status, response.statusText,
                 response.headers, new ReadableStream({
                                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
@@ -858,7 +845,6 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Fet
 }
 
 // ── Global declarations ──
-// These are available to files that import './lib/fetch.js'
 
 declare global {
     type HeadersInit = [string, string][] | Record<string, string> | Headers
@@ -890,75 +876,22 @@ declare global {
         referrerPolicy?: string;
         signal?: AbortSignal | null;
         window?: null;
-        /** QuickWin extension: request timeout in ms (default 30000) */
         timeout?: number;
-        /** QuickWin extension: max redirect count (default 5) */
         maxRedirects?: number;
     }
 
-    interface Headers {
-        append(name: string, value: string): void;
-        delete(name: string): void;
-        get(name: string): string | null;
-        has(name: string): boolean;
-        set(name: string, value: string): void;
-        forEach(callback: (value: string, name: string, parent: Headers) => void): void;
-        entries(): IterableIterator<[string, string]>;
-        keys(): IterableIterator<string>;
-        values(): IterableIterator<string>;
-        [Symbol.iterator](): IterableIterator<[string, string]>;
-    }
-    var Headers: typeof FetchHeaders;
-
-    interface Response {
-        readonly status: number;
-        readonly statusText: string;
-        readonly headers: Headers;
-        readonly ok: boolean;
-        readonly redirected: boolean;
-        readonly type: ResponseType;
-        readonly url: string;
-        readonly body: ReadableStream | null;
-        readonly bodyUsed: boolean;
-        arrayBuffer(): Promise<ArrayBuffer>;
-        blob(): Promise<Blob>;
-        formData(): Promise<FormData>;
-        json(): Promise<any>;
-        text(): Promise<string>;
-    }
-    var Response: typeof FetchResponse;
-
-    interface Request {
-        readonly url: string;
-        readonly method: string;
-        readonly headers: Headers;
-        readonly body: string | null;
-        readonly bodyUsed: boolean;
-        readonly redirect: RequestRedirect;
-        readonly integrity: string;
-        readonly keepalive: boolean;
-        readonly mode: string;
-        readonly cache: string;
-        readonly credentials: string;
-        readonly referrer: string;
-        readonly referrerPolicy: string;
-        readonly signal: AbortSignal | null;
-        readonly destination: string;
-        arrayBuffer(): Promise<ArrayBuffer>;
-        blob(): Promise<Blob>;
-        formData(): Promise<FormData>;
-        json(): Promise<any>;
-        text(): Promise<string>;
-        clone(): Request;
-    }
-    var Request: typeof FetchRequest;
-
+    interface Headers extends HeadersImpl {}
+    var Headers: typeof HeadersImpl
+    interface Response extends ResponseImpl {}
+    var Response: typeof ResponseImpl
+    interface Request extends RequestImpl {}
+    var Request: typeof RequestImpl
     var fetch: (url: string | Request, init?: RequestInit) => Promise<Response>;
 }
 
 // ── Register globals ──
 
 globalThis.fetch = fetch
-globalThis.Response = FetchResponse
-globalThis.Request = FetchRequest
-globalThis.Headers = FetchHeaders
+globalThis.Response = ResponseImpl
+globalThis.Request = RequestImpl
+globalThis.Headers = HeadersImpl

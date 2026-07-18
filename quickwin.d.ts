@@ -287,10 +287,11 @@ declare module "os" {
     function sleepAsync(delay_ms: number): Promise<void>;
     /** Return a timestamp in milliseconds with more precision than `Date.now()`. */
     function now(): number;
+    type TimerId = number & { readonly __brand: unique symbol };
     /** Call the function `func` after `delay` ms. Return a handle to the timer. */
-    function setTimeout(func: () => void, delay: number): number;
+    function setTimeout(func: () => void, delay: number): TimerId;
     /** Cancel a timer. */
-    function clearTimeout(id: number): void;
+    function clearTimeout(id: TimerId): void;
 
     /** POSIX open flags. */
     const O_RDONLY: number;
