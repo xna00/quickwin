@@ -232,14 +232,6 @@ class RequestImpl {
         return bytes.buffer
     }
 
-    async blob(): Promise<Blob> {
-        throw new TypeError('Blob not supported')
-    }
-
-    async formData(): Promise<FormData> {
-        throw new TypeError('FormData not supported')
-    }
-
     async json(): Promise<any> {
         return JSON.parse(await this.text())
     }
@@ -297,12 +289,17 @@ class ResponseImpl {
     get type(): ResponseType { return this._type }
     get url(): string { return this._url }
 
-    constructor(status: number, statusText: string, headers: HeadersImpl, bodyStream: ReadableStream<Uint8Array>) {
+    constructor(body?: BodyInit | null, init?: ResponseInit) {
+        const status = init?.status ?? 200
+        const statusText = init?.statusText ?? ''
+        const headers = new HeadersImpl(init?.headers)
         this.status = status
         this.statusText = statusText
         this._headers = headers
         this.ok = status >= 200 && status < 300
-        this._body = bodyStream
+        this._body = body != null ? _toReadableStream(body) : new ReadableStream<Uint8Array>({
+            start(ctrl) { ctrl.close() }
+        })
     }
 
     async text(): Promise<string> {
@@ -314,14 +311,6 @@ class ResponseImpl {
 
     async json(): Promise<any> {
         return JSON.parse(await this.text())
-    }
-
-    async blob(): Promise<Blob> {
-        throw new TypeError('Blob not supported')
-    }
-
-    async formData(): Promise<FormData> {
-        throw new TypeError('FormData not supported')
     }
 
     async arrayBuffer(): Promise<ArrayBuffer> {
@@ -337,11 +326,11 @@ class ResponseImpl {
         return await _readStream(this._body)
     }
 
-    clone(): ResponseImpl {
+    clone(): Response {
         if (this.bodyUsed) throw new TypeError('Body already used')
         const [branch1, branch2] = this._body.tee()
         this._body = branch1
-        return new ResponseImpl(this.status, this.statusText, this._headers, branch2)
+        return new ResponseImpl(branch2, { status: this.status, statusText: this.statusText, headers: this._headers })
     }
 
     _applyDecompressedBody(stream: ReadableStream<Uint8Array>, _body: ArrayBuffer, newHeaders: HeadersImpl): void {
@@ -563,7 +552,7 @@ async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
                             }
 
                             const response = new ResponseImpl(
-                                parsed.status, parsed.statusText, parsed.headers, stream
+                                stream, { status: parsed.status, statusText: parsed.statusText, headers: parsed.headers }
                             )
                             if (state !== ST_DONE) {
                                 state = ST_RECV_BODY
@@ -700,9 +689,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                     ini.meta.lastAccess = String(Math.floor(Date.now() / 1000))
                     cache.writeMeta(currentUrl, toIni(ini.headers, ini.meta))
                     const resp = new ResponseImpl(
-                        cachedMeta.status, cachedMeta.statusText,
-                        new HeadersImpl(cachedMeta.headers || {}),
-                        _toReadableStream(new Uint8Array(body))
+                        _toReadableStream(new Uint8Array(body)), { status: cachedMeta.status, statusText: cachedMeta.statusText, headers: new HeadersImpl(cachedMeta.headers || {}) }
                     )
                     resp._url = currentUrl
                     return resp
@@ -755,9 +742,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 }
                 cache.writeMeta(currentUrl, toIni(cachedMeta.headers, iniMeta))
                 const resp = new ResponseImpl(
-                    cachedMeta.status, cachedMeta.statusText,
-                    new HeadersImpl(cachedMeta.headers),
-                    _toReadableStream(new Uint8Array(body))
+                    _toReadableStream(new Uint8Array(body)), { status: cachedMeta.status, statusText: cachedMeta.statusText, headers: new HeadersImpl(cachedMeta.headers) }
                 )
                 resp._url = currentUrl
                 return resp
@@ -784,8 +769,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 cache.writeMeta(currentUrl, toIni(resHeaders, iniMeta))
             }
             const resp = new ResponseImpl(
-                response.status, response.statusText,
-                response.headers, _toReadableStream(new Uint8Array(body))
+                _toReadableStream(new Uint8Array(body)), { status: response.status, statusText: response.statusText, headers: response.headers }
             )
             resp._url = currentUrl
             return resp
@@ -866,10 +850,19 @@ declare global {
         maxRedirects?: number;
     }
 
+    interface ResponseInit {
+        status?: number;
+        statusText?: string;
+        headers?: HeadersInit;
+    }
+
     interface Headers extends HeadersImpl {}
     var Headers: typeof HeadersImpl
-    interface Response extends ResponseImpl {}
-    var Response: typeof ResponseImpl
+    interface Response extends Omit<ResponseImpl, '_url' | '_redirected' | '_applyDecompressedBody'> {}
+    interface ResponseConstructor {
+        new(body?: BodyInit | null, init?: ResponseInit): Response
+    }
+    var Response: ResponseConstructor
     interface Request extends RequestImpl {}
     var Request: typeof RequestImpl
     var fetch: (url: string | Request, init?: RequestInit) => Promise<Response>;
