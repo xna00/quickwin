@@ -395,60 +395,53 @@ const ST_DONE = 5
 
 // ── Main fetch request ──
 
-async function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: string; pathname: string; search?: string }, options: RequestInit): Promise<ResponseImpl> {
-        const method = options.method || 'GET'
-        const headers = new HeadersImpl(options.headers)
-        const timeout = options.timeout || 30000
-        const isHTTPS = parsedUrl.protocol === 'https:'
+async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
+    const parsedUrl = new URL(req.url)
+    const method = req.method
+    const headers = new HeadersImpl(req.headers)
+    const timeout = req.timeout || 30000
+    const isHTTPS = parsedUrl.protocol === 'https:'
 
-        const defaultPort = isHTTPS ? 443 : 80
-        const hostname = parsedUrl.hostname.includes(':') ? `[${parsedUrl.hostname}]` : parsedUrl.hostname
-        const hostHeader = parsedUrl.port && parsedUrl.port !== String(defaultPort)
-            ? hostname + ':' + parsedUrl.port
-            : hostname
-        if (!headers.has('host')) headers.set('Host', hostHeader)
-        if (!headers.has('user-agent')) headers.set('User-Agent', 'QuickJS/1.0')
-        if (!headers.has('connection')) headers.set('Connection', 'close')
-        if (!headers.has('accept-encoding')) headers.set('Accept-Encoding', 'br')
-        let bodyBytes: Uint8Array | null = null
-        if (options.body !== null && options.body !== undefined) {
-            if (options.body instanceof ReadableStream) {
-                bodyBytes = await _readStream(options.body)
-            } else if (typeof options.body === 'string') {
-                bodyBytes = new TextEncoder().encode(options.body)
-            } else if (options.body instanceof ArrayBuffer) {
-                bodyBytes = new Uint8Array(options.body)
-            } else {
-                bodyBytes = new Uint8Array(options.body.buffer, options.body.byteOffset, options.body.byteLength)
-            }
-        }
-        if (bodyBytes && !headers.has('content-length')) headers.set('Content-Length', String(bodyBytes.length))
+    const defaultPort = isHTTPS ? 443 : 80
+    const hostname = parsedUrl.hostname.includes(':') ? `[${parsedUrl.hostname}]` : parsedUrl.hostname
+    const hostHeader = parsedUrl.port && parsedUrl.port !== String(defaultPort)
+        ? hostname + ':' + parsedUrl.port
+        : hostname
+    if (!headers.has('host')) headers.set('Host', hostHeader)
+    if (!headers.has('user-agent')) headers.set('User-Agent', 'QuickJS/1.0')
+    if (!headers.has('connection')) headers.set('Connection', 'close')
+    if (!headers.has('accept-encoding')) headers.set('Accept-Encoding', 'br')
+    let bodyBytes: Uint8Array | null = null
+    if (req.body) {
+        bodyBytes = await _readStream(req.body)
+    }
+    if (bodyBytes && !headers.has('content-length')) headers.set('Content-Length', String(bodyBytes.length))
 
-        return new Promise((resolve, reject) => {
-        let request = method + ' ' + parsedUrl.pathname + (parsedUrl.search || '') + ' HTTP/1.1\r\n'
-        headers.forEach((value: string, name: string) => {
-            request += name + ': ' + value + '\r\n'
-        })
-        request += '\r\n'
+    return new Promise((resolve, reject) => {
+    let request = method + ' ' + parsedUrl.pathname + (parsedUrl.search || '') + ' HTTP/1.1\r\n'
+    headers.forEach((value: string, name: string) => {
+        request += name + ': ' + value + '\r\n'
+    })
+    request += '\r\n'
 
-        const requestBytes = new TextEncoder().encode(request)
-        const httpRequest = _concat(
-            bodyBytes ? [requestBytes, bodyBytes] : [requestBytes]
-        ).buffer
+    const requestBytes = new TextEncoder().encode(request)
+    const httpRequest = _concat(
+        bodyBytes ? [requestBytes, bodyBytes] : [requestBytes]
+    ).buffer
 
-        let s: number | null = null
-        let ssl: number | null = null
-        let ctx: number | null = null
-        let state = ST_CONNECTING
-        let resolved = false
-        let timerId: TimerId | undefined
-        let stream: ReadableStream<Uint8Array> | null = null
-        let _controller: ReadableStreamDefaultController<Uint8Array> | null = null
-        let headerRaw: Uint8Array = new Uint8Array(0)
-        let isChunked = false
-        let contentLength = 0
-        let chunkedParts: Uint8Array[] = []
-        let receivedBytes = 0
+    let s: number | null = null
+    let ssl: number | null = null
+    let ctx: number | null = null
+    let state = ST_CONNECTING
+    let resolved = false
+    let timerId: TimerId | undefined
+    let stream: ReadableStream<Uint8Array> | null = null
+    let _controller: ReadableStreamDefaultController<Uint8Array> | null = null
+    let headerRaw: Uint8Array = new Uint8Array(0)
+    let isChunked = false
+    let contentLength = 0
+    let chunkedParts: Uint8Array[] = []
+    let receivedBytes = 0
 
         const cleanupSocket = (): void => {
             state = ST_DONE
@@ -658,23 +651,6 @@ async function fetchRequest(parsedUrl: { protocol: string; hostname: string; por
 
 // ── Public fetch (with redirect handling and caching) ──
 
-function headersToObj(headers: HeadersImpl): { [key: string]: string } {
-    const obj: { [key: string]: string } = {}
-    headers.forEach((value: string, name: string) => { obj[name] = value })
-    return obj
-}
-
-function normalizeHeaders(headers: HeadersInit | undefined): Record<string, string> {
-    if (!headers) return {}
-    if (headers instanceof HeadersImpl) return headersToObj(headers)
-    if (Array.isArray(headers)) {
-        const obj: Record<string, string> = {}
-        for (const [key, val] of headers) obj[key.toLowerCase()] = val
-        return obj
-    }
-    return headers as Record<string, string>
-}
-
 function parseMaxAge(cc: string): number {
     const m = cc.match(/max-age=(\d+)/)
     return m ? parseInt(m[1]!, 10) : 0
@@ -691,36 +667,13 @@ interface CacheMeta {
 }
 
 async function fetch(url: string | Request, init: RequestInit = {}): Promise<ResponseImpl> {
-    // Normalize: if first arg is a Request, unwrap it
-    let currentUrl: string
-    let options: RequestInit
-    if (url instanceof RequestImpl) {
-        const req = url
-        currentUrl = req.url
-        options = {
-            method: init.method || req.method,
-            headers: init.headers || headersToObj(req.headers),
-            body: init.body ?? req.body ?? undefined,
-            timeout: init.timeout || req.timeout,
-            redirect: init.redirect || req.redirect,
-            maxRedirects: init.maxRedirects || req.maxRedirects,
-        }
-    } else {
-        currentUrl = url
-        options = {
-            method: init.method,
-            headers: init.headers,
-            body: init.body,
-            timeout: init.timeout,
-            redirect: init.redirect,
-            maxRedirects: init.maxRedirects,
-        }
-    }
+    let req = new RequestImpl(url, init)
+    let currentUrl = req.url
 
-    const redirectMode = options.redirect || 'follow'
-    const maxRedirects = redirectMode === 'follow' ? (options.maxRedirects || 5) : 0
+    const redirectMode = req.redirect || 'follow'
+    const maxRedirects = redirectMode === 'follow' ? (req.maxRedirects || 5) : 0
     let redirectCount = 0
-    const method = options.method || 'GET'
+    const method = req.method
     const cache = typeof __httpCache__ !== 'undefined' ? __httpCache__ : null
 
     // ── Cache lookup (GET only) ──
@@ -749,35 +702,23 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                     const resp = new ResponseImpl(
                         cachedMeta.status, cachedMeta.statusText,
                         new HeadersImpl(cachedMeta.headers || {}),
-                        new ReadableStream<Uint8Array>({
-                                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
-                                    ctrl.enqueue(new Uint8Array(body));
-                                    ctrl.close();
-                                }
-                            })
+                        _toReadableStream(new Uint8Array(body))
                     )
                     resp._url = currentUrl
                     return resp
                 }
             }
-
             if (cachedMeta.etag) conditionalHeaders['If-None-Match'] = cachedMeta.etag
             if (cachedMeta.lastModified) conditionalHeaders['If-Modified-Since'] = cachedMeta.lastModified
         }
     }
 
     while (true) {
-        const mergedOptions: RequestInit = { ...options }
-        const mergedHeaders = normalizeHeaders(options.headers)
-        for (const key in conditionalHeaders) {
-            mergedHeaders[key] = conditionalHeaders[key]!
+        for (const [k, v] of Object.entries(conditionalHeaders)) {
+            req.headers.set(k, v)
         }
-        if (Object.keys(mergedHeaders).length > 0) mergedOptions.headers = mergedHeaders
 
-        const parsedUrl = new URL(currentUrl)
-        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:')
-            throw new Error(`fetch() does not support protocol "${parsedUrl.protocol}"`)
-        const response = await fetchRequest(parsedUrl, mergedOptions)
+        const response = await fetchRequest(req)
 
         response._url = currentUrl
 
@@ -791,12 +732,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 if (k !== 'content-encoding') newHeaders.set(k, v)
             })
             newHeaders.set('content-length', String(decompressedBody.byteLength))
-            const stream = new ReadableStream<Uint8Array>({
-                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
-                    ctrl.enqueue(new Uint8Array(decompressedBody));
-                    ctrl.close();
-                }
-            })
+            const stream = _toReadableStream(new Uint8Array(decompressedBody))
             response._applyDecompressedBody(stream, decompressedBody, newHeaders)
         }
 
@@ -821,12 +757,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 const resp = new ResponseImpl(
                     cachedMeta.status, cachedMeta.statusText,
                     new HeadersImpl(cachedMeta.headers),
-                    new ReadableStream<Uint8Array>({
-                                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
-                                    ctrl.enqueue(new Uint8Array(body));
-                                    ctrl.close();
-                                }
-                            })
+                    _toReadableStream(new Uint8Array(body))
                 )
                 resp._url = currentUrl
                 return resp
@@ -839,7 +770,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
             const cc = response.headers.get('cache-control') || ''
             const maxAge = parseMaxAge(cc)
             if (maxAge > 0) {
-                const resHeaders = headersToObj(response.headers)
+                const resHeaders = Object.fromEntries(response.headers)
                 const now = String(Math.floor(Date.now() / 1000))
                 const iniMeta: Record<string, string> = {
                     url: currentUrl,
@@ -854,12 +785,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
             }
             const resp = new ResponseImpl(
                 response.status, response.statusText,
-                response.headers, new ReadableStream<Uint8Array>({
-                                start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
-                                    ctrl.enqueue(new Uint8Array(body));
-                                    ctrl.close();
-                                }
-                            })
+                response.headers, _toReadableStream(new Uint8Array(body))
             )
             resp._url = currentUrl
             return resp
@@ -889,8 +815,9 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 response._redirected = true
 
                 if (response.status === 303) {
-                    options.method = 'GET'
-                    delete options.body
+                    req = new RequestImpl(currentUrl, { method: 'GET', headers: req.headers })
+                } else {
+                    req = new RequestImpl(currentUrl, { method: req.method, headers: req.headers, body: req.body ?? undefined })
                 }
             } else {
                 if (redirectCount > 0) response._redirected = true
