@@ -245,6 +245,7 @@ class RequestImpl {
     }
 
     clone(): RequestImpl {
+        if (this.bodyUsed) throw new TypeError('Body already used')
         if (this._body) {
             const [branch1, branch2] = this._body.tee()
             this._body = branch1
@@ -655,19 +656,16 @@ interface CacheMeta {
     lastModified?: string;
 }
 
-async function fetch(url: string | Request, init: RequestInit = {}): Promise<ResponseImpl> {
+async function doFetch(url: string | Request, init: RequestInit, redirectCount: number): Promise<ResponseImpl> {
     let req = new RequestImpl(url, init)
-    let currentUrl = req.url
-
     const redirectMode = req.redirect || 'follow'
     const maxRedirects = redirectMode === 'follow' ? (req.maxRedirects || 5) : 0
-    let redirectCount = 0
-    const method = req.method
     const cache = typeof __httpCache__ !== 'undefined' ? __httpCache__ : null
+    const method = req.method
+    const currentUrl = req.url
 
     // ── Cache lookup (GET only) ──
     let cachedMeta: CacheMeta | null = null
-    let conditionalHeaders: { [key: string]: string } = {}
 
     if (cache && method === 'GET') {
         const metaStr = cache.readMeta(currentUrl)
@@ -695,123 +693,122 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                     return resp
                 }
             }
-            if (cachedMeta.etag) conditionalHeaders['If-None-Match'] = cachedMeta.etag
-            if (cachedMeta.lastModified) conditionalHeaders['If-Modified-Since'] = cachedMeta.lastModified
+            if (cachedMeta.etag) req.headers.set('If-None-Match', cachedMeta.etag)
+            if (cachedMeta.lastModified) req.headers.set('If-Modified-Since', cachedMeta.lastModified)
         }
     }
 
-    while (true) {
-        for (const [k, v] of Object.entries(conditionalHeaders)) {
-            req.headers.set(k, v)
-        }
+    const response = await fetchRequest(req)
 
-        const response = await fetchRequest(req)
+    response._url = currentUrl
 
-        response._url = currentUrl
+    // ── Handle brotli Content-Encoding ──
+    const contentEncoding = response.headers.get('content-encoding') || ''
+    if (contentEncoding.includes('br')) {
+        const compressedBody = await response.arrayBuffer()
+        const decompressedBody = brotli.decompress(compressedBody)
+        const newHeaders = new HeadersImpl()
+        response.headers.forEach((v: string, k: string) => {
+            if (k !== 'content-encoding') newHeaders.set(k, v)
+        })
+        newHeaders.set('content-length', String(decompressedBody.byteLength))
+        const stream = _toReadableStream(new Uint8Array(decompressedBody))
+        response._applyDecompressedBody(stream, decompressedBody, newHeaders)
+    }
 
-        // ── Handle brotli Content-Encoding ──
-        const contentEncoding = response.headers.get('content-encoding') || ''
-        if (contentEncoding.includes('br')) {
-            const compressedBody = await response.arrayBuffer()
-            const decompressedBody = brotli.decompress(compressedBody)
-            const newHeaders = new HeadersImpl()
-            response.headers.forEach((v: string, k: string) => {
-                if (k !== 'content-encoding') newHeaders.set(k, v)
+    // ── Handle 304 Not Modified ──
+    if (response.status === 304 && cachedMeta && cache) {
+        const body = cache.readBody(currentUrl)
+        if (body) {
+            cachedMeta.storedAt = Math.floor(Date.now() / 1000)
+            response.headers.forEach((value: string, name: string) => {
+                cachedMeta.headers[name] = value
             })
-            newHeaders.set('content-length', String(decompressedBody.byteLength))
-            const stream = _toReadableStream(new Uint8Array(decompressedBody))
-            response._applyDecompressedBody(stream, decompressedBody, newHeaders)
-        }
-
-        // ── Handle 304 Not Modified ──
-        if (response.status === 304 && cachedMeta && cache) {
-            const body = cache.readBody(currentUrl)
-            if (body) {
-                cachedMeta.storedAt = Math.floor(Date.now() / 1000)
-                response.headers.forEach((value: string, name: string) => {
-                    cachedMeta.headers[name] = value
-                })
-                const now = String(Math.floor(Date.now() / 1000))
-                const iniMeta: Record<string, string> = {
-                    url: currentUrl,
-                    storedAt: String(cachedMeta.storedAt),
-                    maxAge: String(cachedMeta.maxAge),
-                    lastAccess: now,
-                    status: String(cachedMeta.status),
-                    statusText: cachedMeta.statusText,
-                }
-                cache.writeMeta(currentUrl, toIni(cachedMeta.headers, iniMeta))
-                const resp = new ResponseImpl(
-                    _toReadableStream(new Uint8Array(body)), { status: cachedMeta.status, statusText: cachedMeta.statusText, headers: new HeadersImpl(cachedMeta.headers) }
-                )
-                resp._url = currentUrl
-                return resp
+            const now = String(Math.floor(Date.now() / 1000))
+            const iniMeta: Record<string, string> = {
+                url: currentUrl,
+                storedAt: String(cachedMeta.storedAt),
+                maxAge: String(cachedMeta.maxAge),
+                lastAccess: now,
+                status: String(cachedMeta.status),
+                statusText: cachedMeta.statusText,
             }
-        }
-
-        // ── Cache 200 GET responses ──
-        if (cache && method === 'GET' && response.status === 200) {
-            const body = await response.arrayBuffer()
-            const cc = response.headers.get('cache-control') || ''
-            const maxAge = parseMaxAge(cc)
-            if (maxAge > 0) {
-                const resHeaders = Object.fromEntries(response.headers)
-                const now = String(Math.floor(Date.now() / 1000))
-                const iniMeta: Record<string, string> = {
-                    url: currentUrl,
-                    storedAt: now,
-                    maxAge: String(maxAge),
-                    lastAccess: now,
-                    status: String(response.status),
-                    statusText: response.statusText,
-                }
-                cache.writeBodyOnly(currentUrl, body)
-                cache.writeMeta(currentUrl, toIni(resHeaders, iniMeta))
-            }
+            cache.writeMeta(currentUrl, toIni(cachedMeta.headers, iniMeta))
             const resp = new ResponseImpl(
-                _toReadableStream(new Uint8Array(body)), { status: response.status, statusText: response.statusText, headers: response.headers }
+                _toReadableStream(new Uint8Array(body)), { status: cachedMeta.status, statusText: cachedMeta.statusText, headers: new HeadersImpl(cachedMeta.headers) }
             )
             resp._url = currentUrl
             return resp
         }
+    }
 
-        // ── Redirect handling ──
-        const isRedirect = response.status === 301 || response.status === 302 ||
-                          response.status === 303 || response.status === 307 || response.status === 308
-
-        if (isRedirect) {
-            if (redirectMode === 'error') {
-                response.body.cancel('redirect')
-                throw new Error('Redirect not allowed for: ' + currentUrl)
+    // ── Cache 200 GET responses ──
+    if (cache && method === 'GET' && response.status === 200) {
+        const body = await response.arrayBuffer()
+        const cc = response.headers.get('cache-control') || ''
+        const maxAge = parseMaxAge(cc)
+        if (maxAge > 0) {
+            const resHeaders = Object.fromEntries(response.headers)
+            const now = String(Math.floor(Date.now() / 1000))
+            const iniMeta: Record<string, string> = {
+                url: currentUrl,
+                storedAt: now,
+                maxAge: String(maxAge),
+                lastAccess: now,
+                status: String(response.status),
+                statusText: response.statusText,
             }
-            if (redirectMode === 'manual') {
-                response._redirected = true
-                return response
-            }
-            if (maxRedirects > 0 && redirectCount < maxRedirects) {
-                const location = response.headers.get('location')
-                if (!location) throw new Error('Redirect response missing Location header')
+            cache.writeBodyOnly(currentUrl, body)
+            cache.writeMeta(currentUrl, toIni(resHeaders, iniMeta))
+        }
+        const resp = new ResponseImpl(
+            _toReadableStream(new Uint8Array(body)), { status: response.status, statusText: response.statusText, headers: response.headers }
+        )
+        resp._url = currentUrl
+        return resp
+    }
 
-                response.body.cancel('redirect')
-                currentUrl = new URL(location, currentUrl).href
+    // ── Redirect handling ──
+    const isRedirect = response.status === 301 || response.status === 302 ||
+                      response.status === 303 || response.status === 307 || response.status === 308
 
-                redirectCount++
-                response._redirected = true
-
-                if (response.status === 303) {
-                    req = new RequestImpl(currentUrl, { method: 'GET', headers: req.headers })
-                } else {
-                    req = new RequestImpl(currentUrl, { method: req.method, headers: req.headers, body: req.body ?? undefined })
-                }
-            } else {
-                if (redirectCount > 0) response._redirected = true
-                return response
-            }
-        } else {
-            if (redirectCount > 0) response._redirected = true
+    if (isRedirect) {
+        if (redirectMode === 'error') {
+            response.body.cancel('redirect')
+            throw new TypeError('Redirect not allowed for: ' + currentUrl)
+        }
+        if (redirectMode === 'manual') {
+            response._redirected = true
             return response
         }
+        if (redirectCount >= maxRedirects) {
+            response.body.cancel('redirect')
+            throw new TypeError('Redirect count exceeded')
+        }
+
+        const location = response.headers.get('location')
+        if (!location) throw new Error('Redirect response missing Location header')
+
+        response.body.cancel('redirect')
+        const newUrl = new URL(location, currentUrl).href
+        const isGet = response.status === 301 || response.status === 302 || response.status === 303
+        const newInit: RequestInit = {
+            ...init,
+            method: isGet ? 'GET' : req.method,
+            headers: req.headers,
+            body: isGet ? undefined : (req.body ?? undefined),
+        }
+        const result = await doFetch(newUrl, newInit, redirectCount + 1)
+        result._redirected = true
+        return result
     }
+
+    if (redirectCount > 0) response._redirected = true
+    return response
+}
+
+async function fetch(url: string | Request, init: RequestInit = {}): Promise<ResponseImpl> {
+    return doFetch(url, init, 0)
 }
 
 // ── Global declarations ──
