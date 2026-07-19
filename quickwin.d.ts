@@ -107,7 +107,7 @@ declare module "std" {
         /** Return true if end of file. */
         eof(): boolean;
         /** Return the associated OS handle. */
-        fileno(): number;
+        fileno(): import("os").Fd;
         /** Return true if there was an error. */
         error(): boolean;
         /** Clear the error indication. */
@@ -226,6 +226,8 @@ declare module "std" {
 }
 
 declare module "os" {
+    type Fd = number & { readonly __brand: unique symbol };
+
     interface StatResult {
         dev: number;
         ino: number;
@@ -242,21 +244,21 @@ declare module "os" {
     }
 
     /** Open a file. Return a handle or < 0 if error. */
-    function open(filename: string, flags: number, mode?: number): number;
+    function open(filename: string, flags: number, mode?: number): Fd | null;
     /** Close the file handle `fd`. */
-    function close(fd: number): number;
+    function close(fd: Fd): number;
     /** Seek in the file. Use `std.SEEK_*` for `whence`. `offset` is either a number or a bigint. If `offset` is a bigint, a bigint is returned too. */
-    function seek(fd: number, offset: number | bigint, whence: number): number | bigint;
+    function seek(fd: Fd, offset: number | bigint, whence: number): number | bigint;
     /** Read `length` bytes from the file handle `fd` to the ArrayBuffer `buffer` at byte position `offset`. Return the number of read bytes or < 0 if error. */
-    function read(fd: number, buffer: ArrayBuffer, offset: number, length: number): number;
+    function read(fd: Fd, buffer: ArrayBuffer, offset: number, length: number): number;
     /** Write `length` bytes to the file handle `fd` from the ArrayBuffer `buffer` at byte position `offset`. Return the number of written bytes or < 0 if error. */
-    function write(fd: number, buffer: ArrayBuffer, offset: number, length: number): number;
+    function write(fd: Fd, buffer: ArrayBuffer, offset: number, length: number): number;
     /** Return `true` if `fd` is a TTY (terminal) handle. */
-    function isatty(fd: number): boolean;
+    function isatty(fd: Fd): boolean;
     /** Return the TTY size as `[width, height]` or `null` if not available. */
-    function ttyGetWinSize(fd: number): [number, number] | null;
+    function ttyGetWinSize(fd: Fd): [number, number] | null;
     /** Set the TTY in raw mode. */
-    function ttySetRaw(fd: number): void;
+    function ttySetRaw(fd: Fd): void;
     /** Remove a file. Return 0 if OK or `-errno`. */
     function remove(filename: string): number;
     /** Rename a file. Return 0 if OK or `-errno`. */
@@ -276,9 +278,9 @@ declare module "os" {
     /** Return `[array, err]` where `array` is an array of strings containing the filenames of the directory `path`. `err` is the error code. */
     function readdir(path: string): [string[], number];
     /** Add a read handler to the file handle `fd`. `func` is called each time there is data pending for `fd`. A single read handler per file handle is supported. Use `func = null` to remove the handler. */
-    function setReadHandler(fd: number, func: (() => void) | null): void;
+    function setReadHandler(fd: Fd, func: (() => void) | null): void;
     /** Add a write handler to the file handle `fd`. `func` is called each time data can be written to `fd`. A single write handler per file handle is supported. Use `func = null` to remove the handler. */
-    function setWriteHandler(fd: number, func: (() => void) | null): void;
+    function setWriteHandler(fd: Fd, func: (() => void) | null): void;
     /** Call the function `func` when the signal `signal` happens. Only a single handler per signal number is supported. Use `null` to set the default handler or `undefined` to ignore the signal. Signal handlers can only be defined in the main thread. */
     function signal(signal: number, func: (() => void) | null | undefined): void;
     /** Sleep during `delay_ms` milliseconds. */
@@ -339,6 +341,7 @@ declare module "os" {
 
 declare module "sock" {
     type SockHandle = number & { readonly __brand: unique symbol };
+    type SockFd = number & { readonly __brand: unique symbol };
 
     function socket(domain?: AddrFamily, type?: SockType, protocol?: Protocol): SockHandle;
     function connect(sock: SockHandle, addr: string, port: number): number;
@@ -347,7 +350,7 @@ declare module "sock" {
     function closesocket(sock: SockHandle): void;
     function shutdown(sock: SockHandle, how: Shutdown): number;
     function set_on_event(sock: SockHandle, callback: (events: { lNetworkEvents: number; iErrorCode: number[] }) => void): void;
-    function get_fd(sock: SockHandle): number;
+    function get_fd(sock: SockHandle): SockFd;
     function resolve(hostname: string): string | null;
 
 }
@@ -366,7 +369,7 @@ declare module "wolfssl" {
 
     function wolfSSL_new(ctx: WOLFSSL_CTX): WOLFSSL | null;
     function wolfSSL_free(ssl: WOLFSSL): void;
-    function wolfSSL_set_fd(ssl: WOLFSSL, fd: number): number;
+    function wolfSSL_set_fd(ssl: WOLFSSL, fd: import("sock").SockFd): number;
     function wolfSSL_connect(ssl: WOLFSSL): number;
     function wolfSSL_shutdown(ssl: WOLFSSL): number;
     function wolfSSL_write(ssl: WOLFSSL, buf: ArrayBuffer): number;
