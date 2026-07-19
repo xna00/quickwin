@@ -468,8 +468,8 @@ async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
                 if (err !== 0) { doReject(new Error('Connection failed: ' + err)); return }
 
                 if (isHTTPS) {
-                    const method = wolfssl.wolfTLSv1_2_client_method()
-                    ctx = wolfssl.wolfSSL_CTX_new(method)
+                    const tlsMethod = wolfssl.wolfTLSv1_2_client_method()
+                    ctx = wolfssl.wolfSSL_CTX_new(tlsMethod)
                     if (!ctx) { doReject(new Error('SSL_CTX_new failed')); return }
                     wolfssl.wolfSSL_CTX_set_verify(ctx, wolfssl.VerifyMode.SSL_VERIFY_NONE)
                     ssl = wolfssl.wolfSSL_new(ctx)
@@ -507,7 +507,6 @@ async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
                         } else if (s !== null && s >= 0) {
                             data = sock.recv(s, 8192)
                         } else { break }
-                        if (typeof data !== 'object') break
                         if (!data || data.byteLength === 0) break
                         const incoming = new Uint8Array(data)
                         headerRaw = _concat([headerRaw, incoming])
@@ -574,7 +573,6 @@ async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
                         } else if (s !== null && s >= 0) {
                             data = sock.recv(s, 8192)
                         } else { break }
-                        if (typeof data !== 'object') break
                         if (!data || data.byteLength === 0) break
                         if (isChunked) {
                             chunkedParts.push(new Uint8Array(data))
@@ -612,7 +610,6 @@ async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
                         } else if (s !== null && s >= 0) {
                             data = sock.recv(s, 8192)
                         } else { break }
-                        if (typeof data !== 'object') break
                         if (!data || data.byteLength === 0) break
                         remainingParts.push(new Uint8Array(data))
                     }
