@@ -345,7 +345,7 @@ declare module "sock" {
     function send(sock: SockHandle, buf: ArrayBuffer, flags?: number): number;
     function recv(sock: SockHandle, size?: number, flags?: number): ArrayBuffer | null;
     function closesocket(sock: SockHandle): void;
-    function shutdown(sock: SockHandle, how: number): number;
+    function shutdown(sock: SockHandle, how: Shutdown): number;
     function set_on_event(sock: SockHandle, callback: (events: { lNetworkEvents: number; iErrorCode: number[] }) => void): void;
     function get_fd(sock: SockHandle): number;
     function resolve(hostname: string): string | null;
@@ -360,9 +360,9 @@ declare module "wolfssl" {
     function wolfSSL_library_init(): number;
     function wolfSSL_CTX_new(method: WOLFSSL_METHOD): WOLFSSL_CTX | null;
     function wolfSSL_CTX_free(ctx: WOLFSSL_CTX): void;
-    function wolfSSL_CTX_set_verify(ctx: WOLFSSL_CTX, mode: number): number;
-    function wolfSSL_CTX_use_certificate_file(ctx: WOLFSSL_CTX, file: string, format?: number): number;
-    function wolfSSL_CTX_use_PrivateKey_file(ctx: WOLFSSL_CTX, file: string, format?: number): number;
+    function wolfSSL_CTX_set_verify(ctx: WOLFSSL_CTX, mode: VerifyMode): number;
+    function wolfSSL_CTX_use_certificate_file(ctx: WOLFSSL_CTX, file: string, format?: FileType): number;
+    function wolfSSL_CTX_use_PrivateKey_file(ctx: WOLFSSL_CTX, file: string, format?: FileType): number;
 
     function wolfSSL_new(ctx: WOLFSSL_CTX): WOLFSSL | null;
     function wolfSSL_free(ssl: WOLFSSL): void;
@@ -372,7 +372,7 @@ declare module "wolfssl" {
     function wolfSSL_write(ssl: WOLFSSL, buf: ArrayBuffer): number;
     function wolfSSL_read(ssl: WOLFSSL, sz: number): ArrayBuffer | null;
     function wolfSSL_get_error(ssl: WOLFSSL, ret: number): number;
-    function wolfSSL_UseSNI(ssl: WOLFSSL, type: number, name: string, len?: number): number;
+    function wolfSSL_UseSNI(ssl: WOLFSSL, type: SniType, name: string, len?: number): number;
 
     function wolfSSLv23_client_method(): WOLFSSL_METHOD;
     function wolfTLSv1_2_client_method(): WOLFSSL_METHOD;
@@ -400,9 +400,9 @@ declare module "gui" {
     function CreateWindow(className: string, title: string, style: number, x: number, y: number, width: number, height: number, parent: HWND | null, menu: HMENU | null): HWND | null;
     // 销毁窗口及其所有子窗口，自动清理 WNDPROC 和 JS 引用
     function DestroyWindow(hwnd: HWND): boolean;
-    function GetWindow(hwnd: HWND, cmd: number): HWND;
+    function GetWindow(hwnd: HWND, cmd: GetWindowCmd): HWND;
 
-    function ShowWindow(hwnd: HWND, nCmdShow?: number): void;
+    function ShowWindow(hwnd: HWND, nCmdShow?: ShowWindowCmd): void;
     function SetWindowProc(hwnd: HWND, wndProc: (hwnd: HWND, msg: number, wParam: number, lParam: number) => number): void;
     function DefWindowProc(hwnd: HWND, msg: number, wParam: number, lParam: number): number;
     function PostQuitMessage(exitCode: number): void;
@@ -412,13 +412,13 @@ declare module "gui" {
     function GetWindowText(hwnd: HWND): string;
     function GetScaleFactor(): number;
     function CreateSystemDpiFont(): HFONT | null;
-    function GetWindowLongPtr(hwnd: HWND, nIndex: number): number;
-    function SetWindowLongPtr(hwnd: HWND, nIndex: number, newLong: number): number;
+    function GetWindowLongPtr(hwnd: HWND, nIndex: Gwlp): number;
+    function SetWindowLongPtr(hwnd: HWND, nIndex: Gwlp, newLong: number): number;
     function UnsetWindowProc(hwnd: HWND): boolean;
     function CallWindowProc(wndProc: WNDPROC, hwnd: HWND, msg: number, wParam: number, lParam: number): number;
     function SetParent(hwnd: HWND, parent: HWND | null): void;
     function EnableWindow(hwnd: HWND, enable: boolean): void;
-    function SetWindowPos(hwnd: HWND, insertAfter: number, x: number, y: number, width: number, height: number, flags: number): void;
+    function SetWindowPos(hwnd: HWND, insertAfter: SetWindowPosHwnd, x: number, y: number, width: number, height: number, flags: number): void;
 
 
 
@@ -431,7 +431,7 @@ declare module "gui" {
         tip?: string
     }
 
-    function ShellNotifyIcon(cmd: number, nid: NotifyIconData): boolean;
+    function ShellNotifyIcon(cmd: NotifyIconCmd, nid: NotifyIconData): boolean;
     function LoadIcon(name: string): number | null;
 
 
@@ -457,13 +457,13 @@ declare module "gui" {
     /** Checks if the window handle is valid */
     function IsWindow(hwnd: HWND): boolean;
     /** Sets scroll info; returns current scroll box position. Signature matches Win32 SetScrollInfo. */
-    function SetScrollInfo(hwnd: HWND, bar: number, info: { pos?: number; page?: number; min?: number; max?: number }, redraw?: boolean): number;
+    function SetScrollInfo(hwnd: HWND, bar: ScrollBar, info: { pos?: number; page?: number; min?: number; max?: number }, redraw?: boolean): number;
 
     /** Gets scroll info. Signature matches Win32 GetScrollInfo. */
-    function GetScrollInfo(hwnd: HWND, bar: number): { pos: number; page: number; min: number; max: number; trackPos: number };
+    function GetScrollInfo(hwnd: HWND, bar: ScrollBar): { pos: number; page: number; min: number; max: number; trackPos: number };
 
     /** Shows or hides a scroll bar. Signature matches Win32 ShowScrollBar. */
-    function ShowScrollBar(hwnd: HWND, bar: number, show: boolean): boolean;
+    function ShowScrollBar(hwnd: HWND, bar: ScrollBar, show: boolean): boolean;
 
 
 

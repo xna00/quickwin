@@ -161,7 +161,7 @@ function updateScrollRange(): void {
         const style = gui.GetWindowLongPtr(hwndCanvas, gui.Gwlp.STYLE) | 0
         if (!(style & gui.WindowStyle.HSCROLL)) {
             gui.SetWindowLongPtr(hwndCanvas, gui.Gwlp.STYLE, style | gui.WindowStyle.HSCROLL)
-            gui.SetWindowPos(hwndCanvas, 0, 0, 0, 0, 0,
+            gui.SetWindowPos(hwndCanvas, gui.SetWindowPosHwnd.TOP, 0, 0, 0, 0,
                 gui.SetWindowPosFlag.SWP_NOMOVE | gui.SetWindowPosFlag.SWP_NOSIZE |
                 gui.SetWindowPosFlag.SWP_NOZORDER | gui.SetWindowPosFlag.SWP_FRAMECHANGED)
         }
@@ -172,7 +172,7 @@ function updateScrollRange(): void {
         const style = gui.GetWindowLongPtr(hwndCanvas, gui.Gwlp.STYLE) | 0
         if (style & gui.WindowStyle.HSCROLL) {
             gui.SetWindowLongPtr(hwndCanvas, gui.Gwlp.STYLE, style & ~gui.WindowStyle.HSCROLL)
-            gui.SetWindowPos(hwndCanvas, 0, 0, 0, 0, 0,
+            gui.SetWindowPos(hwndCanvas, gui.SetWindowPosHwnd.TOP, 0, 0, 0, 0,
                 gui.SetWindowPosFlag.SWP_NOMOVE | gui.SetWindowPosFlag.SWP_NOSIZE |
                 gui.SetWindowPosFlag.SWP_NOZORDER | gui.SetWindowPosFlag.SWP_FRAMECHANGED)
         }
@@ -182,7 +182,7 @@ function updateScrollRange(): void {
         gui.SetScrollInfo(hwndCanvas, gui.ScrollBar.VERT, { min: 0, max: currentPixmap.h - 1, page: ch, pos: scrollY }, true)
         gui.ShowScrollBar(hwndCanvas, gui.ScrollBar.VERT, true)
     } else { scrollY = 0; gui.ShowScrollBar(hwndCanvas, gui.ScrollBar.VERT, false) }
-    gui.SetWindowPos(hwndContent, 0, -scrollX, -scrollY, 0, 0,
+    gui.SetWindowPos(hwndContent, gui.SetWindowPosHwnd.TOP, -scrollX, -scrollY, 0, 0,
         gui.SetWindowPosFlag.SWP_NOSIZE | gui.SetWindowPosFlag.SWP_NOZORDER)
 }
 
@@ -193,7 +193,7 @@ function showPdf(mupdf: MuPdf, path: string, pageIdx: number): void {
     currentPixmap = pix; currentPage = pageIdx; totalPages = pix.totalPages
     gui.SetWindowText(hwndMain, 'PDF 预览 - 第 ' + (pageIdx + 1) + '/' + totalPages + ' 页')
     scrollX = 0; scrollY = 0
-    gui.SetWindowPos(hwndContent, 0, 0, 0, pix.w, pix.h,
+    gui.SetWindowPos(hwndContent, gui.SetWindowPosHwnd.TOP, 0, 0, pix.w, pix.h,
         gui.SetWindowPosFlag.SWP_NOZORDER | gui.SetWindowPosFlag.SWP_NOMOVE)
     updateScrollRange()
     gui.InvalidateRect(hwndContent, null, true)
@@ -208,7 +208,7 @@ function doScroll(dx: number, dy: number): void {
     const maxY = Math.max(0, currentPixmap.h - ch)
     scrollX = Math.max(0, Math.min(maxX, scrollX + dx))
     scrollY = Math.max(0, Math.min(maxY, scrollY + dy))
-    gui.SetWindowPos(hwndContent, 0, -scrollX, -scrollY, 0, 0,
+    gui.SetWindowPos(hwndContent, gui.SetWindowPosHwnd.TOP, -scrollX, -scrollY, 0, 0,
         gui.SetWindowPosFlag.SWP_NOSIZE | gui.SetWindowPosFlag.SWP_NOZORDER)
     gui.SetScrollInfo(hwndCanvas, gui.ScrollBar.HORZ, { pos: scrollX }, true)
     gui.SetScrollInfo(hwndCanvas, gui.ScrollBar.VERT, { pos: scrollY }, true)
@@ -234,8 +234,8 @@ let hwndBtnNext: gui.HWND | null = null
             const cr = gui.GetClientRect(hwnd)
             if (cr) {
                 const cw = cr.right - cr.left, ch = cr.bottom - cr.top
-                gui.SetWindowPos(hwndCanvas, 0, 0, 50, cw, Math.max(1, ch - 50), gui.SetWindowPosFlag.SWP_NOZORDER)
-                gui.SetWindowPos(hwndEdit, 0, 0, 0, Math.max(100, cw - 320), 0,
+                gui.SetWindowPos(hwndCanvas, gui.SetWindowPosHwnd.TOP, 0, 50, cw, Math.max(1, ch - 50), gui.SetWindowPosFlag.SWP_NOZORDER)
+                gui.SetWindowPos(hwndEdit, gui.SetWindowPosHwnd.TOP, 0, 0, Math.max(100, cw - 320), 0,
                     gui.SetWindowPosFlag.SWP_NOMOVE | gui.SetWindowPosFlag.SWP_NOZORDER)
             }
             return gui.DefWindowProc(hwnd, msg, wParam, lParam)
