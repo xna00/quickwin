@@ -281,51 +281,39 @@ class RequestImpl {
 class ResponseImpl {
     readonly status: number
     readonly statusText: string
-    headers: HeadersImpl
     readonly ok: boolean
-    redirected: boolean
-    type: ResponseType
-    url: string
-    body: ReadableStream<Uint8Array>
-    private _bodyConsumed: boolean = false
-    _preloadedBody: ArrayBuffer | null = null
 
-    get bodyUsed(): boolean {
-        return this._bodyConsumed || this.body.locked
-    }
+    private _headers: HeadersImpl
+    _redirected: boolean = false
+    private _type: ResponseType = 'basic'
+    _url: string = ''
+    private _body: ReadableStream<Uint8Array>
+    private _bodyConsumed: boolean = false
+
+    get body(): ReadableStream<Uint8Array> { return this._body }
+    get bodyUsed(): boolean { return this._bodyConsumed || this._body.locked }
+    get headers(): HeadersImpl { return this._headers }
+    get redirected(): boolean { return this._redirected }
+    get type(): ResponseType { return this._type }
+    get url(): string { return this._url }
 
     constructor(status: number, statusText: string, headers: HeadersImpl, bodyStream: ReadableStream<Uint8Array>) {
         this.status = status
         this.statusText = statusText
-        this.headers = headers
+        this._headers = headers
         this.ok = status >= 200 && status < 300
-        this.redirected = false
-        this.type = 'basic'
-        this.url = ''
-        this.body = bodyStream
+        this._body = bodyStream
     }
 
     async text(): Promise<string> {
-        if (this._preloadedBody) {
-            if (this._bodyConsumed) throw new TypeError('Body already used')
-            this._bodyConsumed = true
-            return new TextDecoder('utf-8').decode(this._preloadedBody)
-        }
         if (this.bodyUsed) throw new TypeError('Body already used')
         this._bodyConsumed = true
-        const reader = this.body.getReader()
-        const chunks: Uint8Array[] = []
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            chunks.push(value)
-        }
-        return new TextDecoder('utf-8').decode(_concat(chunks))
+        const bytes = await _readStream(this._body)
+        return new TextDecoder('utf-8').decode(bytes)
     }
 
     async json(): Promise<any> {
-        const text = await this.text()
-        return JSON.parse(text)
+        return JSON.parse(await this.text())
     }
 
     async blob(): Promise<Blob> {
@@ -337,30 +325,29 @@ class ResponseImpl {
     }
 
     async arrayBuffer(): Promise<ArrayBuffer> {
-        if (this._preloadedBody) {
-            if (this._bodyConsumed) throw new TypeError('Body already used')
-            this._bodyConsumed = true
-            return this._preloadedBody
-        }
         if (this.bodyUsed) throw new TypeError('Body already used')
         this._bodyConsumed = true
-        const reader = this.body.getReader()
-        const chunks: Uint8Array[] = []
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            chunks.push(value)
-        }
-        const combined = _concat(chunks)
-        return combined.buffer
+        const bytes = await _readStream(this._body)
+        return bytes.buffer
     }
 
-    /** Replace body/headers after brotli decompression. */
-    _applyDecompressedBody(stream: ReadableStream<Uint8Array>, body: ArrayBuffer, newHeaders: HeadersImpl): void {
-        this._preloadedBody = body
+    async bytes(): Promise<Uint8Array> {
+        if (this.bodyUsed) throw new TypeError('Body already used')
+        this._bodyConsumed = true
+        return await _readStream(this._body)
+    }
+
+    clone(): ResponseImpl {
+        if (this.bodyUsed) throw new TypeError('Body already used')
+        const [branch1, branch2] = this._body.tee()
+        this._body = branch1
+        return new ResponseImpl(this.status, this.statusText, this._headers, branch2)
+    }
+
+    _applyDecompressedBody(stream: ReadableStream<Uint8Array>, _body: ArrayBuffer, newHeaders: HeadersImpl): void {
         this._bodyConsumed = false
-        this.body = stream
-        this.headers = newHeaders
+        this._body = stream
+        this._headers = newHeaders
     }
 }
 
@@ -769,11 +756,11 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                                 }
                             })
                     )
-                    resp.url = currentUrl
-                    resp._preloadedBody = body
+                    resp._url = currentUrl
                     return resp
                 }
             }
+
             if (cachedMeta.etag) conditionalHeaders['If-None-Match'] = cachedMeta.etag
             if (cachedMeta.lastModified) conditionalHeaders['If-Modified-Since'] = cachedMeta.lastModified
         }
@@ -792,7 +779,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
             throw new Error(`fetch() does not support protocol "${parsedUrl.protocol}"`)
         const response = await fetchRequest(parsedUrl, mergedOptions)
 
-        response.url = currentUrl
+        response._url = currentUrl
 
         // ── Handle brotli Content-Encoding ──
         const contentEncoding = response.headers.get('content-encoding') || ''
@@ -841,8 +828,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                                 }
                             })
                 )
-                resp.url = currentUrl
-                resp._preloadedBody = body
+                resp._url = currentUrl
                 return resp
             }
         }
@@ -875,8 +861,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                                 }
                             })
             )
-            resp.url = currentUrl
-            resp._preloadedBody = body
+            resp._url = currentUrl
             return resp
         }
 
@@ -890,7 +875,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 throw new Error('Redirect not allowed for: ' + currentUrl)
             }
             if (redirectMode === 'manual') {
-                response.redirected = true
+                response._redirected = true
                 return response
             }
             if (maxRedirects > 0 && redirectCount < maxRedirects) {
@@ -901,18 +886,18 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 currentUrl = new URL(location, currentUrl).href
 
                 redirectCount++
-                response.redirected = true
+                response._redirected = true
 
                 if (response.status === 303) {
                     options.method = 'GET'
                     delete options.body
                 }
             } else {
-                if (redirectCount > 0) response.redirected = true
+                if (redirectCount > 0) response._redirected = true
                 return response
             }
         } else {
-            if (redirectCount > 0) response.redirected = true
+            if (redirectCount > 0) response._redirected = true
             return response
         }
     }
