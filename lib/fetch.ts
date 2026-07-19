@@ -15,6 +15,32 @@ function _concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
     return result
 }
 
+function _toReadableStream(body: BodyInit): ReadableStream<Uint8Array> {
+    if (body instanceof ReadableStream) return body
+    const bytes = (typeof body === 'string')
+        ? new TextEncoder().encode(body)
+        : (body instanceof ArrayBuffer)
+            ? new Uint8Array(body)
+            : new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
+    return new ReadableStream<Uint8Array>({
+        start(ctrl) {
+            ctrl.enqueue(bytes)
+            ctrl.close()
+        }
+    })
+}
+
+async function _readStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>> {
+    const reader = stream.getReader()
+    const chunks: Uint8Array[] = []
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+    }
+    return _concat(chunks)
+}
+
 function _hasChunkedEnd(data: Uint8Array): boolean {
     if (data.length < 7) return false
     let i = data.length - 7
@@ -152,11 +178,11 @@ class RequestImpl {
     readonly url: string
     readonly method: string
     readonly headers: HeadersImpl
-    readonly body: string | null
+    private _body: ReadableStream<Uint8Array> | null
     readonly redirect: RequestRedirect
     readonly timeout: number
     readonly maxRedirects: number
-    readonly bodyUsed: boolean = false
+    private _bodyConsumed: boolean = false
     readonly integrity: string = ''
     readonly keepalive: boolean = false
     readonly mode: string = 'cors'
@@ -167,13 +193,23 @@ class RequestImpl {
     readonly signal: AbortSignal | null = null
     readonly destination: string = ''
 
+    get body(): ReadableStream<Uint8Array> | null { return this._body }
+
+    get bodyUsed(): boolean {
+        return this._bodyConsumed || (this._body?.locked ?? false)
+    }
+
     constructor(input: string | RequestImpl, init: RequestInit = {}) {
-        const bodyStr = typeof init.body === 'string' ? init.body : undefined
+        const initBody = init.body
         if (input instanceof RequestImpl) {
             this.url = input.url
             this.method = init.method || input.method
             this.headers = new HeadersImpl(init.headers || input.headers)
-            this.body = bodyStr !== undefined ? bodyStr : input.body
+            if (initBody !== undefined && initBody !== null) {
+                this._body = _toReadableStream(initBody)
+            } else {
+                this._body = input._body
+            }
             this.redirect = init.redirect || input.redirect
             this.timeout = init.timeout || input.timeout
             this.maxRedirects = init.maxRedirects || input.maxRedirects
@@ -181,7 +217,7 @@ class RequestImpl {
             this.url = input
             this.method = init.method || 'GET'
             this.headers = new HeadersImpl(init.headers)
-            this.body = bodyStr || null
+            this._body = initBody !== null && initBody !== undefined ? _toReadableStream(initBody) : null
             this.redirect = init.redirect || 'follow'
             this.timeout = init.timeout || 30000
             this.maxRedirects = init.maxRedirects || 5
@@ -189,7 +225,11 @@ class RequestImpl {
     }
 
     async arrayBuffer(): Promise<ArrayBuffer> {
-        return new TextEncoder().encode(this.body ?? undefined).buffer
+        if (!this.body) return new ArrayBuffer(0)
+        if (this._bodyConsumed) throw new TypeError('Body already used')
+        this._bodyConsumed = true
+        const bytes = await _readStream(this.body)
+        return bytes.buffer
     }
 
     async blob(): Promise<Blob> {
@@ -201,19 +241,34 @@ class RequestImpl {
     }
 
     async json(): Promise<any> {
-        if (this.body === null) throw new TypeError('Body is null')
-        return JSON.parse(this.body)
+        return JSON.parse(await this.text())
     }
 
     async text(): Promise<string> {
-        return this.body || ''
+        if (!this.body) return ''
+        if (this._bodyConsumed) throw new TypeError('Body already used')
+        this._bodyConsumed = true
+        const bytes = await _readStream(this.body)
+        return new TextDecoder('utf-8').decode(bytes)
     }
 
     clone(): RequestImpl {
+        if (this._body) {
+            const [branch1, branch2] = this._body.tee()
+            this._body = branch1
+            const req = new RequestImpl(this.url, {
+                method: this.method,
+                headers: this.headers,
+                body: branch2,
+                redirect: this.redirect,
+                timeout: this.timeout,
+                maxRedirects: this.maxRedirects,
+            })
+            return req
+        }
         return new RequestImpl(this.url, {
             method: this.method,
             headers: this.headers,
-            body: this.body || undefined,
             redirect: this.redirect,
             timeout: this.timeout,
             maxRedirects: this.maxRedirects,
@@ -231,7 +286,7 @@ class ResponseImpl {
     redirected: boolean
     type: ResponseType
     url: string
-    body: ReadableStream
+    body: ReadableStream<Uint8Array>
     private _bodyConsumed: boolean = false
     _preloadedBody: ArrayBuffer | null = null
 
@@ -239,7 +294,7 @@ class ResponseImpl {
         return this._bodyConsumed || this.body.locked
     }
 
-    constructor(status: number, statusText: string, headers: HeadersImpl, bodyStream: ReadableStream) {
+    constructor(status: number, statusText: string, headers: HeadersImpl, bodyStream: ReadableStream<Uint8Array>) {
         this.status = status
         this.statusText = statusText
         this.headers = headers
@@ -301,7 +356,7 @@ class ResponseImpl {
     }
 
     /** Replace body/headers after brotli decompression. */
-    _applyDecompressedBody(stream: ReadableStream, body: ArrayBuffer, newHeaders: HeadersImpl): void {
+    _applyDecompressedBody(stream: ReadableStream<Uint8Array>, body: ArrayBuffer, newHeaders: HeadersImpl): void {
         this._preloadedBody = body
         this._bodyConsumed = false
         this.body = stream
@@ -353,11 +408,9 @@ const ST_DONE = 5
 
 // ── Main fetch request ──
 
-function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: string; pathname: string; search?: string }, options: RequestInit): Promise<ResponseImpl> {
-    return new Promise((resolve, reject) => {
+async function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: string; pathname: string; search?: string }, options: RequestInit): Promise<ResponseImpl> {
         const method = options.method || 'GET'
         const headers = new HeadersImpl(options.headers)
-        const body = typeof options.body === 'string' ? options.body : null
         const timeout = options.timeout || 30000
         const isHTTPS = parsedUrl.protocol === 'https:'
 
@@ -370,9 +423,21 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
         if (!headers.has('user-agent')) headers.set('User-Agent', 'QuickJS/1.0')
         if (!headers.has('connection')) headers.set('Connection', 'close')
         if (!headers.has('accept-encoding')) headers.set('Accept-Encoding', 'br')
-        const bodyBytes = body ? new TextEncoder().encode(body) : null
-        if (body && !headers.has('content-length')) headers.set('Content-Length', String(bodyBytes!.length))
+        let bodyBytes: Uint8Array | null = null
+        if (options.body !== null && options.body !== undefined) {
+            if (options.body instanceof ReadableStream) {
+                bodyBytes = await _readStream(options.body)
+            } else if (typeof options.body === 'string') {
+                bodyBytes = new TextEncoder().encode(options.body)
+            } else if (options.body instanceof ArrayBuffer) {
+                bodyBytes = new Uint8Array(options.body)
+            } else {
+                bodyBytes = new Uint8Array(options.body.buffer, options.body.byteOffset, options.body.byteLength)
+            }
+        }
+        if (bodyBytes && !headers.has('content-length')) headers.set('Content-Length', String(bodyBytes.length))
 
+        return new Promise((resolve, reject) => {
         let request = method + ' ' + parsedUrl.pathname + (parsedUrl.search || '') + ' HTTP/1.1\r\n'
         headers.forEach((value: string, name: string) => {
             request += name + ': ' + value + '\r\n'
@@ -390,8 +455,8 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
         let state = ST_CONNECTING
         let resolved = false
         let timerId: TimerId | undefined
-        let stream: ReadableStream | null = null
-        let _controller: ReadableStreamDefaultController | null = null
+        let stream: ReadableStream<Uint8Array> | null = null
+        let _controller: ReadableStreamDefaultController<Uint8Array> | null = null
         let headerRaw: Uint8Array = new Uint8Array(0)
         let isChunked = false
         let contentLength = 0
@@ -495,7 +560,7 @@ function fetchRequest(parsedUrl: { protocol: string; hostname: string; port: str
                                 parsed.headers.get('content-length') || '0', 10
                             )
                             _controller = null
-                            stream = new ReadableStream({
+                            stream = new ReadableStream<Uint8Array>({
                                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) { _controller = ctrl },
                                 cancel() { cleanup(); cleanupSocket() }
                             })
@@ -642,14 +707,13 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
     // Normalize: if first arg is a Request, unwrap it
     let currentUrl: string
     let options: RequestInit
-    const bodyStr = typeof init.body === 'string' ? init.body : undefined
     if (url instanceof RequestImpl) {
         const req = url
         currentUrl = req.url
         options = {
             method: init.method || req.method,
             headers: init.headers || headersToObj(req.headers),
-            body: bodyStr !== undefined ? bodyStr : req.body || undefined,
+            body: init.body ?? req.body ?? undefined,
             timeout: init.timeout || req.timeout,
             redirect: init.redirect || req.redirect,
             maxRedirects: init.maxRedirects || req.maxRedirects,
@@ -659,7 +723,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
         options = {
             method: init.method,
             headers: init.headers,
-            body: bodyStr,
+            body: init.body,
             timeout: init.timeout,
             redirect: init.redirect,
             maxRedirects: init.maxRedirects,
@@ -698,7 +762,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                     const resp = new ResponseImpl(
                         cachedMeta.status, cachedMeta.statusText,
                         new HeadersImpl(cachedMeta.headers || {}),
-                        new ReadableStream({
+                        new ReadableStream<Uint8Array>({
                                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
                                     ctrl.enqueue(new Uint8Array(body));
                                     ctrl.close();
@@ -740,7 +804,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 if (k !== 'content-encoding') newHeaders.set(k, v)
             })
             newHeaders.set('content-length', String(decompressedBody.byteLength))
-            const stream = new ReadableStream({
+            const stream = new ReadableStream<Uint8Array>({
                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
                     ctrl.enqueue(new Uint8Array(decompressedBody));
                     ctrl.close();
@@ -770,7 +834,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
                 const resp = new ResponseImpl(
                     cachedMeta.status, cachedMeta.statusText,
                     new HeadersImpl(cachedMeta.headers),
-                    new ReadableStream({
+                    new ReadableStream<Uint8Array>({
                                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
                                     ctrl.enqueue(new Uint8Array(body));
                                     ctrl.close();
@@ -804,7 +868,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
             }
             const resp = new ResponseImpl(
                 response.status, response.statusText,
-                response.headers, new ReadableStream({
+                response.headers, new ReadableStream<Uint8Array>({
                                 start(ctrl: ReadableStreamDefaultController<Uint8Array>) {
                                     ctrl.enqueue(new Uint8Array(body));
                                     ctrl.close();
@@ -858,7 +922,7 @@ async function fetch(url: string | Request, init: RequestInit = {}): Promise<Res
 
 declare global {
     type HeadersInit = [string, string][] | Record<string, string> | Headers
-    type BodyInit = ReadableStream | string | ArrayBuffer | ArrayBufferView
+    type BodyInit = ReadableStream<Uint8Array> | string | ArrayBuffer | ArrayBufferView
     type RequestRedirect = 'error' | 'follow' | 'manual'
     type RequestCache = 'default' | 'force-cache' | 'no-cache' | 'no-store' | 'only-if-cached' | 'reload'
     type RequestCredentials = 'include' | 'omit' | 'same-origin'
