@@ -413,7 +413,8 @@ declare module "gui" {
     function GetWindowText(hwnd: HWND): string;
     function GetScaleFactor(): number;
     function CreateSystemDpiFont(): HFONT | null;
-    function GetWindowLongPtr(hwnd: HWND, nIndex: Gwlp): number;
+    type GwlpReturnType<T extends Gwlp> = T extends Gwlp.WNDPROC ? WNDPROC : number;
+    function GetWindowLongPtr<T extends Gwlp>(hwnd: HWND, nIndex: T): GwlpReturnType<T>;
     function SetWindowLongPtr(hwnd: HWND, nIndex: Gwlp, newLong: number): number;
     function UnsetWindowProc(hwnd: HWND): boolean;
     function CallWindowProc(wndProc: WNDPROC, hwnd: HWND, msg: number, wParam: number, lParam: number): number;

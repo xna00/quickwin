@@ -1,6 +1,6 @@
 import {
     CallWindowProc, CreateSystemDpiFont, CreateWindow as CreateWindowWithoutScale, DefWindowProc,
-    GetScaleFactor, GetWindowLongPtr, GetWindowText, HWND, WNDPROC,
+    GetScaleFactor, GetWindowLongPtr, GetWindowText, HWND,
     RegisterClass, SendMessage, SetWindowProc, ShowWindow,
     WmMsg, WindowStyle, ButtonStyle, Gwlp, LbMsg,
 } from "gui";
@@ -49,7 +49,7 @@ function wndProc(hwnd: HWND, msg: number, wParam: number, lParam: number) {
                     })
                 return 0;
             }
-            return CallWindowProc(oldProc as WNDPROC, hwnd, msg, wParam, lParam);
+            return CallWindowProc(oldProc, hwnd, msg, wParam, lParam);
         });
         return 0;
     } else if (msg === WmMsg.COMMAND) {

@@ -42,7 +42,7 @@ function makeBitmapInfo(w: number, h: number): ArrayBuffer {
 }
 
 function strToWide(str: string): ArrayBuffer {
-    return new TextEncoder('utf-16le').encode(str + '\0').buffer as ArrayBuffer
+    return new TextEncoder('utf-16le').encode(str + '\0').buffer
 }
 
 function wideToStr(buf: ArrayBuffer): string {

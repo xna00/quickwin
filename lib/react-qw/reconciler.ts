@@ -32,7 +32,7 @@ function isDelayedControl(winClass: string): boolean {
 
 function setupWindowProc(instance: Instance, hwnd: gui.HWND) {
   instance.hwnd = hwnd
-  const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC) as unknown as gui.WNDPROC
+  const oldProc = gui.GetWindowLongPtr(hwnd, gui.Gwlp.WNDPROC)
   instancesByHwnd.set(hwnd, instance)
   gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
     const ev = instance.props.onEvent
