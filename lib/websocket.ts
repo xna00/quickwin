@@ -164,9 +164,9 @@ class WebSocketImpl {
     onmessage: ((event: MessageEvent) => void) | null = null
 
     private _options: WebSocketOptions
-    private _sock: number | null = null
-    private _ssl: number | null = null
-    private _ctx: number | null = null
+    private _sock: sock.SockHandle | null = null
+    private _ssl: wolfssl.WOLFSSL | null = null
+    private _ctx: wolfssl.WOLFSSL_CTX | null = null
     private _readBuffer: Uint8Array = new Uint8Array(0)
     private _state: State = State.CONNECTING
     private _processingHandshake: boolean = false

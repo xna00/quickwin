@@ -419,9 +419,9 @@ async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
         bodyBytes ? [requestBytes, bodyBytes] : [requestBytes]
     ).buffer
 
-    let s: number | null = null
-    let ssl: number | null = null
-    let ctx: number | null = null
+    let s: sock.SockHandle | null = null
+    let ssl: wolfssl.WOLFSSL | null = null
+    let ctx: wolfssl.WOLFSSL_CTX | null = null
     let state = ST_CONNECTING
     let resolved = false
     let timerId: TimerId | undefined
@@ -458,7 +458,7 @@ async function fetchRequest(req: RequestImpl): Promise<ResponseImpl> {
 
         s = sock.socket()
         if (s < 0) { doReject(new Error('Failed to create socket')); return }
-        const fd: number = s
+        const fd = s
 
         sock.set_on_event(fd, (event: { lNetworkEvents: number; iErrorCode: number[] }) => {
             if (state === ST_DONE) return

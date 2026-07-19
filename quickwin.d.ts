@@ -338,9 +338,9 @@ declare module "os" {
 }
 
 declare module "sock" {
-    type SockHandle = number;
+    type SockHandle = number & { readonly __brand: unique symbol };
 
-    function socket(domain?: number, type?: number, protocol?: number): SockHandle;
+    function socket(domain?: AddrFamily, type?: SockType, protocol?: Protocol): SockHandle;
     function connect(sock: SockHandle, addr: string, port: number): number;
     function send(sock: SockHandle, buf: ArrayBuffer, flags?: number): number;
     function recv(sock: SockHandle, size?: number, flags?: number): ArrayBuffer | null;
@@ -353,9 +353,9 @@ declare module "sock" {
 }
 
 declare module "wolfssl" {
-    type WOLFSSL = number;
-    type WOLFSSL_CTX = number;
-    type WOLFSSL_METHOD = number;
+    type WOLFSSL = number & { readonly __brand: unique symbol };
+    type WOLFSSL_CTX = number & { readonly __brand: unique symbol };
+    type WOLFSSL_METHOD = number & { readonly __brand: unique symbol };
 
     function wolfSSL_library_init(): number;
     function wolfSSL_CTX_new(method: WOLFSSL_METHOD): WOLFSSL_CTX | null;
@@ -394,6 +394,7 @@ declare module "gui" {
     type HWND = number & { readonly __label: unique symbol };
     type HMENU = number & { readonly __label: unique symbol };
     type HFONT = number & { readonly __label: unique symbol };
+    type HICON = number & { readonly __label: unique symbol };
     type WNDPROC = number & { readonly __label: unique symbol };
 
     function RegisterClass(className: string, wndProc?: (hwnd: HWND, msg: number, wParam: number, lParam: number) => number): number;
@@ -423,23 +424,23 @@ declare module "gui" {
 
 
     interface NotifyIconData {
-        hwnd: number
+        hwnd: HWND
         uID?: number
         flags?: number
         callbackMessage?: number
-        hIcon?: number
+        hIcon?: HICON
         tip?: string
     }
 
     function ShellNotifyIcon(cmd: NotifyIconCmd, nid: NotifyIconData): boolean;
-    function LoadIcon(name: string): number | null;
+    function LoadIcon(name: string): HICON | null;
 
 
-    function CreatePopupMenu(): number | null;
-    function AppendMenu(menu: number, flags: number, id: number, text: string): boolean;
-    function TrackPopupMenu(menu: number, x: number, y: number, flags?: number, hwnd?: number): number;
-    function DestroyMenu(menu: number): boolean;
-    function SetForegroundWindow(hwnd: number): boolean;
+    function CreatePopupMenu(): HMENU | null;
+    function AppendMenu(menu: HMENU, flags: number, id: number, text: string): boolean;
+    function TrackPopupMenu(menu: HMENU, x: number, y: number, flags?: number, hwnd?: HWND): number;
+    function DestroyMenu(menu: HMENU): boolean;
+    function SetForegroundWindow(hwnd: HWND): boolean;
     /** Returns [x, y] or null */
     function GetCursorPos(): [number, number] | null;
     /** Returns [width, height] of the primary monitor */
