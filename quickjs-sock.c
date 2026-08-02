@@ -387,7 +387,7 @@ static JSValue js_recv(JSContext *ctx, JSValueConst this_val, int argc, JSValueC
     int ret = recv(sock->fd, (char*)buf, size, flags);
     if (ret <= 0) {
         free(buf);
-        return JS_NewInt32(ctx, ret);
+        return JS_NULL;
     }
 
     JSValue arr = JS_NewArrayBufferCopy(ctx, buf, ret);

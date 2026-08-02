@@ -145,8 +145,8 @@ function parseHeader(headerStr: string): ParsedHeader | null {
 
 export class HttpServer {
     readonly handler: ServerHandler
-    private serverSock: number = -1
-    readonly conns = new Map<number, Conn>()
+    private serverSock: SockHandle | null = null
+    readonly conns = new Map<SockHandle, Conn>()
     private closed = false
 
     constructor(handler: ServerHandler) {
@@ -155,18 +155,18 @@ export class HttpServer {
 
     /** Actual bound address, or null if not listening. */
     address(): { addr: string; port: number } | null {
-        if (this.serverSock < 0) return null
-        return sock.getsockname(this.serverSock as SockHandle)
+        if (this.serverSock === null) return null
+        return sock.getsockname(this.serverSock)
     }
 
     /** Bind and start listening. Returns 0 on success, -1 on failure. */
     listen(port: number, host?: string, backlog?: number): number {
-        if (this.serverSock >= 0) return -1
+        if (this.serverSock !== null) return -1
         const s = sock.socket()
         if (s < 0) return -1
         if (sock.bind(s, host ?? null, port) !== 0) { sock.closesocket(s); return -1 }
         if (sock.listen(s, backlog ?? 64) !== 0) { sock.closesocket(s); return -1 }
-        this.serverSock = s as number
+        this.serverSock = s
         sock.set_on_event(s, (event: NetEvent) => {
             if (event.lNetworkEvents & sock.FdEvent.FD_ACCEPT) this.acceptLoop()
         })
@@ -178,13 +178,13 @@ export class HttpServer {
         this.closed = true
         for (const c of Array.from(this.conns.values())) closeConn(c)
         this.conns.clear()
-        if (this.serverSock >= 0) { sock.closesocket(this.serverSock as SockHandle); this.serverSock = -1 }
+        if (this.serverSock !== null) { sock.closesocket(this.serverSock); this.serverSock = null }
     }
 
     private acceptLoop(): void {
-        if (this.closed || this.serverSock < 0) return
+        if (this.closed || this.serverSock === null) return
         while (true) {
-            const ac = sock.accept(this.serverSock as SockHandle)
+            const ac = sock.accept(this.serverSock)
             if (!ac) break
             const c: Conn = {
                 sock: ac.handle,
@@ -197,7 +197,7 @@ export class HttpServer {
                 keepAlive: true,
                 owner: this,
             }
-            this.conns.set(c.sock as number, c)
+            this.conns.set(c.sock, c)
             sock.set_on_event(c.sock, (event: NetEvent) => this.onConnEvent(c, event))
         }
     }
@@ -222,12 +222,8 @@ export function createServer(handler: ServerHandler): HttpServer {
 function onRead(c: Conn): void {
     if (c.closed) return
     while (true) {
-        const d = sock.recv(c.sock, 8192) as unknown as ArrayBuffer | number
-        if (typeof d === 'number') {
-            if (d === 0) closeConn(c)
-            break
-        }
-        if (!d || d.byteLength === 0) break
+        const d = sock.recv(c.sock, 8192)
+        if (!d) break
         c.parts.push(new Uint8Array(d))
     }
     if (!c.closed) tryProcess(c)
@@ -272,7 +268,7 @@ function closeConn(c: Conn): void {
     if (c.closed) return
     c.closed = true
     if (c.sock >= 0) sock.closesocket(c.sock)
-    c.owner.conns.delete(c.sock as number)
+    c.owner.conns.delete(c.sock)
 }
 
 // ── Request state machine ──
