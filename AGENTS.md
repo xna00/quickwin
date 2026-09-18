@@ -369,7 +369,42 @@ return extract_body(response);
 
 **当前状态：** 已确认问题，暂时未修。单 Worker 场景完全安全（当前所有测试都是串行 Worker）。
 
-## 11. React Custom Renderer 计划
+## 12. Windows XP 兼容性状态
+
+**分支：** `feat/win32-xp`
+
+**已完成（自己的代码）：**
+- `quickjs-sock.c`：`inet_ntop`/`inet_pton` 运行时检测（Vista+ 用原生，XP 用 `WSAStringToAddress`/`WSAAddressToString` fallback，均支持 IPv4+IPv6）
+- `main.c`：`SetProcessDPIAware` 运行时检测（GetProcAddress + user32.dll）
+- `quickjs-wamr.c`：`FILE_ID_BOTH_DIR_INFO` typedef（Vista+ 结构体，XP 编译时需要）
+- `Makefile`：`-D_WIN32_WINNT=0x0501` + `WAMR_TARGET` 可配置
+- `ci.yml`：UCRT64 → MINGW64/MINGW32 双架构
+
+**未解决（WAMR 子模块，7 个 Vista+ API）：**
+
+| API | 文件 | 说明 |
+|-----|------|------|
+| `AcquireSRWLockExclusive` | wamr/win_thread.c | SRWLock = Vista+ |
+| `AcquireSRWLockShared` | wamr/win_thread.c | 同上 |
+| `InitializeSRWLock` | wamr/win_thread.c | 同上 |
+| `ReleaseSRWLockExclusive` | wamr/win_thread.c | 同上 |
+| `ReleaseSRWLockShared` | wamr/win_thread.c | 同上 |
+| `inet_pton` | wamr/win_socket.c | Vista+ |
+
+**关键发现：**
+- SRWLock 函数**在 iwasm 解释器中未被调用**（解释器只用 `os_mutex`/`os_cond`），但链接器仍将其加入导入表
+- `inet_pton` 在 WAMR 的 `win_socket.c` 中使用（WASI socket 代码），WASI 已禁用但代码仍被编译
+- XP 加载器看到导入表里有不存在的函数（`AcquireSRWLockExclusive`）就会**拒绝加载整个 exe**
+- 即使运行时不会调用这些函数，也**无法通过 XP 加载器检查**
+
+**修复方案（未实施）：**
+1. 在 wamr 中用 `CRITICAL_SECTION` 替换 `SRWLock`（`InitializeCriticalSection`/`EnterCriticalSection`/`LeaveCriticalSection`，XP 兼容）
+2. 在 wamr 的 `win_socket.c` 中添加 `inet_pton` XP fallback（用 `WSAStringToAddress`）
+3. 可通过 Python 脚本（`patches/apply-xp-patch.py`）自动 apply，但脚本的多行函数替换逻辑有 bug 需修复
+
+**结论：** 自己的代码已完全 XP 兼容，但 WAMR 子模块的 7 个 Vista+ 导入阻止了 XP 运行。需要修改 WAMR 源码才能真正支持 XP。
+
+## 13. React Custom Renderer 计划
 
 **文件位置：** `.agents/REACT_RENDERER_PLAN.md`
 

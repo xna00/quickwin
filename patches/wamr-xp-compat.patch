@@ -1,0 +1,114 @@
+diff --git a/core/shared/platform/windows/platform_internal.h b/core/shared/platform/windows/platform_internal.h
+index f77e1ad5..c0fdc1b4 100644
+--- a/core/shared/platform/windows/platform_internal.h
++++ b/core/shared/platform/windows/platform_internal.h
+@@ -68,8 +68,7 @@ typedef void *korp_mutex;
+ typedef void *korp_sem;
+ 
+ typedef struct {
+-    SRWLOCK lock;
+-    bool exclusive;
++    CRITICAL_SECTION cs;
+ } korp_rwlock;
+ 
+ /**
+diff --git a/core/shared/platform/windows/win_socket.c b/core/shared/platform/windows/win_socket.c
+index 8d61c45c..b1b2888b 100644
+--- a/core/shared/platform/windows/win_socket.c
++++ b/core/shared/platform/windows/win_socket.c
+@@ -11,6 +11,30 @@
+ /* link with Ws2_32.lib */
+ #pragma comment(lib, "ws2_32.lib")
+ 
++/* inet_pton is Vista+; provide XP fallback */
++#if _WIN32_WINNT < 0x0600
++static int inet_pton_xp(int af, const char *src, void *dst) {
++    struct sockaddr_storage ss;
++    int size = sizeof(ss);
++    char src_copy[INET6_ADDRSTRLEN + 1];
++    strncpy(src_copy, src, INET6_ADDRSTRLEN);
++    src_copy[INET6_ADDRSTRLEN] = '\0';
++    memset(&ss, 0, sizeof(ss));
++    if (WSAStringToAddressA(src_copy, af, NULL, (struct sockaddr *)&ss, &size) == 0) {
++        switch (af) {
++        case AF_INET:
++            *(struct in_addr *)dst = ((struct sockaddr_in *)&ss)->sin_addr;
++            return 1;
++        case AF_INET6:
++            *(struct in6_addr *)dst = ((struct sockaddr_in6 *)&ss)->sin6_addr;
++            return 1;
++        }
++    }
++    return 0;
++}
++#define inet_pton inet_pton_xp
++#endif
++
+ static bool is_winsock_inited = false;
+ 
+ #define CHECK_VALID_SOCKET_HANDLE(win_handle)                   \
+diff --git a/core/shared/platform/windows/win_thread.c b/core/shared/platform/windows/win_thread.c
+index 1f6a57eb..66bfaf30 100644
+--- a/core/shared/platform/windows/win_thread.c
++++ b/core/shared/platform/windows/win_thread.c
+@@ -605,10 +605,7 @@ int
+ os_rwlock_init(korp_rwlock *lock)
+ {
+     bh_assert(lock);
+-
+-    InitializeSRWLock(&(lock->lock));
+-    lock->exclusive = false;
+-
++    InitializeCriticalSection(&lock->cs);
+     return BHT_OK;
+ }
+ 
+@@ -616,9 +613,7 @@ int
+ os_rwlock_rdlock(korp_rwlock *lock)
+ {
+     bh_assert(lock);
+-
+-    AcquireSRWLockShared(&(lock->lock));
+-
++    EnterCriticalSection(&lock->cs);
+     return BHT_OK;
+ }
+ 
+@@ -626,10 +621,7 @@ int
+ os_rwlock_wrlock(korp_rwlock *lock)
+ {
+     bh_assert(lock);
+-
+-    AcquireSRWLockExclusive(&(lock->lock));
+-    lock->exclusive = true;
+-
++    EnterCriticalSection(&lock->cs);
+     return BHT_OK;
+ }
+ 
+@@ -637,23 +629,14 @@ int
+ os_rwlock_unlock(korp_rwlock *lock)
+ {
+     bh_assert(lock);
+-
+-    if (lock->exclusive) {
+-        lock->exclusive = false;
+-        ReleaseSRWLockExclusive(&(lock->lock));
+-    }
+-    else {
+-        ReleaseSRWLockShared(&(lock->lock));
+-    }
+-
++    LeaveCriticalSection(&lock->cs);
+     return BHT_OK;
+ }
+ 
+ int
+ os_rwlock_destroy(korp_rwlock *lock)
+ {
+-    (void)lock;
+-
++    DeleteCriticalSection(&lock->cs);
+     return BHT_OK;
+ }
+ 
