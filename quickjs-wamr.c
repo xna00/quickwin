@@ -1,3 +1,22 @@
+/* FILE_ID_BOTH_DIR_INFO is Vista+; needed for WAMR's platform_internal.h */
+#if defined(_WIN32) && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600)
+#include <windows.h>
+typedef struct _FILE_ID_BOTH_DIR_INFO {
+    DWORD NextEntryOffset;
+    DWORD FileIndex;
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER LastWriteTime;
+    LARGE_INTEGER ChangeTime;
+    LARGE_INTEGER EndOfFile;
+    LARGE_INTEGER AllocationSize;
+    DWORD FileAttributes;
+    DWORD FileNameLength;
+    DWORD EaSize;
+    WCHAR FileName[1];
+} FILE_ID_BOTH_DIR_INFO;
+#endif
+
 #include "quickjs-wamr.h"
 #include "quickjs-args.h"
 #include "wasm_export.h"
