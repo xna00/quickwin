@@ -15,11 +15,13 @@ else
     CFLAGS = -I./quickjs -I$(MSYS2_PREFIX)/include -DNDEBUG
 endif
 
+CFLAGS += -D_WIN32_WINNT=0x0501
 CFLAGS += -DDUMP_GC -DDUMP_LEAKS
 CFLAGS += -Wall -Wextra
 
 WAMR_DIR = wamr
 WAMR_CORE = $(WAMR_DIR)/core/iwasm
+WAMR_TARGET ?= X86_64
 WAMR_INC = -I$(WAMR_CORE)/include
 WAMR_INC += -I$(WAMR_DIR)/core/shared/platform/windows
 WAMR_INC += -I$(WAMR_DIR)/core/iwasm/interpreter
@@ -212,7 +214,7 @@ $(WAMR_LIB):
 	@mkdir -p $(WAMR_BUILD_DIR)
 	cd $(WAMR_DIR) && cmake -B build \
 		-DWAMR_BUILD_PLATFORM=windows \
-		-DWAMR_BUILD_TARGET=X86_64 \
+		-DWAMR_BUILD_TARGET=$(WAMR_TARGET) \
 		-DWAMR_BUILD_INTERP=1 \
 		-DWAMR_BUILD_FAST_INTERP=1 \
 		-DWAMR_BUILD_AOT=0 \
