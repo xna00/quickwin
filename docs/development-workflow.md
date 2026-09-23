@@ -131,7 +131,7 @@ cd docker
 ./run.sh win7 --stop     # ACPI 关机，超时 60s 自动 kill
 ```
 
-流程：杀旧 QEMU → 重建 overlay（`*_test.qcow2`，写时复制，保护 ready 快照）→ 拷贝 `_build` 到 `ci_share/quickwin` → `unix2dos` run.bat → 启动 → 等 `ci_share/run-<vm>.log` 的 Done。
+流程：杀旧 QEMU → 重建 overlay（`*_test.qcow2`，写时复制，保护 ready 快照）→ `ln -s` `_build` 到 `ci_share/quickwin` → `unix2dos` run.bat → 启动 → 等 `ci_share/run-<vm>.log` 的 Done。
 
 Win7 用 `qwin.exe`（64 位），XP 用 `qwin-x86.exe`（32 位），`run.bat` 按 `ver` 自动选择。
 

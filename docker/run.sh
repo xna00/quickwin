@@ -84,11 +84,12 @@ if $FRESH || [ ! -f "$OVERLAY" ]; then
     qemu-img create -f qcow2 -b "$SNAPSHOT" -F qcow2 "$OVERLAY" >/dev/null
 fi
 
-# ── 复制 _build 到 ci_share/quickwin（真实目录，不是符号链接）──
-# 不能用 ln -s：smbd 会把符号链接暴露成 SMB2 symlink，Win7 的 cmd.exe
-# `cd /d Z:\quickwin` 直接失败（cwd 留在 Z:\），后续 `if exist qwin-x86.exe`
-# 找不到文件。真实目录无 symlink 语义，也不需要 wide links。
-rm -rf "$LINK" && mkdir -p "$LINK" && cp -a "$SHARE_DIR/." "$LINK/"
+# ── 链接 _build 到 ci_share/quickwin（symlink，需 smbd wide links = yes）──
+# smb_wrapper: unix extensions=no + wide links=yes，Win7/XP 均已验证 cwd=[Z:\quickwin]。
+# 已是指向 SHARE_DIR 的 symlink 则不动（避免 VM 使用中被删）；否则 rm 后重建。
+if [ "$(readlink "$LINK" 2>/dev/null)" != "$SHARE_DIR" ]; then
+    rm -rf "$LINK" && ln -s "$SHARE_DIR" "$LINK"
+fi
 
 # ── run.bat 转 CRLF ──
 # git 里是 LF，但 cmd.exe 对 LF-only 批处理的 if(...) 块 / goto / :label 解析会失败：
