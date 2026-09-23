@@ -114,8 +114,8 @@ cd docker
 ./setup-xp.sh       # → snapshots/xp_ready.qcow2
 ```
 
-- XP：提取 ISO → 注入 `WINNT.SIF` + `$OEM$` → 重建 ISO → 无人值守安装（约 5–6 分钟）
-- Win7：直接用原始 ISO 安装
+- XP：提取 ISO → 注入 `WINNT.SIF` + `$OEM$`（`.bat` 经 `unix2dos` 转 CRLF）→ 重建 ISO → 无人值守安装（约 5–6 分钟）
+- Win7：直接用原始 ISO 安装；软盘里的 `install.bat`/`bootstrap.bat` 同样 `unix2dos` 转 CRLF（中文 cmd + LF 会吞行尾）
 - 安装脚本会自动清理残留 pid / 旧盘；QEMU 干净关机后脚本轮询退出
 
 ### 每次测试
@@ -141,7 +141,7 @@ Win7 用 `qwin.exe`（64 位），XP 用 `qwin-x86.exe`（32 位），`run.bat` 
 |------|-------------|
 | XP 卡在产品密钥页 | `floppy-xp/WINNT.SIF` 的 `ProductKey` 与 ISO 不匹配（中文 VL 盘用 `MRX3F-...`） |
 | VM 内挂不上 Z: | XP 仅 SMB1：须走 `smb_wrapper.sh`（guestfwd + `server min protocol = NT1`），不能用 QEMU `-smb` |
-| `net use` 成功但不跑 run.bat | `run.bat` 必须 CRLF；`run.sh` 每次启动已 `unix2dos` |
+| `net use` 成功但不跑 run.bat | `.bat` 必须 CRLF：仓库根 `.gitattributes` 已 `eol=crlf`（checkout 即 CRLF），`run.sh` 每次再 `unix2dos` 作双保险 |
 | 网络测试连不上宿主 | guest `portproxy` 18923/18924 + 容器内 `serve_test` 必须都在；`--fresh` 会丢 overlay 里的 portproxy，由 run.bat 每次重建 |
 | 关机/等待死循环 | 不能用 `kill -0` 判 QEMU（容器 PID1 不回收僵尸）；看 pid **文件是否还存在**（QEMU 退出时自行 unlink） |
 | 需要看 VM 画面 | XP：monitor `screendump`（`setup-xp.sh` 无 VNC）；Win7/XP 测试态可 `./start-novnc.sh` 后浏览器开 `:6080` |
