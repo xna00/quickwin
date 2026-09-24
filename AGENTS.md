@@ -412,3 +412,9 @@ return extract_body(response);
 **文件位置：** `.agents/REACT_RENDERER_PLAN.md`
 
 **功能：** 记录 React Custom Renderer 实现方案，包括完整步骤（清理 preact、esbuild bundle、reconciler、公开 API、组件移植）、类型方案（`@types/react` + vendor bundle 桥接）和依赖清单。每次迭代前查看该文件了解当前进度。
+
+## 15. FFI 系统性优化计划
+
+**文件位置：** `.agents/FFI_OPTIMIZATION_PLAN.md`
+
+**功能：** 记录 FFI 调研结论与完整方案：现状调用面、问题清单（句柄宽度/ABI/校验）、方案 A（`qw_call` 固定签名 wrapper）、TS 类型系统（`hnd`/`i64` 双模/`ffi.dlopen` 推导）、ARM64、Phase 0–2 文件级路径。动 FFI/`quickjs-ffi.c`/`ffiCall` 前先看该文件。
