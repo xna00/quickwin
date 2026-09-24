@@ -1,5 +1,4 @@
 import * as ffi from 'ffi'
-import * as os from 'os'
 import * as win from 'win'
 import * as gui from 'gui'
 
@@ -17,8 +16,8 @@ const GetDC = loadProc(user32, 'GetDC')
 const ReleaseDC = loadProc(user32, 'ReleaseDC')
 const SelectObject = loadProc(gdi32, 'SelectObject')
 
-// 句柄宽度随架构：ia32 上 HDC/HWND 是 32-bit，错用 UINT64 会导致 DrawTextW 参数错位、测宽为 0
-const FFI_HND = os.arch === 'ia32' ? ffi.FFI_TYPE_UINT32 : ffi.FFI_TYPE_UINT64
+// 句柄（HDC/HWND/HFONT）：C 侧按指针宽传参，无需再按 os.arch 分支
+const FFI_HND = ffi.FFI_TYPE_HND
 const FFI_S32 = ffi.FFI_TYPE_SINT32
 const FFI_PTR = ffi.FFI_TYPE_POINTER
 

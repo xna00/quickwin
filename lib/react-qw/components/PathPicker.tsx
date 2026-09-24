@@ -106,8 +106,8 @@ function openFolderDialog(owner: gui.HWND, title: string | undefined): string | 
   if (!pidl) return null
 
   const pathBuf = new ArrayBuffer(260 * 2)
-  const ok = ffi.ffiCall(_SHGetPathFromIDListW, [ffi.FFI_TYPE_UINT64, FFI_PTR], [pidl, pathBuf], FFI_U32)
-  ffi.ffiCall(_CoTaskMemFree, [ffi.FFI_TYPE_UINT64], [pidl], ffi.FFI_TYPE_VOID)
+  const ok = ffi.ffiCall(_SHGetPathFromIDListW, [ffi.FFI_TYPE_HND, FFI_PTR], [pidl, pathBuf], FFI_U32)
+  ffi.ffiCall(_CoTaskMemFree, [ffi.FFI_TYPE_HND], [pidl], ffi.FFI_TYPE_VOID)
 
   return ok ? wideToStr(pathBuf) : null
 }
