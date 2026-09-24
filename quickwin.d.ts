@@ -631,6 +631,9 @@ declare module "ffi" {
     function ffiCall<const T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID>[], const R extends FfiType>(func: number, argTypes: T, args: TypeArgs<T>, retType: R, abi?: "winapi" | "cdecl"): R extends TYPE_OF_FFI_TYPE_VOID ? undefined : R extends TYPE_OF_FFI_TYPE_POINTER ? number | null : TypeArg<R>;
     /** 字符串 kind 版 ffiCall（i64/u64 入参可为 bigint） */
     function ffiCall<A extends readonly FfiKind[], R extends FfiKind>(func: number, argTypes: A, args: KindArgs<A>, retType: R, abi?: "winapi" | "cdecl"): KindRet<R>;
+    /** Phase 1 spike：切换调用后端；返回上一个后端名 */
+    function setBackend(name: "libffi" | "qwcall"): "libffi" | "qwcall";
+    function getBackend(): "libffi" | "qwcall";
     function bufferPtr(buf: ArrayBuffer): number;
     function readByte(ptr: number): number;
     function writeByte(ptr: number, value: number): void;

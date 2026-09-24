@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <windows.h>
 #include <ffi.h>
@@ -10,6 +11,30 @@
 #define QW_MAX_ARGS 16
 #define QW_MAX_TYPES 17
 #define QW_MAX_BOUNDS 256
+
+/* Phase 1 spike：0=libffi（默认），1=纯 C qw_call（可切换） */
+static int qw_backend_qwcall = 0;
+
+#if defined(_M_IX86) || defined(__i386__)
+#define QW_IS_IA32 1
+#else
+#define QW_IS_IA32 0
+#endif
+
+#if QW_IS_IA32
+#define QW_SAPI __stdcall
+#define QW_CAPI __cdecl
+#else
+#define QW_SAPI
+#define QW_CAPI
+#endif
+
+static void qw_backend_init(void)
+{
+    const char *e = getenv("QUICKWIN_FFI");
+    if (e && !strcmp(e, "qwcall"))
+        qw_backend_qwcall = 1;
+}
 
 static ffi_type *ffi_types[QW_MAX_TYPES] = {
     &ffi_type_void,     /* 0  VOID */
@@ -183,6 +208,107 @@ static JSValue qw_make_return(JSContext *ctx, int ret_type, uint64_t ret)
     return JS_NewInt64(ctx, (int64_t)ret);
 }
 
+/* ── Phase 1：纯 C 固定签名 wrapper（无 libffi 调用路径） ── */
+
+#define QW_CASES_VAL(ABI) \
+    case 0: return ((intptr_t (ABI *)(void))fp)(); \
+    case 1: return ((intptr_t (ABI *)(intptr_t))fp)(a[0]); \
+    case 2: return ((intptr_t (ABI *)(intptr_t, intptr_t))fp)(a[0], a[1]); \
+    case 3: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2]); \
+    case 4: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3]); \
+    case 5: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4]); \
+    case 6: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5]); \
+    case 7: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); \
+    case 8: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); \
+    case 9: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]); \
+    case 10: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]); \
+    case 11: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10]); \
+    case 12: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11]); \
+    case 13: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12]); \
+    case 14: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13]); \
+    case 15: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14]); \
+    case 16: return ((intptr_t (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]);
+
+#define QW_CASES_VOID(ABI) \
+    case 0: ((void (ABI *)(void))fp)(); return 0; \
+    case 1: ((void (ABI *)(intptr_t))fp)(a[0]); return 0; \
+    case 2: ((void (ABI *)(intptr_t, intptr_t))fp)(a[0], a[1]); return 0; \
+    case 3: ((void (ABI *)(intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2]); return 0; \
+    case 4: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3]); return 0; \
+    case 5: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4]); return 0; \
+    case 6: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5]); return 0; \
+    case 7: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); return 0; \
+    case 8: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); return 0; \
+    case 9: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]); return 0; \
+    case 10: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9]); return 0; \
+    case 11: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10]); return 0; \
+    case 12: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11]); return 0; \
+    case 13: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12]); return 0; \
+    case 14: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13]); return 0; \
+    case 15: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14]); return 0; \
+    case 16: ((void (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]); return 0;
+
+static intptr_t qw_call_raw(void *fp, int n, int abi_cdecl, int is_void,
+                            const intptr_t *a)
+{
+    if (n < 0 || n > QW_MAX_ARGS)
+        return 0;
+#if QW_IS_IA32
+    if (abi_cdecl)
+    {
+        if (is_void)
+        {
+            switch (n) { QW_CASES_VOID(QW_CAPI) }
+        }
+        else
+        {
+            switch (n) { QW_CASES_VAL(QW_CAPI) }
+        }
+    }
+    else
+    {
+        if (is_void)
+        {
+            switch (n) { QW_CASES_VOID(QW_SAPI) }
+        }
+        else
+        {
+            switch (n) { QW_CASES_VAL(QW_SAPI) }
+        }
+    }
+#else
+    (void)abi_cdecl;
+    if (is_void)
+    {
+        switch (n) { QW_CASES_VOID(QW_SAPI) }
+    }
+    else
+    {
+        switch (n) { QW_CASES_VAL(QW_SAPI) }
+    }
+#endif
+    return 0;
+}
+
+/* ia32：i64/u64 占 8 字节栈槽，intptr_t wrapper 无法正确传参 → 不可走 qw_call */
+static int qw_call_eligible(int n, const int *arg_types, int ret_type)
+{
+#if QW_IS_IA32
+    if (ret_type == FFI_TYPE_SINT64 || ret_type == FFI_TYPE_UINT64)
+        return 0;
+    for (int i = 0; i < n; i++)
+    {
+        if (arg_types[i] == FFI_TYPE_SINT64 || arg_types[i] == FFI_TYPE_UINT64)
+            return 0;
+    }
+#else
+    (void)n;
+    (void)arg_types;
+    (void)ret_type;
+#endif
+    return 1;
+}
+
 static JSValue qw_do_call(JSContext *ctx, void *func, int n_args,
                           const int *arg_types, int ret_type, int abi_cdecl,
                           JSValueConst *argv)
@@ -193,32 +319,85 @@ static JSValue qw_do_call(JSContext *ctx, void *func, int n_args,
         return JS_ThrowRangeError(ctx, "invalid FFI return type");
 
     int64_t slots[QW_MAX_ARGS];
-    void *ffi_args[QW_MAX_ARGS];
-    ffi_type *atypes[QW_MAX_ARGS];
     memset(slots, 0, sizeof(slots));
 
     for (int i = 0; i < n_args; i++)
     {
         if (!qw_type_valid(arg_types[i]))
             return JS_ThrowRangeError(ctx, "invalid FFI argument type");
-        atypes[i] = ffi_types[arg_types[i]];
-        ffi_args[i] = &slots[i];
     }
 
     if (qw_collect_args(ctx, n_args, arg_types, argv, slots) < 0)
         return JS_EXCEPTION;
 
-    ffi_cif cif;
-    ffi_status status = ffi_prep_cif(&cif, qw_pick_abi(abi_cdecl), n_args,
-                                     ffi_types[ret_type], atypes);
-    if (status != FFI_OK)
-        return JS_ThrowInternalError(ctx, "ffi_prep_cif failed: %d", status);
+    int use_qw = qw_backend_qwcall && qw_call_eligible(n_args, arg_types, ret_type);
+    if (qw_backend_qwcall && !use_qw)
+        return JS_ThrowRangeError(ctx, "qwcall backend: i64/u64 not supported on ia32");
 
     uint64_t ret = 0;
-    ffi_call(&cif, func, &ret, ffi_args);
+    if (use_qw)
+    {
+        intptr_t a[QW_MAX_ARGS];
+        for (int i = 0; i < n_args; i++)
+            a[i] = (intptr_t)slots[i];
+        intptr_t raw = qw_call_raw(func, n_args, abi_cdecl,
+                                   ret_type == FFI_TYPE_VOID, a);
+        ret = (uint64_t)(uintptr_t)raw;
+    }
+    else
+    {
+        void *ffi_args[QW_MAX_ARGS];
+        ffi_type *atypes[QW_MAX_ARGS];
+        for (int i = 0; i < n_args; i++)
+        {
+            atypes[i] = ffi_types[arg_types[i]];
+            ffi_args[i] = &slots[i];
+        }
+        ffi_cif cif;
+        ffi_status status = ffi_prep_cif(&cif, qw_pick_abi(abi_cdecl), n_args,
+                                         ffi_types[ret_type], atypes);
+        if (status != FFI_OK)
+            return JS_ThrowInternalError(ctx, "ffi_prep_cif failed: %d", status);
+        ffi_call(&cif, func, &ret, ffi_args);
+    }
+
     if (JS_HasException(ctx))
         return JS_EXCEPTION;
     return qw_make_return(ctx, ret_type, ret);
+}
+
+/* ── backend 切换（Phase 1 spike） ── */
+
+static JSValue js_ffi_set_backend(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "setBackend('libffi'|'qwcall')");
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+    int prev = qw_backend_qwcall;
+    if (!strcmp(s, "qwcall"))
+        qw_backend_qwcall = 1;
+    else if (!strcmp(s, "libffi"))
+        qw_backend_qwcall = 0;
+    else
+    {
+        JS_FreeCString(ctx, s);
+        return JS_ThrowRangeError(ctx, "backend must be 'libffi' or 'qwcall'");
+    }
+    JS_FreeCString(ctx, s);
+    return JS_NewString(ctx, prev ? "qwcall" : "libffi");
+}
+
+static JSValue js_ffi_get_backend(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    (void)argc;
+    (void)argv;
+    return JS_NewString(ctx, qw_backend_qwcall ? "qwcall" : "libffi");
 }
 
 /**
@@ -536,6 +715,8 @@ static const JSCFunctionListEntry ffi_funcs[] = {
     JS_CFUNC_DEF("bufferPtr", 1, js_ffi_buffer_ptr),
     JS_CFUNC_DEF("readByte", 1, js_ffi_read_byte),
     JS_CFUNC_DEF("writeByte", 2, js_ffi_write_byte),
+    JS_CFUNC_DEF("setBackend", 1, js_ffi_set_backend),
+    JS_CFUNC_DEF("getBackend", 0, js_ffi_get_backend),
 };
 
 #define DEF(x) JS_PROP_INT32_DEF(#x, x, JS_PROP_CONFIGURABLE)
@@ -564,6 +745,7 @@ static int js_ffi_init(JSContext *ctx, JSModuleDef *m)
 JSModuleDef *js_init_module_ffi(JSContext *ctx)
 {
     JSModuleDef *m;
+    qw_backend_init();
     m = JS_NewCModule(ctx, "ffi", js_ffi_init);
     if (!m)
         return NULL;

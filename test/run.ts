@@ -28,6 +28,7 @@ const suiteDefs = [
     { name: 'mupdf-render',      file: './test_mupdf_render.js',     tags: ['wasm', 'mupdf'] },
     { name: 'ffi',               file: './test_ffi.js',              tags: [] },
     { name: 'ffi-phase0',        file: './test_ffi_phase0.js',       tags: [] },
+    { name: 'ffi-spike',         file: './test_ffi_spike.js',        tags: [] },
     { name: 'net-fetch',         file: './test_net_fetch.js',        tags: ['net'] },
     { name: 'net-wolfssl-read',   file: './test_wolfssl_read.js',     tags: ['net'] },
     { name: 'net-websocket',     file: './test_net_websocket.js',    tags: ['net'] },
