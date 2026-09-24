@@ -25,8 +25,8 @@ function loadProc(lib: win.HMODULE, name: string): number {
 }
 
 const GetOpenFileNameW_ = loadProc(_comdlg32, 'GetOpenFileNameW')
-const FFI_PTR = ffi.FFI_TYPE_POINTER
-const FFI_U32 = ffi.FFI_TYPE_UINT32
+const FFI_PTR = 'ptr' as const
+const FFI_U32 = 'u32' as const
 
 function strToWide(str: string): ArrayBuffer {
   const buf = new ArrayBuffer((str.length + 1) * 2)

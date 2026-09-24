@@ -545,45 +545,6 @@ declare module "gui" {
 }
 
 declare module "ffi" {
-    type TYPE_OF_FFI_TYPE_VOID = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_UINT8 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_SINT8 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_UINT16 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_SINT16 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_UINT32 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_SINT32 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_UINT64 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_SINT64 = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_POINTER = number & { readonly __label: unique symbol }
-    type TYPE_OF_FFI_TYPE_HND = number & { readonly __label: unique symbol }
-
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_VOID: TYPE_OF_FFI_TYPE_VOID;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_UINT8: TYPE_OF_FFI_TYPE_UINT8;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_SINT8: TYPE_OF_FFI_TYPE_SINT8;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_UINT16: TYPE_OF_FFI_TYPE_UINT16;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_SINT16: TYPE_OF_FFI_TYPE_SINT16;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_UINT32: TYPE_OF_FFI_TYPE_UINT32;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_SINT32: TYPE_OF_FFI_TYPE_SINT32;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_UINT64: TYPE_OF_FFI_TYPE_UINT64;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_SINT64: TYPE_OF_FFI_TYPE_SINT64;
-    /** @deprecated prefer string kinds / FFI_TYPE_HND for handles */
-    const FFI_TYPE_POINTER: TYPE_OF_FFI_TYPE_POINTER;
-    /** 句柄/指针宽整数：ia32=32-bit，x64/ARM64=64-bit（C 侧按指针宽传参） */
-    const FFI_TYPE_HND: TYPE_OF_FFI_TYPE_HND;
-
-    type FfiType = TYPE_OF_FFI_TYPE_VOID | TYPE_OF_FFI_TYPE_UINT8 | TYPE_OF_FFI_TYPE_SINT8 | TYPE_OF_FFI_TYPE_UINT16 | TYPE_OF_FFI_TYPE_SINT16 | TYPE_OF_FFI_TYPE_UINT32 | TYPE_OF_FFI_TYPE_SINT32 | TYPE_OF_FFI_TYPE_UINT64 | TYPE_OF_FFI_TYPE_SINT64 | TYPE_OF_FFI_TYPE_POINTER | TYPE_OF_FFI_TYPE_HND;
-    type TypeArg<T extends FfiType> = T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID | TYPE_OF_FFI_TYPE_POINTER | TYPE_OF_FFI_TYPE_HND> ? number : T extends TYPE_OF_FFI_TYPE_POINTER ? (ArrayBuffer | null) : T extends TYPE_OF_FFI_TYPE_HND ? number : never;
-    type TypeArgs<T extends FfiType[], Args extends(number | null | ArrayBuffer)[] = []> = T extends [infer T1 extends FfiType, ...infer RES extends FfiType[]] ? TypeArgs<RES, [...Args, TypeArg<T1>]> : Args;
-
     /** 语义 kind 字符串（与 C QwType 对齐）；i64/u64 入参可为 bigint */
     type FfiKind =
         | "void"
@@ -628,12 +589,7 @@ declare module "ffi" {
      */
     function dlopen<const S extends Record<string, SymSig>>(libName: string, sigs: S, abi?: "winapi" | "cdecl"): BoundLib<S>;
 
-    function ffiCall<const T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID>[], const R extends FfiType>(func: number, argTypes: T, args: TypeArgs<T>, retType: R, abi?: "winapi" | "cdecl"): R extends TYPE_OF_FFI_TYPE_VOID ? undefined : R extends TYPE_OF_FFI_TYPE_POINTER ? number | null : TypeArg<R>;
-    /** 字符串 kind 版 ffiCall（i64/u64 入参可为 bigint） */
     function ffiCall<A extends readonly FfiKind[], R extends FfiKind>(func: number, argTypes: A, args: KindArgs<A>, retType: R, abi?: "winapi" | "cdecl"): KindRet<R>;
-    /** Phase 1 spike：切换调用后端；返回上一个后端名 */
-    function setBackend(name: "libffi" | "qwcall"): "libffi" | "qwcall";
-    function getBackend(): "libffi" | "qwcall";
     function bufferPtr(buf: ArrayBuffer): number;
     function readByte(ptr: number): number;
     function writeByte(ptr: number, value: number): void;

@@ -2,18 +2,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
-#include <ffi.h>
 #include "quickjs.h"
 #include "quickjs-ffi.h"
 
-/* 自定义类型：句柄/指针宽整数（超出 libffi FFI_TYPE_*） */
+/* 类型 ID（与历史 libffi FFI_TYPE_* 数值兼容；仅 C 内部使用，不导出 JS） */
+#define FFI_TYPE_VOID 0
+#define FFI_TYPE_UINT8 5
+#define FFI_TYPE_SINT8 6
+#define FFI_TYPE_UINT16 7
+#define FFI_TYPE_SINT16 8
+#define FFI_TYPE_UINT32 9
+#define FFI_TYPE_SINT32 10
+#define FFI_TYPE_UINT64 11
+#define FFI_TYPE_SINT64 12
+#define FFI_TYPE_POINTER 14
 #define FFI_TYPE_HND 16
-#define QW_MAX_ARGS 16
-#define QW_MAX_TYPES 17
-#define QW_MAX_BOUNDS 256
 
-/* Phase 1 spike：0=libffi（默认），1=纯 C qw_call（可切换） */
-static int qw_backend_qwcall = 0;
+#define QW_MAX_ARGS 16
+#define QW_MAX_BOUNDS 256
 
 #if defined(_M_IX86) || defined(__i386__)
 #define QW_IS_IA32 1
@@ -29,41 +35,25 @@ static int qw_backend_qwcall = 0;
 #define QW_CAPI
 #endif
 
-static void qw_backend_init(void)
-{
-    const char *e = getenv("QUICKWIN_FFI");
-    if (e && !strcmp(e, "qwcall"))
-        qw_backend_qwcall = 1;
-}
-
-static ffi_type *ffi_types[QW_MAX_TYPES] = {
-    &ffi_type_void,     /* 0  VOID */
-    NULL,               /* 1  INT */
-    NULL,               /* 2  FLOAT */
-    NULL,               /* 3  DOUBLE */
-    NULL,               /* 4  LONGDOUBLE */
-    &ffi_type_uint8,    /* 5  UINT8 */
-    &ffi_type_sint8,    /* 6  SINT8 */
-    &ffi_type_uint16,   /* 7  UINT16 */
-    &ffi_type_sint16,   /* 8  SINT16 */
-    &ffi_type_uint32,   /* 9  UINT32 */
-    &ffi_type_sint32,   /* 10 SINT32 */
-    &ffi_type_uint64,   /* 11 UINT64 */
-    &ffi_type_sint64,   /* 12 SINT64 */
-    NULL,               /* 13 STRUCT */
-    &ffi_type_pointer,  /* 14 POINTER */
-    NULL,               /* 15 COMPLEX */
-    &ffi_type_pointer,  /* 16 HND → 指针宽 */
-};
-
 static int qw_type_valid(int t)
 {
-    if (t < 0 || t >= QW_MAX_TYPES)
+    switch (t)
+    {
+    case FFI_TYPE_VOID:
+    case FFI_TYPE_UINT8:
+    case FFI_TYPE_SINT8:
+    case FFI_TYPE_UINT16:
+    case FFI_TYPE_SINT16:
+    case FFI_TYPE_UINT32:
+    case FFI_TYPE_SINT32:
+    case FFI_TYPE_UINT64:
+    case FFI_TYPE_SINT64:
+    case FFI_TYPE_POINTER:
+    case FFI_TYPE_HND:
+        return 1;
+    default:
         return 0;
-    /* VOID 与 HND 的槽位也必须是可解析的 ffi_type */
-    if (t == 16)
-        return ffi_types[16] != NULL;
-    return ffi_types[t] != NULL || t == FFI_TYPE_VOID;
+    }
 }
 
 static int qw_kind_from_str(const char *s)
@@ -82,7 +72,7 @@ static int qw_kind_from_str(const char *s)
     return -1;
 }
 
-/* 解析类型：数字（旧 FFI_TYPE_*）或字符串 kind */
+/* 解析类型：字符串 kind（主推）或数字（兼容旧硬编码数值） */
 static int qw_parse_type(JSContext *ctx, JSValueConst v, int *out)
 {
     if (JS_IsString(v))
@@ -105,16 +95,6 @@ static int qw_parse_type(JSContext *ctx, JSValueConst v, int *out)
         return -1;
     *out = (int)t;
     return 0;
-}
-
-static ffi_abi qw_pick_abi(int cdecl_flag)
-{
-#if defined(X86_WIN32) || (defined(__i386__) && defined(_WIN32))
-    return cdecl_flag ? FFI_MS_CDECL : FFI_STDCALL;
-#else
-    (void)cdecl_flag;
-    return FFI_DEFAULT_ABI;
-#endif
 }
 
 static int qw_abi_from_js(JSContext *ctx, JSValueConst v, int *out)
@@ -149,7 +129,7 @@ static int qw_abi_from_js(JSContext *ctx, JSValueConst v, int *out)
     return 0;
 }
 
-/* 收集参数到 intptr 槽；成功返回 0，失败已抛异常返回 -1 */
+/* 收集参数到 int64 槽；成功返回 0，失败已抛异常返回 -1 */
 static int qw_collect_args(JSContext *ctx, int argc_in, const int *arg_types,
                            JSValueConst *argv, int64_t *slots)
 {
@@ -208,7 +188,7 @@ static JSValue qw_make_return(JSContext *ctx, int ret_type, uint64_t ret)
     return JS_NewInt64(ctx, (int64_t)ret);
 }
 
-/* ── Phase 1：纯 C 固定签名 wrapper（无 libffi 调用路径） ── */
+/* ── 纯 C 固定签名 wrapper（唯一调用后端） ── */
 
 #define QW_CASES_VAL(ABI) \
     case 0: return ((intptr_t (ABI *)(void))fp)(); \
@@ -290,7 +270,7 @@ static intptr_t qw_call_raw(void *fp, int n, int abi_cdecl, int is_void,
     return 0;
 }
 
-/* ia32：i64/u64 占 8 字节栈槽，intptr_t wrapper 无法正确传参 → 不可走 qw_call */
+/* ia32：i64/u64 占 8 字节栈槽，intptr_t wrapper 无法正确传参 */
 static int qw_call_eligible(int n, const int *arg_types, int ret_type)
 {
 #if QW_IS_IA32
@@ -327,85 +307,31 @@ static JSValue qw_do_call(JSContext *ctx, void *func, int n_args,
             return JS_ThrowRangeError(ctx, "invalid FFI argument type");
     }
 
+    if (!qw_call_eligible(n_args, arg_types, ret_type))
+        return JS_ThrowRangeError(ctx, "i64/u64 not supported on ia32");
+
     if (qw_collect_args(ctx, n_args, arg_types, argv, slots) < 0)
         return JS_EXCEPTION;
 
-    int use_qw = qw_backend_qwcall && qw_call_eligible(n_args, arg_types, ret_type);
-    if (qw_backend_qwcall && !use_qw)
-        return JS_ThrowRangeError(ctx, "qwcall backend: i64/u64 not supported on ia32");
-
-    uint64_t ret = 0;
-    if (use_qw)
-    {
-        intptr_t a[QW_MAX_ARGS];
-        for (int i = 0; i < n_args; i++)
-            a[i] = (intptr_t)slots[i];
-        intptr_t raw = qw_call_raw(func, n_args, abi_cdecl,
-                                   ret_type == FFI_TYPE_VOID, a);
-        ret = (uint64_t)(uintptr_t)raw;
-    }
-    else
-    {
-        void *ffi_args[QW_MAX_ARGS];
-        ffi_type *atypes[QW_MAX_ARGS];
-        for (int i = 0; i < n_args; i++)
-        {
-            atypes[i] = ffi_types[arg_types[i]];
-            ffi_args[i] = &slots[i];
-        }
-        ffi_cif cif;
-        ffi_status status = ffi_prep_cif(&cif, qw_pick_abi(abi_cdecl), n_args,
-                                         ffi_types[ret_type], atypes);
-        if (status != FFI_OK)
-            return JS_ThrowInternalError(ctx, "ffi_prep_cif failed: %d", status);
-        ffi_call(&cif, func, &ret, ffi_args);
-    }
+    intptr_t a[QW_MAX_ARGS];
+    for (int i = 0; i < n_args; i++)
+        a[i] = (intptr_t)slots[i];
+    intptr_t raw = qw_call_raw(func, n_args, abi_cdecl,
+                               ret_type == FFI_TYPE_VOID, a);
+    uint64_t ret = (uint64_t)(uintptr_t)raw;
 
     if (JS_HasException(ctx))
         return JS_EXCEPTION;
     return qw_make_return(ctx, ret_type, ret);
 }
 
-/* ── backend 切换（Phase 1 spike） ── */
-
-static JSValue js_ffi_set_backend(JSContext *ctx, JSValueConst this_val,
-                                  int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1)
-        return JS_ThrowTypeError(ctx, "setBackend('libffi'|'qwcall')");
-    const char *s = JS_ToCString(ctx, argv[0]);
-    if (!s)
-        return JS_EXCEPTION;
-    int prev = qw_backend_qwcall;
-    if (!strcmp(s, "qwcall"))
-        qw_backend_qwcall = 1;
-    else if (!strcmp(s, "libffi"))
-        qw_backend_qwcall = 0;
-    else
-    {
-        JS_FreeCString(ctx, s);
-        return JS_ThrowRangeError(ctx, "backend must be 'libffi' or 'qwcall'");
-    }
-    JS_FreeCString(ctx, s);
-    return JS_NewString(ctx, prev ? "qwcall" : "libffi");
-}
-
-static JSValue js_ffi_get_backend(JSContext *ctx, JSValueConst this_val,
-                                  int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    (void)argc;
-    (void)argv;
-    return JS_NewString(ctx, qw_backend_qwcall ? "qwcall" : "libffi");
-}
-
 /**
  * argv: func, argTypes[], args[], retType[, abi]
- * argTypes 元素可为 FFI_TYPE_* 数字或 'hnd'/'ptr'/'i32'… 字符串
+ * argTypes 元素为 'hnd'/'ptr'/'i32'… 字符串 kind（或兼容数字）
  */
 JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
+    (void)this_val;
     if (argc < 4)
         return JS_ThrowTypeError(ctx, "ffiCall(func, argTypes, args, retType[, abi])");
 
@@ -673,7 +599,7 @@ fail:
 }
 
 static JSValue js_ffi_buffer_ptr(JSContext *ctx, JSValueConst this_val,
-                                int argc, JSValueConst *argv)
+                                 int argc, JSValueConst *argv)
 {
     (void)this_val;
     (void)argc;
@@ -715,29 +641,10 @@ static const JSCFunctionListEntry ffi_funcs[] = {
     JS_CFUNC_DEF("bufferPtr", 1, js_ffi_buffer_ptr),
     JS_CFUNC_DEF("readByte", 1, js_ffi_read_byte),
     JS_CFUNC_DEF("writeByte", 2, js_ffi_write_byte),
-    JS_CFUNC_DEF("setBackend", 1, js_ffi_set_backend),
-    JS_CFUNC_DEF("getBackend", 0, js_ffi_get_backend),
-};
-
-#define DEF(x) JS_PROP_INT32_DEF(#x, x, JS_PROP_CONFIGURABLE)
-static const JSCFunctionListEntry ffi_consts[] = {
-    DEF(FFI_TYPE_VOID),
-    DEF(FFI_TYPE_UINT8),
-    DEF(FFI_TYPE_SINT8),
-    DEF(FFI_TYPE_UINT16),
-    DEF(FFI_TYPE_SINT16),
-    DEF(FFI_TYPE_UINT32),
-    DEF(FFI_TYPE_SINT32),
-    DEF(FFI_TYPE_UINT64),
-    DEF(FFI_TYPE_SINT64),
-    DEF(FFI_TYPE_POINTER),
-    DEF(FFI_TYPE_HND),
-#undef DEF
 };
 
 static int js_ffi_init(JSContext *ctx, JSModuleDef *m)
 {
-    JS_SetModuleExportList(ctx, m, ffi_consts, sizeof(ffi_consts) / sizeof(ffi_consts[0]));
     JS_SetModuleExportList(ctx, m, ffi_funcs, sizeof(ffi_funcs) / sizeof(ffi_funcs[0]));
     return 0;
 }
@@ -745,11 +652,9 @@ static int js_ffi_init(JSContext *ctx, JSModuleDef *m)
 JSModuleDef *js_init_module_ffi(JSContext *ctx)
 {
     JSModuleDef *m;
-    qw_backend_init();
     m = JS_NewCModule(ctx, "ffi", js_ffi_init);
     if (!m)
         return NULL;
-    JS_AddModuleExportList(ctx, m, ffi_consts, sizeof(ffi_consts) / sizeof(ffi_consts[0]));
     JS_AddModuleExportList(ctx, m, ffi_funcs, sizeof(ffi_funcs) / sizeof(ffi_funcs[0]));
     return m;
 }

@@ -43,9 +43,9 @@ function newDevMode(): ArrayBuffer {
 function enumMode(modeNum: number, buf: ArrayBuffer): number {
     return ffi.ffiCall(
         EnumDisplaySettingsA,
-        [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_SINT32, ffi.FFI_TYPE_POINTER],
+        ['ptr', 'i32', 'ptr'],
         [null, modeNum, buf],
-        ffi.FFI_TYPE_SINT32,
+        'i32',
     )
 }
 
@@ -75,9 +75,9 @@ function applyFromCurrent(w: number, h: number, flags: number, label: string): n
 
     const ret = ffi.ffiCall(
         ChangeDisplaySettingsA,
-        [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_UINT32],
+        ['ptr', 'u32'],
         [dm, flags],
-        ffi.FFI_TYPE_SINT32,
+        'i32',
     )
     print(label + ': ChangeDisplaySettings ' + w + 'x' + h +
         ' flags=0x' + flags.toString(16) + ' ret=' + ret + ' (' + (DISP_CHANGE[ret] ?? '?') + ')')

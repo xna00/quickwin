@@ -2,7 +2,7 @@
 
 > 对应 TODO：`.agents/TODO.md` 低优先级「系统性优化 FFI」  
 > 范围：**Windows-only**（x86 XP / x64，未来可能 **ARM64 Windows**）；不含 Linux/macOS  
-> 状态：调研 + 完整方案已定稿；**执行未开始**（Phase 0 起）
+> 状态：Phase 0 + Phase 1 Spike + **Phase 2（删 libffi、qwcall 唯一后端、删 FFI_TYPE_*）已完成**
 
 ---
 
@@ -486,17 +486,17 @@ static intptr_t qw_call(intptr_t fp, int argc, QwAbi abi, const intptr_t *a)
 - 失败 → **停 Phase 0**，长期 D（保 libffi，只修 ABI+缓存）。  
 - 通过 → Phase 2。
 
-### Phase 2 — 换后端、删 libffi
+### Phase 2 — 换后端、删 libffi ✅ 已完成
 
 | # | 改动 | 文件 |
 |---|------|------|
-| 2.1 | 实现 `qw_call` + 宏 wrapper；`js_ffi_call` 改走新路径；自备 `FFI_TYPE_*` 数值（去 `#include <ffi.h>`） | `quickjs-ffi.c`、`quickjs-ffi.h` |
-| 2.2 | 删 `$(LIBFFI)`、include、构建规则 L377–388、CROSS_BUILD_LIBS | `Makefile` |
+| 2.1 | 实现 `qw_call` + 宏 wrapper；`js_ffi_call` 改走新路径；自备 `FFI_TYPE_*` 数值（去 `#include <ffi.h>`）；删 `setBackend`/`getBackend` | `quickjs-ffi.c`、`quickjs-ffi.h`、`quickwin.d.ts` |
+| 2.2 | 删 `$(LIBFFI)`、include、构建规则、CROSS_BUILD_LIBS | `Makefile` |
 | 2.3 | 删 cache path ×2；hashFiles 去 `deps/libffi/**`；key `-v3`→`-v4` | `ci-qemu.yml` |
 | 2.4 | 删 submodule | `.gitmodules`、`deps/libffi` |
-| 2.5 | TS 全量迁 `hnd`/签名 API（或 `ffiCall` 内部透明换 backend，调用点零改） | 8 文件 31 处 |
-| 2.6 | float 等 throw | C/TS 边界 |
-| 2.7 | 文档 | README、AGENTS、development-workflow、本文件、TODO |
+| 2.5 | TS 全量迁字符串 kind；删 `FFI_TYPE_*` branded 常量与 spike 测试 | 8 文件 31 处 + `test_ffi_spike.ts` |
+| 2.6 | float 等 throw（`qw_type_valid` 拒绝） | C/TS 边界 |
+| 2.7 | 文档 | README、development-workflow、本文件、TODO、QEMU_NET_SUITE_TEST |
 
 **验收：** `make cc64 cc32` 无 libffi；XP+Win7 全量 `http_test.sh`（`failed≤1`）；examples 手跑。
 

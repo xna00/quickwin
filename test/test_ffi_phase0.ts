@@ -7,27 +7,7 @@ export const suite = {
     name: 'ffi-phase0',
     run: (t: Tester) => {
         t.section('phase0 probe (arch=' + os.arch + ')')
-        t.checkTrue('FFI_TYPE_HND exported', typeof ffi.FFI_TYPE_HND === 'number')
 
-        {
-            let threw = false
-            try {
-                ffi.ffiCall(0, [99 as any], [0], ffi.FFI_TYPE_VOID)
-            } catch {
-                threw = true
-            }
-            t.checkTrue('invalid arg type throws', threw)
-        }
-        {
-            let threw = false
-            try {
-                ffi.ffiCall(0, [], [], 13 as any)
-                threw = false
-            } catch {
-                threw = true
-            }
-            t.checkTrue('invalid ret type throws', threw)
-        }
         {
             let threw = false
             try {
@@ -64,10 +44,8 @@ export const suite = {
         const getDesktop = win.GetProcAddress(win.LoadLibrary('user32.dll')!, 'GetDesktopWindow')
         t.checkTrue('GetProcAddress GetDesktopWindow', !!getDesktop)
         if (getDesktop) {
-            const h = ffi.ffiCall(getDesktop, [], [], ffi.FFI_TYPE_HND)
-            t.checkTrue('ffiCall HND ret !== 0', typeof h === 'number' && h !== 0)
-            const h2 = ffi.ffiCall(getDesktop, [], [], 'hnd' as any)
-            t.check('ffiCall string hnd === FFI_TYPE_HND', h, h2)
+            const h = ffi.ffiCall(getDesktop, [], [], 'hnd')
+            t.checkTrue('ffiCall hnd ret !== 0', typeof h === 'number' && h !== 0)
         }
 
         {
@@ -98,7 +76,7 @@ export const suite = {
         if (enumPrinters) {
             let threw = false
             try {
-                ffi.ffiCall(enumPrinters, [ffi.FFI_TYPE_POINTER] as any, [123] as any, ffi.FFI_TYPE_VOID)
+                ffi.ffiCall(enumPrinters, ['ptr'] as any, [123] as any, 'void')
             } catch {
                 threw = true
             }

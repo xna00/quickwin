@@ -18,9 +18,9 @@ const GetDC_ = loadProc(_user32, 'GetDC')
 const ReleaseDC_ = loadProc(_user32, 'ReleaseDC')
 const SetDIBitsToDevice_ = loadProc(_gdi32, 'SetDIBitsToDevice')
 
-const FFI_PTR = ffi.FFI_TYPE_POINTER
-const FFI_U32 = ffi.FFI_TYPE_UINT32
-const FFI_S32 = ffi.FFI_TYPE_SINT32
+const FFI_PTR = 'ptr' as const
+const FFI_U32 = 'u32' as const
+const FFI_S32 = 'i32' as const
 
 function makeBitmapInfo(w: number, h: number): ArrayBuffer {
   const bmi = new ArrayBuffer(40)
@@ -59,11 +59,11 @@ export const PdfCanvas = forwardRef<gui.HWND, PdfCanvasProps>(
           if (e.msg === gui.WmMsg.PAINT) {
             const pm = pixmapRef.current
             if (!pm) return 0
-            const hdc = ffi.ffiCall(GetDC_, [ffi.FFI_TYPE_HND], [hwnd], ffi.FFI_TYPE_HND)
+            const hdc = ffi.ffiCall(GetDC_, ['hnd'], [hwnd], 'hnd')
             if (hdc) {
               const bmi = makeBitmapInfo(pm.w, pm.h)
               ffi.ffiCall(SetDIBitsToDevice_, [
-                ffi.FFI_TYPE_HND, FFI_S32, FFI_S32, FFI_U32, FFI_U32,
+                'hnd', FFI_S32, FFI_S32, FFI_U32, FFI_U32,
                 FFI_S32, FFI_S32, FFI_U32, FFI_U32,
                 FFI_PTR, FFI_PTR, FFI_U32
               ], [
@@ -71,7 +71,7 @@ export const PdfCanvas = forwardRef<gui.HWND, PdfCanvasProps>(
                 0, 0, 0, pm.h,
                 pm.data, bmi, 0
               ], FFI_S32)
-              ffi.ffiCall(ReleaseDC_, [ffi.FFI_TYPE_HND, ffi.FFI_TYPE_HND], [hwnd, hdc], FFI_S32)
+              ffi.ffiCall(ReleaseDC_, ['hnd', 'hnd'], [hwnd, hdc], FFI_S32)
             }
             return 0
           }

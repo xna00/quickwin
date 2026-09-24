@@ -4,8 +4,8 @@ import * as ffi from 'ffi'
 import * as win from 'win'
 import type { WStyle } from '../jsx.d.ts'
 
-const FFI_PTR = ffi.FFI_TYPE_POINTER
-const FFI_U32 = ffi.FFI_TYPE_UINT32
+const FFI_PTR = 'ptr' as const
+const FFI_U32 = 'u32' as const
 
 let _GetOpenFileNameW = 0
 let _SHBrowseForFolderW = 0
@@ -106,8 +106,8 @@ function openFolderDialog(owner: gui.HWND, title: string | undefined): string | 
   if (!pidl) return null
 
   const pathBuf = new ArrayBuffer(260 * 2)
-  const ok = ffi.ffiCall(_SHGetPathFromIDListW, [ffi.FFI_TYPE_HND, FFI_PTR], [pidl, pathBuf], FFI_U32)
-  ffi.ffiCall(_CoTaskMemFree, [ffi.FFI_TYPE_HND], [pidl], ffi.FFI_TYPE_VOID)
+  const ok = ffi.ffiCall(_SHGetPathFromIDListW, ['hnd', FFI_PTR], [pidl, pathBuf], FFI_U32)
+  ffi.ffiCall(_CoTaskMemFree, ['hnd'], [pidl], 'void')
 
   return ok ? wideToStr(pathBuf) : null
 }

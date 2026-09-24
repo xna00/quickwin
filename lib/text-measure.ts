@@ -17,9 +17,9 @@ const ReleaseDC = loadProc(user32, 'ReleaseDC')
 const SelectObject = loadProc(gdi32, 'SelectObject')
 
 // 句柄（HDC/HWND/HFONT）：C 侧按指针宽传参，无需再按 os.arch 分支
-const FFI_HND = ffi.FFI_TYPE_HND
-const FFI_S32 = ffi.FFI_TYPE_SINT32
-const FFI_PTR = ffi.FFI_TYPE_POINTER
+const FFI_HND = 'hnd' as const
+const FFI_S32 = 'i32' as const
+const FFI_PTR = 'ptr' as const
 
 export function measureText(hdc: number, text: string, maxWidth: number): { width: number; height: number } {
     const textBuf = new TextEncoder('utf-16le').encode(text + '\0').buffer

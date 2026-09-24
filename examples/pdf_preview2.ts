@@ -6,9 +6,9 @@ import * as ffi from 'ffi'
 import type { Document, Page, Pixmap } from '../vendor/mupdf-wasm/mupdf.js'
 import { assertNonNullable } from '../lib/assert.js'
 
-const FFI_PTR = ffi.FFI_TYPE_POINTER
-const FFI_U32 = ffi.FFI_TYPE_UINT32
-const FFI_S32 = ffi.FFI_TYPE_SINT32
+const FFI_PTR = 'ptr' as const
+const FFI_U32 = 'u32' as const
+const FFI_S32 = 'i32' as const
 
 const _user32 = win.LoadLibrary('user32.dll')
 const _gdi32 = win.LoadLibrary('gdi32.dll')
@@ -299,15 +299,15 @@ let hwndBtnNext: gui.HWND | null = null
             gui.DefWindowProc(hwnd, msg, wParam, lParam)
             const pm = currentPixmap
             if (!pm) return 0
-            const hdc = ffi.ffiCall(GetDC, [ffi.FFI_TYPE_HND], [hwnd], ffi.FFI_TYPE_HND)
+            const hdc = ffi.ffiCall(GetDC, ['hnd'], [hwnd], 'hnd')
             if (hdc) {
                 const bmi = makeBitmapInfo(pm.w, pm.h)
                 ffi.ffiCall(SetDIBitsToDevice, [
-                    ffi.FFI_TYPE_HND, FFI_S32, FFI_S32, FFI_U32, FFI_U32,
+                    'hnd', FFI_S32, FFI_S32, FFI_U32, FFI_U32,
                     FFI_S32, FFI_S32, FFI_U32, FFI_U32,
                     FFI_PTR, FFI_PTR, FFI_U32
                 ], [hdc, 0, 0, pm.w, pm.h, 0, 0, 0, pm.h, pm.data, bmi, 0], FFI_S32)
-                ffi.ffiCall(ReleaseDC, [ffi.FFI_TYPE_HND, ffi.FFI_TYPE_HND], [hwnd, hdc], FFI_S32)
+                ffi.ffiCall(ReleaseDC, ['hnd', 'hnd'], [hwnd, hdc], FFI_S32)
             }
             return 0
         }
@@ -321,11 +321,11 @@ let hwndBtnNext: gui.HWND | null = null
             const cr = gui.GetClientRect(hwnd)
             if (cr) {
                 const cw = cr.right - cr.left, ch = cr.bottom - cr.top
-            const hdc = ffi.ffiCall(GetDC, [ffi.FFI_TYPE_HND], [hwnd], ffi.FFI_TYPE_HND)
+            const hdc = ffi.ffiCall(GetDC, ['hnd'], [hwnd], 'hnd')
                 if (hdc) {
-                    ffi.ffiCall(PatBlt, [ffi.FFI_TYPE_HND, FFI_S32, FFI_S32, FFI_S32, FFI_S32, FFI_U32],
+                    ffi.ffiCall(PatBlt, ['hnd', FFI_S32, FFI_S32, FFI_S32, FFI_S32, FFI_U32],
                         [hdc, 0, 0, cw, ch, WHITENESS], FFI_U32)
-                    ffi.ffiCall(ReleaseDC, [ffi.FFI_TYPE_HND, ffi.FFI_TYPE_HND], [hwnd, hdc], FFI_S32)
+                    ffi.ffiCall(ReleaseDC, ['hnd', 'hnd'], [hwnd, hdc], FFI_S32)
                 }
             }
             gui.DefWindowProc(hwnd, msg, wParam, lParam)

@@ -88,15 +88,7 @@ export const suite = {
 
         const ret1 = ffi.ffiCall(
             enumPrinters,
-            [
-                ffi.FFI_TYPE_UINT32,
-                ffi.FFI_TYPE_POINTER,
-                ffi.FFI_TYPE_UINT32,
-                ffi.FFI_TYPE_POINTER,
-                ffi.FFI_TYPE_UINT32,
-                ffi.FFI_TYPE_POINTER,
-                ffi.FFI_TYPE_POINTER,
-            ],
+            ['u32', 'ptr', 'u32', 'ptr', 'u32', 'ptr', 'ptr'],
             [
                 flags,
                 null,
@@ -106,7 +98,7 @@ export const suite = {
                 neededBuf.buffer,
                 returnedBuf.buffer,
             ],
-            ffi.FFI_TYPE_SINT32
+            'i32'
         )
         std.printf('  first call: ret=%d needed=%d returned=%d\n', ret1, neededBuf[0], returnedBuf[0])
         t.checkTrue('pcbNeeded > 0', neededBuf[0]! > 0)
@@ -115,15 +107,7 @@ export const suite = {
         const printerBuf = new ArrayBuffer(neededBuf[0]!)
         const ret2 = ffi.ffiCall(
             enumPrinters,
-            [
-                ffi.FFI_TYPE_UINT32,
-                ffi.FFI_TYPE_POINTER,
-                ffi.FFI_TYPE_UINT32,
-                ffi.FFI_TYPE_POINTER,
-                ffi.FFI_TYPE_UINT32,
-                ffi.FFI_TYPE_POINTER,
-                ffi.FFI_TYPE_POINTER,
-            ],
+            ['u32', 'ptr', 'u32', 'ptr', 'u32', 'ptr', 'ptr'],
             [
                 flags,
                 null,
@@ -133,7 +117,7 @@ export const suite = {
                 neededBuf.buffer,
                 returnedBuf.buffer,
             ],
-            ffi.FFI_TYPE_SINT32
+            'i32'
         )
         t.checkTrue('EnumPrintersW succeeds', ret2 !== 0)
         if (ret2 === 0) return
@@ -178,9 +162,9 @@ export const suite = {
         try {
             ffi.ffiCall(
                 enumPrinters,
-                [ffi.FFI_TYPE_POINTER] as any,
+                ['ptr'] as any,
                 [123] as any,
-                ffi.FFI_TYPE_VOID
+                'void'
             )
         } catch (e) {
             threw = true

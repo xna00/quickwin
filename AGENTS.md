@@ -418,3 +418,5 @@ return extract_body(response);
 **文件位置：** `.agents/FFI_OPTIMIZATION_PLAN.md`
 
 **功能：** 记录 FFI 调研结论与完整方案：现状调用面、问题清单（句柄宽度/ABI/校验）、方案 A（`qw_call` 固定签名 wrapper）、TS 类型系统（`hnd`/`i64` 双模/`ffi.dlopen` 推导）、ARM64、Phase 0–2 文件级路径。动 FFI/`quickjs-ffi.c`/`ffiCall` 前先看该文件。
+
+**状态：** Phase 0 + Phase 1 Spike + **Phase 2 已完成**——`qwcall` 为唯一后端（libffi 已删）；`ffiCall` 只收字符串 kind（`'hnd'`/`'ptr'`/`'i32'`…）；`FFI_TYPE_*` branded 常量与 `setBackend`/`getBackend` 已移除。类型 ID 宏仅保留在 `quickjs-ffi.c` 内部（数值兼容旧 libffi 编码）。

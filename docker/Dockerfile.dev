@@ -11,8 +11,6 @@ RUN sed -e 's|^metalink=|#metalink=|g' \
 RUN dnf install -y \
     # Build tools
     gcc gcc-c++ make cmake git pkgconfig \
-    # Autotools (libffi 干净 checkout 需要 autoreconf -fiv)
-    autoconf automake libtool libtool-ltdl-devel \
     # WABT (wat2wasm 编译 test/*.wat 为 wasm)
     wabt \
     # MinGW cross-compilers
