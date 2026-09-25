@@ -109,7 +109,7 @@ function getCellFont(hwnd: gui.HWND, style: CellStyle): number | null {
   const dv = new DataView(lf)
   const cur = gui.SendMessage(hwnd, gui.WmMsg.GETFONT, 0, 0)
   if (cur) {
-    const got = ffi.ffiCall(getObjectW, [ffi.FFI_TYPE_UINT64, ffi.FFI_TYPE_SINT32, ffi.FFI_TYPE_POINTER],
+    const got = ffi.ffiCall(getObjectW, [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_SINT32, ffi.FFI_TYPE_POINTER],
       [cur, 92, lf], ffi.FFI_TYPE_SINT32)
     if (!got) return null
   } else {
@@ -118,9 +118,9 @@ function getCellFont(hwnd: gui.HWND, style: CellStyle): number | null {
   if (style.bold) dv.setInt32(16, gui.FontWeight.BOLD, true)
   if (style.italic) dv.setUint8(20, 1)
   if (style.underline) dv.setUint8(21, 1)
-  const h = ffi.ffiCall(createFontIndirectW, [ffi.FFI_TYPE_POINTER], [lf], ffi.FFI_TYPE_UINT64)
-  fontCache.set(key, h === 0 ? 0 : h)
-  return h === 0 ? null : h
+  const h = ffi.ffiCall(createFontIndirectW, [ffi.FFI_TYPE_POINTER], [lf], ffi.FFI_TYPE_POINTER)
+  fontCache.set(key, h ? h : 0)
+  return h ? h : null
 }
 
 function handleCustomDraw<D>(lParam: number, columns: Column<D>[], data: D[], hwnd: gui.HWND | null): number {
@@ -140,7 +140,7 @@ function handleCustomDraw<D>(lParam: number, columns: Column<D>[], data: D[], hw
     if (hfont && selectObjectFn) {
       const hdc = readU64(lParam, CD_HDC)
       if (hdc) {
-        ffi.ffiCall(selectObjectFn, [ffi.FFI_TYPE_UINT64, ffi.FFI_TYPE_UINT64], [hdc, hfont], ffi.FFI_TYPE_UINT64)
+        ffi.ffiCall(selectObjectFn, [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_POINTER], [hdc, hfont], ffi.FFI_TYPE_POINTER)
         return gui.CustomDrawFlag.NEWFONT
       }
     }
@@ -353,7 +353,7 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
           const sdv = new DataView(sbuf)
           sdv.setInt32(0, sp[0], true)
           sdv.setInt32(4, sp[1], true)
-          ffi.ffiCall(screenToClient, [ffi.FFI_TYPE_UINT64, ffi.FFI_TYPE_POINTER], [h, sbuf], ffi.FFI_TYPE_SINT32)
+          ffi.ffiCall(screenToClient, [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_POINTER], [h, sbuf], ffi.FFI_TYPE_SINT32)
 
           const lvhi = new ArrayBuffer(24)
           const lvd = new DataView(lvhi)
@@ -368,9 +368,9 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
           const style = resolveCellStyle(columns, data, iItem, iSubItem)
           if (!style || style.cursor === undefined) return
           const hc = ffi.ffiCall(loadCursorW,
-            [ffi.FFI_TYPE_UINT64, ffi.FFI_TYPE_UINT64], [0, style.cursor], ffi.FFI_TYPE_UINT64)
+            [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_POINTER], [0, style.cursor], ffi.FFI_TYPE_POINTER)
           if (hc) {
-            ffi.ffiCall(setCursorFn, [ffi.FFI_TYPE_UINT64], [hc], ffi.FFI_TYPE_UINT64)
+            ffi.ffiCall(setCursorFn, [ffi.FFI_TYPE_POINTER], [hc], ffi.FFI_TYPE_POINTER)
             return 1
           }
           return

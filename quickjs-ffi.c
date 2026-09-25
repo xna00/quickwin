@@ -64,9 +64,14 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
         JSValue js_arg = JS_GetPropertyUint32(ctx, js_args_array, i);
         if (arg_type == FFI_TYPE_POINTER)
         {
-            if (JS_IsNull(js_arg))
+            if (JS_IsNull(js_arg) || JS_IsUndefined(js_arg))
             {
                 args[i] = (int64_t)NULL;
+            }
+            else if (JS_IsNumber(js_arg))
+            {
+                // 句柄/裸指针（HDC/HWND…）按指针槽宽直通：ia32 4 字节、x64 8 字节，避免错用 UINT64 在 x86 栈上错位
+                JS_ToInt64(ctx, &args[i], js_arg);
             }
             else
             {

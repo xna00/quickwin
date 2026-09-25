@@ -568,7 +568,7 @@ declare module "ffi" {
     const FFI_TYPE_POINTER: TYPE_OF_FFI_TYPE_POINTER;
 
     type FfiType = TYPE_OF_FFI_TYPE_VOID | TYPE_OF_FFI_TYPE_UINT8 | TYPE_OF_FFI_TYPE_SINT8 | TYPE_OF_FFI_TYPE_UINT16 | TYPE_OF_FFI_TYPE_SINT16 | TYPE_OF_FFI_TYPE_UINT32 | TYPE_OF_FFI_TYPE_SINT32 | TYPE_OF_FFI_TYPE_UINT64 | TYPE_OF_FFI_TYPE_SINT64 | TYPE_OF_FFI_TYPE_POINTER;
-    type TypeArg<T extends FfiType> = T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID | TYPE_OF_FFI_TYPE_POINTER> ? number : T extends TYPE_OF_FFI_TYPE_POINTER ? (ArrayBuffer | null) : never;
+    type TypeArg<T extends FfiType> = T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID | TYPE_OF_FFI_TYPE_POINTER> ? number : T extends TYPE_OF_FFI_TYPE_POINTER ? (ArrayBuffer | number | null) : never;
     type TypeArgs<T extends FfiType[], Args extends(number | null | ArrayBuffer)[] = []> = T extends [infer T1 extends FfiType, ...infer RES extends FfiType[]] ? TypeArgs<RES, [...Args, TypeArg<T1>]> : Args;
 
     function ffiCall<const T extends Exclude<FfiType, TYPE_OF_FFI_TYPE_VOID>[], const R extends FfiType>(func: number, argTypes: T, args: TypeArgs<T>, retType: R): R extends TYPE_OF_FFI_TYPE_VOID ? undefined : R extends TYPE_OF_FFI_TYPE_POINTER ? number | null : TypeArg<R>;

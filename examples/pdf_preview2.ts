@@ -299,15 +299,15 @@ let hwndBtnNext: gui.HWND | null = null
             gui.DefWindowProc(hwnd, msg, wParam, lParam)
             const pm = currentPixmap
             if (!pm) return 0
-            const hdc = ffi.ffiCall(GetDC, [ffi.FFI_TYPE_UINT64], [hwnd], ffi.FFI_TYPE_UINT64)
+            const hdc = ffi.ffiCall(GetDC, [ffi.FFI_TYPE_POINTER], [hwnd], ffi.FFI_TYPE_POINTER)
             if (hdc) {
                 const bmi = makeBitmapInfo(pm.w, pm.h)
                 ffi.ffiCall(SetDIBitsToDevice, [
-                    ffi.FFI_TYPE_UINT64, FFI_S32, FFI_S32, FFI_U32, FFI_U32,
+                    ffi.FFI_TYPE_POINTER, FFI_S32, FFI_S32, FFI_U32, FFI_U32,
                     FFI_S32, FFI_S32, FFI_U32, FFI_U32,
                     FFI_PTR, FFI_PTR, FFI_U32
                 ], [hdc, 0, 0, pm.w, pm.h, 0, 0, 0, pm.h, pm.data, bmi, 0], FFI_S32)
-                ffi.ffiCall(ReleaseDC, [ffi.FFI_TYPE_UINT64, ffi.FFI_TYPE_UINT64], [hwnd, hdc], FFI_S32)
+                ffi.ffiCall(ReleaseDC, [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_POINTER], [hwnd, hdc], FFI_S32)
             }
             return 0
         }
@@ -321,11 +321,11 @@ let hwndBtnNext: gui.HWND | null = null
             const cr = gui.GetClientRect(hwnd)
             if (cr) {
                 const cw = cr.right - cr.left, ch = cr.bottom - cr.top
-            const hdc = ffi.ffiCall(GetDC, [ffi.FFI_TYPE_UINT64], [hwnd], ffi.FFI_TYPE_UINT64)
+            const hdc = ffi.ffiCall(GetDC, [ffi.FFI_TYPE_POINTER], [hwnd], ffi.FFI_TYPE_POINTER)
                 if (hdc) {
-                    ffi.ffiCall(PatBlt, [ffi.FFI_TYPE_UINT64, FFI_S32, FFI_S32, FFI_S32, FFI_S32, FFI_U32],
+                    ffi.ffiCall(PatBlt, [ffi.FFI_TYPE_POINTER, FFI_S32, FFI_S32, FFI_S32, FFI_S32, FFI_U32],
                         [hdc, 0, 0, cw, ch, WHITENESS], FFI_U32)
-                    ffi.ffiCall(ReleaseDC, [ffi.FFI_TYPE_UINT64, ffi.FFI_TYPE_UINT64], [hwnd, hdc], FFI_S32)
+                    ffi.ffiCall(ReleaseDC, [ffi.FFI_TYPE_POINTER, ffi.FFI_TYPE_POINTER], [hwnd, hdc], FFI_S32)
                 }
             }
             gui.DefWindowProc(hwnd, msg, wParam, lParam)
