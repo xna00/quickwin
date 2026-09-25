@@ -2,10 +2,45 @@ import { forwardRef, useState, useRef } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
 import * as win from 'win'
+import { struct } from '../../ffi-struct.js'
 import type { WStyle } from '../jsx.d.ts'
 
 const FFI_PTR = ffi.FFI_TYPE_POINTER
 const FFI_U32 = ffi.FFI_TYPE_UINT32
+
+const OPENFILENAMEW = struct({
+  lStructSize: 'u32',
+  hwndOwner: 'ptr',
+  hInstance: 'ptr',
+  lpstrFilter: 'ptr',
+  lpstrCustomFilter: 'ptr',
+  nMaxCustFilter: 'u32',
+  nFilterIndex: 'u32',
+  lpstrFile: 'ptr',
+  nMaxFile: 'u32',
+  lpstrFileTitle: 'ptr',
+  nMaxFileTitle: 'u32',
+  lpstrInitialDir: 'ptr',
+  lpstrTitle: 'ptr',
+  Flags: 'u32',
+  nFileOffset: 'u16',
+  nFileExtension: 'u16',
+  lpstrDefExt: 'ptr',
+  lCustData: 'ptr',
+  lpfnHook: 'ptr',
+  lpTemplateName: 'ptr',
+})
+
+const BROWSEINFOW = struct({
+  hwndOwner: 'ptr',
+  pidlRoot: 'ptr',
+  pszDisplayName: 'ptr',
+  lpszTitle: 'ptr',
+  ulFlags: 'u32',
+  lpfn: 'ptr',
+  lParam: 'ptr',
+  iImage: 'i32',
+})
 
 let _GetOpenFileNameW = 0
 let _SHBrowseForFolderW = 0
@@ -38,11 +73,6 @@ function wideToStr(buf: ArrayBuffer, offset = 0): string {
   return nullIdx >= 0 ? str.substring(0, nullIdx) : str
 }
 
-function setPtr(dv: DataView, off: number, ptr: number): void {
-  dv.setUint32(off, ptr & 0xFFFFFFFF, true)
-  dv.setUint32(off + 4, Math.floor(ptr / 0x100000000), true)
-}
-
 function openFileDialog(
   owner: gui.HWND,
   filter: string,
@@ -51,26 +81,38 @@ function openFileDialog(
 ): string | string[] | null {
   if (!ensureDlls()) return null
 
-  const structBuf = new ArrayBuffer(152)
-  const sv = new DataView(structBuf)
   const fileBuf = new ArrayBuffer(260 * 2)
   const filterWide = strToWide(filter)
   const titleWide = title ? strToWide(title) : null
 
-  sv.setUint32(0, 152, true)
-  setPtr(sv, 8, owner)
-  setPtr(sv, 24, ffi.bufferPtr(filterWide))
-  setPtr(sv, 48, ffi.bufferPtr(fileBuf))
-  sv.setUint32(56, 260, true)
-
   let flags = 0x1000 | 0x0800 | 0x0008
   if (multiple) flags |= 0x0200
   flags |= 0x80000
-  sv.setUint32(96, flags, true)
 
-  if (titleWide) setPtr(sv, 88, ffi.bufferPtr(titleWide))
+  const ofn = OPENFILENAMEW.write({
+    lStructSize: OPENFILENAMEW.size,
+    hwndOwner: owner,
+    hInstance: 0,
+    lpstrFilter: ffi.bufferPtr(filterWide),
+    lpstrCustomFilter: 0,
+    nMaxCustFilter: 0,
+    nFilterIndex: 0,
+    lpstrFile: ffi.bufferPtr(fileBuf),
+    nMaxFile: 260,
+    lpstrFileTitle: 0,
+    nMaxFileTitle: 0,
+    lpstrInitialDir: 0,
+    lpstrTitle: titleWide ? ffi.bufferPtr(titleWide) : 0,
+    Flags: flags,
+    nFileOffset: 0,
+    nFileExtension: 0,
+    lpstrDefExt: 0,
+    lCustData: 0,
+    lpfnHook: 0,
+    lpTemplateName: 0,
+  })
 
-  const ret = ffi.ffiCall(_GetOpenFileNameW, [FFI_PTR], [structBuf], FFI_U32)
+  const ret = ffi.ffiCall(_GetOpenFileNameW, [FFI_PTR], [ofn], FFI_U32)
   if (!ret) return null
 
   if (!multiple) {
@@ -94,15 +136,20 @@ function openFileDialog(
 function openFolderDialog(owner: gui.HWND, title: string | undefined): string | null {
   if (!ensureDlls()) return null
 
-  const structBuf = new ArrayBuffer(64)
-  const sv = new DataView(structBuf)
   const titleWide = title ? strToWide(title) : null
 
-  setPtr(sv, 0, owner)
-  if (titleWide) setPtr(sv, 24, ffi.bufferPtr(titleWide))
-  sv.setUint32(32, 0x00000041, true)
+  const bi = BROWSEINFOW.write({
+    hwndOwner: owner,
+    pidlRoot: 0,
+    pszDisplayName: 0,
+    lpszTitle: titleWide ? ffi.bufferPtr(titleWide) : 0,
+    ulFlags: 0x00000041,
+    lpfn: 0,
+    lParam: 0,
+    iImage: 0,
+  })
 
-  const pidl = ffi.ffiCall(_SHBrowseForFolderW, [FFI_PTR], [structBuf], FFI_PTR)
+  const pidl = ffi.ffiCall(_SHBrowseForFolderW, [FFI_PTR], [bi], FFI_PTR)
   if (!pidl) return null
 
   const pathBuf = new ArrayBuffer(260 * 2)

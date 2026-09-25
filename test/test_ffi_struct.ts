@@ -103,5 +103,42 @@ export const suite = {
         const fr = FL.read(fb)
         t.check('float', 1.5, fr.f)
         t.check('double', -2.25, fr.d)
+
+        t.section('comctl dialog structs track 32/64-bit ABI')
+        const TCITEMW = struct({
+            mask: 'u32', dwState: 'u32', dwStateMask: 'u32',
+            pszText: 'ptr', cchTextMax: 'i32', iImage: 'i32', lParam: 'ptr',
+        })
+        t.check('TCITEMW.size', is64 ? 40 : 28, TCITEMW.size)
+        t.check('TCITEMW.offsetOf pszText', is64 ? 16 : 12, TCITEMW.offsetOf('pszText'))
+        t.check('TCITEMW.offsetOf cchTextMax', is64 ? 24 : 16, TCITEMW.offsetOf('cchTextMax'))
+
+        const TTTOOLINFOW = struct({
+            cbSize: 'u32', uFlags: 'u32', hwnd: 'ptr', uId: 'ptr',
+            rect: 'i32[4]', hinst: 'ptr', lpszText: 'ptr', lParam: 'ptr',
+        })
+        t.check('TTTOOLINFOW.size', is64 ? 64 : 44, TTTOOLINFOW.size)
+        t.check('TTTOOLINFOW.offsetOf lpszText', is64 ? 48 : 36, TTTOOLINFOW.offsetOf('lpszText'))
+
+        const OPENFILENAMEW = struct({
+            lStructSize: 'u32', hwndOwner: 'ptr', hInstance: 'ptr', lpstrFilter: 'ptr',
+            lpstrCustomFilter: 'ptr', nMaxCustFilter: 'u32', nFilterIndex: 'u32',
+            lpstrFile: 'ptr', nMaxFile: 'u32', lpstrFileTitle: 'ptr', nMaxFileTitle: 'u32',
+            lpstrInitialDir: 'ptr', lpstrTitle: 'ptr', Flags: 'u32',
+            nFileOffset: 'u16', nFileExtension: 'u16',
+            lpstrDefExt: 'ptr', lCustData: 'ptr', lpfnHook: 'ptr', lpTemplateName: 'ptr',
+        })
+        t.check('OPENFILENAMEW.size', is64 ? 136 : 76, OPENFILENAMEW.size)
+        t.check('OPENFILENAMEW.offsetOf lpstrFile', is64 ? 48 : 28, OPENFILENAMEW.offsetOf('lpstrFile'))
+        t.check('OPENFILENAMEW.offsetOf Flags', is64 ? 96 : 52, OPENFILENAMEW.offsetOf('Flags'))
+        t.check('OPENFILENAMEW.offsetOf lpstrTitle', is64 ? 88 : 48, OPENFILENAMEW.offsetOf('lpstrTitle'))
+
+        const BROWSEINFOW = struct({
+            hwndOwner: 'ptr', pidlRoot: 'ptr', pszDisplayName: 'ptr', lpszTitle: 'ptr',
+            ulFlags: 'u32', lpfn: 'ptr', lParam: 'ptr', iImage: 'i32',
+        })
+        t.check('BROWSEINFOW.size', is64 ? 64 : 32, BROWSEINFOW.size)
+        t.check('BROWSEINFOW.offsetOf lpszTitle', is64 ? 24 : 12, BROWSEINFOW.offsetOf('lpszTitle'))
+        t.check('BROWSEINFOW.offsetOf ulFlags', is64 ? 32 : 16, BROWSEINFOW.offsetOf('ulFlags'))
     },
 }

@@ -1,7 +1,18 @@
 import { forwardRef, useRef, useEffect, useState, type ReactNode } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
+import { struct } from '../../ffi-struct.js'
 import type { WStyle } from '../jsx.d.ts'
+
+const TCITEMW = struct({
+  mask: 'u32',
+  dwState: 'u32',
+  dwStateMask: 'u32',
+  pszText: 'ptr',
+  cchTextMax: 'i32',
+  iImage: 'i32',
+  lParam: 'ptr',
+})
 
 function textToUtf16(s: string): ArrayBuffer {
   const buf = new ArrayBuffer((s.length + 1) * 2)
@@ -37,11 +48,15 @@ export const Tab = forwardRef<gui.HWND, TabProps>(
       gui.SendMessage(h, gui.TcMsg.DELETEALLITEMS, 0, 0)
       for (let i = 0; i < tabs.length; i++) {
         const titleBuf = textToUtf16(tabs[i]!.title)
-        const tci = new ArrayBuffer(40)
-        const dv = new DataView(tci)
-        dv.setUint32(0, gui.TcItemFlag.TEXT, true)
-        dv.setBigUint64(16, BigInt(ffi.bufferPtr(titleBuf)), true)
-        dv.setInt32(24, tabs[i]!.title.length + 1, true)
+        const tci = TCITEMW.write({
+          mask: gui.TcItemFlag.TEXT,
+          dwState: 0,
+          dwStateMask: 0,
+          pszText: ffi.bufferPtr(titleBuf),
+          cchTextMax: tabs[i]!.title.length + 1,
+          iImage: 0,
+          lParam: 0,
+        })
         const tciPtr = ffi.bufferPtr(tci)
         gui.SendMessage(h, gui.TcMsg.INSERTITEMW, i, tciPtr)
       }
