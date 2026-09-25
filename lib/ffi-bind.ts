@@ -4,19 +4,21 @@ import './text-codec.js'
 
 // 声明式 FFI 绑定：把字符串签名（'ptr wstr i32 ptr i32 -> i32'）解析成
 // 一个可调用函数（bind）或一个 dll 的签名表（bindLib）。
-// kind：void u8 i8 u16 i16 u32 i32 u64 i64 ptr wstr
+// kind：void u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 ptr wstr
+//   可用 C/Windows typedef 别名：int long short char float double
+//     + DWORD UINT LONG BOOL HRESULT ... + *_PTR WPARAM LPARAM SIZE_T
+//     + HANDLE HWND HDC ... (+ LPVOID/LPCWSTR 等指针 typedef)
+//   别名在 token 层归一化到上面规范 kind（见 CTypeOf / C_ALIAS，两者须同步）
 //   ptr   收 ArrayBuffer | number | null，槽宽=指针宽（ia32 4B / x64 8B）
 //   wstr  收 string，自动 utf-16le+'\0' 编码后走 ptr 槽（仅参数，不能作返回）
 
-type Kind = 'void' | 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64' | 'ptr' | 'wstr'
-
-type ArgKind = Exclude<Kind, 'void'>
-type RetKind = Exclude<Kind, 'void' | 'wstr'>
+type Kind = 'void' | 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64' | 'f32' | 'f64' | 'ptr' | 'wstr'
 
 type ArgTypeOf = {
     u8: number; i8: number; u16: number; i16: number
     u32: number; i32: number
     u64: number; i64: number
+    f32: number; f64: number
     ptr: ArrayBuffer | number | null
     wstr: string
 }
@@ -24,16 +26,61 @@ type RetTypeOf = {
     u8: number; i8: number; u16: number; i16: number
     u32: number; i32: number
     u64: number; i64: number
+    f32: number; f64: number
     ptr: number | null
 }
 
+// C / Windows typedef → 规范 kind。Windows x86/x64 均 LLP64：int/long 恒 32 位，
+// long long 恒 64 位；LONG_PTR/WPARAM/SIZE_T 等指针宽随 arch 走 'ptr' 槽。
+// 运行时见 C_ALIAS（两表内容必须保持一致）。
+type CTypeOf = {
+    int: 'i32'
+    long: 'i32'
+    short: 'i16'
+    char: 'i8'
+    float: 'f32'
+    double: 'f64'
+    DWORD: 'u32'
+    UINT: 'u32'
+    ULONG: 'u32'
+    LONG: 'i32'
+    BOOL: 'i32'
+    HRESULT: 'i32'
+    SHORT: 'i16'
+    USHORT: 'u16'
+    BYTE: 'u8'
+    LONG_PTR: 'ptr'
+    ULONG_PTR: 'ptr'
+    INT_PTR: 'ptr'
+    UINT_PTR: 'ptr'
+    DWORD_PTR: 'ptr'
+    SIZE_T: 'ptr'
+    WPARAM: 'ptr'
+    LPARAM: 'ptr'
+    HANDLE: 'ptr'
+    HWND: 'ptr'
+    HDC: 'ptr'
+    HMODULE: 'ptr'
+    HFONT: 'ptr'
+    HBRUSH: 'ptr'
+    HICON: 'ptr'
+    HBITMAP: 'ptr'
+    LPVOID: 'ptr'
+    LPCVOID: 'ptr'
+    LPCWSTR: 'ptr'
+    PCWSTR: 'ptr'
+    LPWSTR: 'ptr'
+}
+
+export type Norm<T extends string> = T extends keyof CTypeOf ? CTypeOf[T] : T
+
 type ArgsOf<T extends string> =
     T extends '' ? []
-        : T extends `${infer H} ${infer R}` ? [ArgTypeOf[H & keyof ArgTypeOf], ...ArgsOf<R>]
-        : [ArgTypeOf[T & keyof ArgTypeOf]]
+        : T extends `${infer H} ${infer R}` ? [ArgTypeOf[Norm<H> & keyof ArgTypeOf], ...ArgsOf<R>]
+        : [ArgTypeOf[Norm<T> & keyof ArgTypeOf]]
 
 type _Args<S extends string> = S extends `${infer A} -> ${string}` ? ArgsOf<A> : never
-type _Ret<S extends string> = S extends `${string} -> ${infer R}` ? RetTypeOf[R & keyof RetTypeOf] : never
+type _Ret<S extends string> = S extends `${string} -> ${infer R}` ? RetTypeOf[Norm<R> & keyof RetTypeOf] : never
 
 const KIND_TO_FFI: Record<Kind, ffi.FfiType> = {
     void: ffi.FFI_TYPE_VOID,
@@ -45,8 +92,28 @@ const KIND_TO_FFI: Record<Kind, ffi.FfiType> = {
     i32: ffi.FFI_TYPE_SINT32,
     u64: ffi.FFI_TYPE_UINT64,
     i64: ffi.FFI_TYPE_SINT64,
+    f32: ffi.FFI_TYPE_FLOAT,
+    f64: ffi.FFI_TYPE_DOUBLE,
     ptr: ffi.FFI_TYPE_POINTER,
     wstr: ffi.FFI_TYPE_POINTER,
+}
+
+// 与类型层 CTypeOf 同步的运行时别名表
+const C_ALIAS: Record<string, Kind> = {
+    int: 'i32', long: 'i32', short: 'i16', char: 'i8', float: 'f32', double: 'f64',
+    DWORD: 'u32', UINT: 'u32', ULONG: 'u32', LONG: 'i32', BOOL: 'i32', HRESULT: 'i32',
+    SHORT: 'i16', USHORT: 'u16', BYTE: 'u8',
+    LONG_PTR: 'ptr', ULONG_PTR: 'ptr', INT_PTR: 'ptr', UINT_PTR: 'ptr', DWORD_PTR: 'ptr',
+    SIZE_T: 'ptr', WPARAM: 'ptr', LPARAM: 'ptr',
+    HANDLE: 'ptr', HWND: 'ptr', HDC: 'ptr', HMODULE: 'ptr', HFONT: 'ptr', HBRUSH: 'ptr',
+    HICON: 'ptr', HBITMAP: 'ptr', LPVOID: 'ptr', LPCVOID: 'ptr', LPCWSTR: 'ptr',
+    PCWSTR: 'ptr', LPWSTR: 'ptr',
+}
+
+export function normKind(t: string): Kind {
+    const k = C_ALIAS[t] ?? t
+    if (!(k in KIND_TO_FFI)) throw new Error(`ffi-bind: invalid kind "${t}"`)
+    return k as Kind
 }
 
 const _dllCache: Map<string, win.HMODULE> = new Map()
@@ -60,14 +127,17 @@ function loadDll(dll: string): win.HMODULE {
     return loaded
 }
 
-function parseSig(sig: string): { args: ArgKind[]; ret: RetKind } {
+function parseSig(sig: string): { args: Kind[]; ret: Kind } {
     const parts = sig.split(' -> ')
     const ret = parts[1]
     if (ret === undefined || parts.length > 2) {
         throw new Error(`ffi-bind: invalid signature "${sig}" (expected "arg1 arg2 -> ret")`)
     }
-    const args = (parts[0] ?? '') === '' ? [] : (parts[0] as string).split(' ') as ArgKind[]
-    return { args, ret: ret as RetKind }
+    const retK = normKind(ret)
+    if (retK === 'wstr') throw new Error('ffi-bind: "wstr" cannot be a return type')
+    const tokens = (parts[0] ?? '') === '' ? [] : (parts[0] as string).split(' ')
+    const args = tokens.map((t) => normKind(t))
+    return { args, ret: retK }
 }
 
 function makeFn(proc: number, sig: string): (...a: unknown[]) => unknown {
