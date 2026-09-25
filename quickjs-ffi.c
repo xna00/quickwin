@@ -43,15 +43,15 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
     JS_ToInt64(ctx, &length, len);
     JS_FreeValue(ctx, len);
     ffi_type *arg_types[length];
-    union { int64_t i; double d; } args[length];
+    uint64_t args[length];
     void *ffi_args[length];
     for (int i = 0; i < length; i++)
     {
-        // 所有参数统一由该 union 槽存储（8 字节），ffi_args[i] 指向槽位
-        // 提供等于槽宽的存储；float/double 按位模式 memcpy 进槽，
-        // 整数走 .i（小端下 int32 等取低 N 字节即正确）
-        // 在大端上：int64_t 的前 N 个字节是高 N 字节，对于小值全是 0，结果错误
-        // Windows 全平台均为小端，此处明确不做大端适配
+        // 所有参数统一由 64 位位宽槽存储（8 字节），ffi_args[i] 指向槽位。
+        // libffi 按 arg_types[i] 从槽起始读 N 字节：整数写满整槽，小端下
+        // 取低 N 字节即正确（int32 读前 4 字节）；float/double 按位模式
+        // memcpy 进槽。大端上 int64 槽高 N 字节对小值全是 0 → 传参全变 0；
+        // Windows 全平台均为小端，此处明确不做大端适配。
         ffi_args[i] = args + i;
     }
     for (int i = 0; i < length; i++)
@@ -67,17 +67,19 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
         {
             if (JS_IsNull(js_arg) || JS_IsUndefined(js_arg))
             {
-                args[i].i = (int64_t)NULL;
+                args[i] = (uint64_t)NULL;
             }
             else if (JS_IsNumber(js_arg))
             {
                 // 句柄/裸指针（HDC/HWND…）按指针槽宽直通：ia32 4 字节、x64 8 字节，避免错用 UINT64 在 x86 栈上错位
-                JS_ToInt64(ctx, &args[i].i, js_arg);
+                int64_t v;
+                JS_ToInt64(ctx, &v, js_arg);
+                args[i] = (uint64_t)v;
             }
             else
             {
                 size_t size;
-                args[i].i = (int64_t)JS_GetArrayBuffer(ctx, &size, js_arg);
+                args[i] = (uint64_t)JS_GetArrayBuffer(ctx, &size, js_arg);
                 if (JS_HasException(ctx))
                 {
                     JS_FreeValue(ctx, js_arg);
@@ -103,12 +105,14 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
             }
             else
             {
-                // 非指针类型的整数参数统一以 int64_t 存入 args[i]
+                // 非指针类型的整数参数统一以 64 位位宽存入 args[i]
                 // ffi_call 会按 arg_types[i] 从 args[i] 开头读 N 个字节
-                // 小端：取低 N 字节，结果正确（例如 int32 读前 4 字节即正确的 32 位值）
-                // 大端：取高 N 字节，小值的高位全是 0 → 传参全部变 0
+                // 小端：读低 N 字节，结果正确（例如 int32 读前 4 字节即正确的 32 位值）
+                // 大端：读高 N 字节，小值的高位全是 0 → 传参全部变 0
                 // Windows 全平台均为小端，此处明确不做大端适配
-                JS_ToInt64(ctx, &args[i].i, js_arg);
+                int64_t v;
+                JS_ToInt64(ctx, &v, js_arg);
+                args[i] = (uint64_t)v;
             }
         }
         JS_FreeValue(ctx, js_arg);
