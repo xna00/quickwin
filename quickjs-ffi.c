@@ -136,7 +136,27 @@ JSValue js_ffi_call(JSContext *ctx, JSValueConst this_val, int argc, JSValueCons
     }
     if (ret_type == FFI_TYPE_POINTER && ret == (uint64_t)NULL)
         return JS_NULL;
-    return JS_NewInt64(ctx, ret);
+    // 整数返回值不依赖 libffi 是否符号扩展写回（x64 会扩展、x86 只写低 4 字节），
+    // 按声明类型显式截断 + 符号/零扩展，保证 i8/i16/i32 负数在 JS 里读回负数。
+    switch (ret_type)
+    {
+    case FFI_TYPE_UINT8:
+        return JS_NewInt64(ctx, (int64_t)(uint8_t)ret);
+    case FFI_TYPE_SINT8:
+        return JS_NewInt64(ctx, (int64_t)(int8_t)ret);
+    case FFI_TYPE_UINT16:
+        return JS_NewInt64(ctx, (int64_t)(uint16_t)ret);
+    case FFI_TYPE_SINT16:
+        return JS_NewInt64(ctx, (int64_t)(int16_t)ret);
+    case FFI_TYPE_UINT32:
+        return JS_NewInt64(ctx, (int64_t)(uint32_t)ret);
+    case FFI_TYPE_SINT32:
+        return JS_NewInt64(ctx, (int64_t)(int32_t)ret);
+    case FFI_TYPE_UINT64:
+    case FFI_TYPE_SINT64:
+    default:
+        return JS_NewInt64(ctx, (int64_t)ret);
+    }
 }
 
 static JSValue js_ffi_buffer_ptr(JSContext *ctx, JSValueConst this_val,

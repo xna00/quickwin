@@ -1,3 +1,4 @@
+import * as std from 'std'
 import * as gui from 'gui'
 import { Tester } from './test_helper.js'
 import { bind, bindLib } from '../lib/ffi-bind.js'
@@ -23,5 +24,23 @@ export const suite = {
         t.checkTrue('measured width > 0', dv.getInt32(8, true) > 0)
         t.checkTrue('measured height > 0', dv.getInt32(12, true) > 0)
         if (dc) user32.ReleaseDC(0, dc)
+
+        t.section('signedness read-back: i32 vs u32')
+        const lstrcmpI = bind('kernel32.dll', 'lstrcmpW', 'wstr wstr -> i32')
+        const lstrcmpU = bind('kernel32.dll', 'lstrcmpW', 'wstr wstr -> u32')
+        const setLastError = bind('kernel32.dll', 'SetLastError', 'u32 -> void')
+        const getErrU = bind('kernel32.dll', 'GetLastError', ' -> u32')
+        const getErrI = bind('kernel32.dll', 'GetLastError', ' -> i32')
+        const ri = lstrcmpI('a', 'b')
+        const ru = lstrcmpU('a', 'b')
+        std.printf('  lstrcmpW("a","b"): i32=%s u32=%s\n', String(ri), String(ru))
+        t.checkTrue('i32 read-back keeps negative sign', ri < 0)
+        t.check('u32 read-back is 0xFFFFFFFF', 4294967295, ru)
+        setLastError(0x80000000)
+        const glU = getErrU()
+        const glI = getErrI()
+        std.printf('  GetLastError after SetLastError(0x80000000): u32=%s i32=%s\n', String(glU), String(glI))
+        t.check('GetLastError u32 keeps big value', 2147483648, glU)
+        t.check('GetLastError i32 reads as negative', -2147483648, glI)
     },
 }
