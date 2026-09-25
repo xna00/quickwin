@@ -131,6 +131,7 @@ LIBS = $(LIBBROTLIDEC) $(LIBBROTLICOMMON) $(WOLFSSL_LIB) -lws2_32 -lbcrypt -lcry
 TARGET_NAME ?= qwin.exe
 TARGET = $(BUILD_DIR)/$(TARGET_NAME)
 TARGET_NAME_32 ?= qwin-x86.exe
+TARGET_NAME_ARM64 ?= qwin-arm64.exe
 TARGET_NOWASM ?= qwin-nowasm.exe
 TARGET_NOWASM_32 ?= qwin-nowasm-x86.exe
 NPM_PKG_DIR = dist/quickwin
@@ -160,7 +161,16 @@ endif
 OBJS = $(SRCS:%.c=$(OBJ_DIR)/%.o) $(OBJ_DIR)/app.o
 DEPS = $(SRCS:%.c=$(OBJ_DIR)/%.d)
 
-.PHONY: cc64 cc32 cc64-nowasm cc32-nowasm apply-submodule-patches \
+# FFI i64 trampoline 测试 DLL（按 arch 命名，随 $(TARGET) 子 make 构建）
+ifeq ($(ARCH_TAG),ia32)
+TEST_I64_DLL = $(BUILD_DIR)/test_ffi_i64-x86.dll
+else ifeq ($(ARCH_TAG),arm64)
+TEST_I64_DLL = $(BUILD_DIR)/test_ffi_i64-arm64.dll
+else
+TEST_I64_DLL = $(BUILD_DIR)/test_ffi_i64.dll
+endif
+
+.PHONY: cc64 cc32 cc-arm64 cc64-nowasm cc32-nowasm apply-submodule-patches \
         gen-const wamr wasm js test npm-pkg exec_server embed-js embed-js-br info help clean distclean
 
 .DEFAULT_GOAL := cc64
@@ -178,6 +188,8 @@ endef
 
 $(eval $(call cross_build,cc64,$(BUILD_DIR)/$(TARGET_NAME),ARCH_TAG=x64))
 $(eval $(call cross_build,cc32,$(BUILD_DIR)/$(TARGET_NAME_32),ARCH_TAG=ia32 CC=i686-w64-mingw32-gcc CXX=i686-w64-mingw32-g++ WINDRES=i686-w64-mingw32-windres MSYS2_PREFIX=/usr/i686-w64-mingw32 WAMR_TARGET=X86_32 TARGET_NAME=$(TARGET_NAME_32)))
+# ARM64 Windows：需 aarch64-w64-mingw32-gcc（llvm-mingw / mingw-w64 GCC）在 PATH；未装则报 compiler not found
+$(eval $(call cross_build,cc-arm64,$(BUILD_DIR)/$(TARGET_NAME_ARM64),ARCH_TAG=arm64 CC=aarch64-w64-mingw32-gcc CXX=aarch64-w64-mingw32-g++ WINDRES=aarch64-w64-mingw32-windres MSYS2_PREFIX=/usr/aarch64-w64-mingw32 WAMR_TARGET=AARCH64 TARGET_NAME=$(TARGET_NAME_ARM64)))
 $(eval $(call cross_build,cc64-nowasm,$(BUILD_DIR)/$(TARGET_NOWASM),ARCH_TAG=x64 TARGET_NAME=$(TARGET_NOWASM) NO_WASM=1))
 $(eval $(call cross_build,cc32-nowasm,$(BUILD_DIR)/$(TARGET_NOWASM_32),ARCH_TAG=ia32 CC=i686-w64-mingw32-gcc CXX=i686-w64-mingw32-g++ WINDRES=i686-w64-mingw32-windres MSYS2_PREFIX=/usr/i686-w64-mingw32 WAMR_TARGET=X86_32 TARGET_NAME=$(TARGET_NOWASM_32) NO_WASM=1))
 
@@ -201,7 +213,7 @@ else
 WAMR_LINK = $(WAMR_LIB)
 endif
 
-$(TARGET): $(OBJS) $(QUICKJS_LIB) $(WAMR_LINK) $(WOLFSSL_LIB_STATIC) $(CROSS_BUILD_LIBS)
+$(TARGET): $(OBJS) $(QUICKJS_LIB) $(WAMR_LINK) $(WOLFSSL_LIB_STATIC) $(CROSS_BUILD_LIBS) $(TEST_I64_DLL)
 	@echo "Linking $@..."
 	mkdir -p $(BUILD_DIR)
 	$(CC) -o $@ $(OBJS) $(QUICKJS_LIB) $(WAMR_LINK) $(LDFLAGS) $(LIBS)
@@ -209,6 +221,11 @@ ifneq ($(BUILD), debug)
 	strip $@
 endif
 	@echo "Build complete: $@"
+
+$(TEST_I64_DLL): test/test_ffi_i64.c
+	@echo "Building $@..."
+	mkdir -p $(BUILD_DIR)
+	$(CC) -Wall -Wextra -shared -O2 -Wl,--kill-at -o $@ $<
 
 $(OBJ_DIR)/%.o: %.c | $(WOLFSSL_LIB_STATIC) $(CROSS_BUILD_LIBS)
 	@echo "Compiling $<..."
@@ -439,10 +456,11 @@ help:
 	@echo "  make cc64 BUILD=small         - cross x64, -Os+LTO release (CI/发布)"
 	@echo "  make cc64 BUILD=debug         - cross x64, -g -O0 debug (不 strip)"
 	@echo "  make cc32                     - cross ia32 -> $(BUILD_DIR)/$(TARGET_NAME_32)"
+	@echo "  make cc-arm64                 - cross ARM64 -> $(BUILD_DIR)/$(TARGET_NAME_ARM64) (需 aarch64-w64-mingw32-gcc)"
 	@echo "  make cc64-nowasm / cc32-nowasm - 同上但无 WASM/WAMR"
 	@echo "  中间产物全部在 $(BUILD_DIR)/ 下，按 arch 隔离："
-	@echo "    $(BUILD_DIR)/obj/{x64,ia32}-{cross,native}[-nowasm]/   .o .d libquickjs.a"
-	@echo "    $(BUILD_DIR)/deps/{x64,ia32}-{cross,native}/  静态库 + cmake build（nowasm 共享）"
+	@echo "    $(BUILD_DIR)/obj/{x64,ia32,arm64}-{cross,native}[-nowasm]/   .o .d libquickjs.a"
+	@echo "    $(BUILD_DIR)/deps/{x64,ia32,arm64}-{cross,native}/  静态库 + cmake build（nowasm 共享）"
 	@echo "    切 32/64 无需手动清 deps；make clean 清掉全部中间产物"
 	@echo "  test      - Run suites: make test / make test TEST=wasm / make test TEST=-net"
 	@echo "  js        - Compile TypeScript files to JavaScript"

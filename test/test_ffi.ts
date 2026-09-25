@@ -72,6 +72,47 @@ function formatStatus(status: number): string {
 export const suite = {
     name: 'ffi',
     run: (t: Tester) => {
+        // 先跑 i64（EnumPrinters 段有 early return，不能放后面）
+        t.section('i64 trampoline (arch=' + os.arch + ')')
+        const dll = os.arch === 'ia32' ? 'test_ffi_i64-x86.dll'
+            : os.arch === 'arm64' ? 'test_ffi_i64-arm64.dll'
+            : 'test_ffi_i64.dll'
+        let lib: any = null
+        try {
+            lib = ffi.dlopen(dll, {
+                q_add64: { args: ['u64', 'u64'], returns: 'u64' },
+                q_add64s: { args: ['i64', 'i64'], returns: 'i64' },
+                q_add64_std: { args: ['u64', 'u64'], returns: 'u64' },
+                q_mix: { args: ['u32', 'u64', 'i32'], returns: 'u64' },
+                q_out64: { args: ['ptr', 'u64'], returns: 'void' },
+                q_low32: { args: ['u64'], returns: 'u32' },
+                q_i32_to64: { args: ['i32'], returns: 'i64' },
+                q_zero: { args: [], returns: 'u32' },
+            }, 'cdecl')
+        } catch (e) {
+            t.checkTrue('dlopen ' + dll + ' (' + String(e) + ')', false)
+        }
+        if (lib) {
+            t.check('q_add64(1,2)=3', 3, lib.q_add64(1, 2))
+            t.check('q_add64 bigint 0x100000000+1', 4294967297, lib.q_add64(BigInt('4294967296'), BigInt(1)))
+            t.check('q_add64s(-5,-3)=-8', -8, lib.q_add64s(-5, -3))
+            t.check('q_add64_std(10,20)=30', 30, lib.q_add64_std(10, 20))
+            t.check('q_mix(1,2,-1)=2', 2, lib.q_mix(1, 2, -1))
+            t.check('q_mix(0xFFFFFFFF,0x100000000,0)=0x1FFFFFFFF', 8589934591, lib.q_mix(4294967295, 4294967296, 0))
+            t.check('q_low32(0x1122334455667788)=0x55667788', 1432778632, lib.q_low32(BigInt('0x1122334455667788')))
+            t.check('q_i32_to64(-5)=-5', -5, lib.q_i32_to64(-5))
+            t.check('q_zero()=0x2A5A', 10842, lib.q_zero())
+            const outBuf = new ArrayBuffer(8)
+            lib.q_out64(outBuf, BigInt('0x0102030405060708'))
+            const outDv = new DataView(outBuf)
+            t.check('q_out64 write low', 0x05060708, outDv.getUint32(0, true))
+            t.check('q_out64 write high', 0x01020304, outDv.getUint32(4, true))
+
+            const qAdd = win.GetProcAddress(win.LoadLibrary(dll)!, 'q_add64')
+            t.checkTrue('GetProcAddress q_add64', !!qAdd)
+            if (qAdd) t.check('ffiCall q_add64(5,6)=11', 11, ffi.ffiCall(qAdd, ['u64', 'u64'], [5, 6], 'u64'))
+        }
+
         t.section('EnumPrintersW')
         const hWinspool = win.LoadLibrary('winspool.drv')
         t.checkTrue('LoadLibrary("winspool.drv") succeeds', hWinspool !== null)

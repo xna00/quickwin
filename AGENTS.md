@@ -419,4 +419,4 @@ return extract_body(response);
 
 **功能：** 记录 FFI 调研结论与完整方案：现状调用面、问题清单（句柄宽度/ABI/校验）、方案 A（`qw_call` 固定签名 wrapper）、TS 类型系统（`hnd`/`i64` 双模/`ffi.dlopen` 推导）、ARM64、Phase 0–2 文件级路径。动 FFI/`quickjs-ffi.c`/`ffiCall` 前先看该文件。
 
-**状态：** Phase 0 + Phase 1 Spike + **Phase 2 已完成**——`qwcall` 为唯一后端（libffi 已删）；`ffiCall` 只收字符串 kind（`'hnd'`/`'ptr'`/`'i32'`…）；`FFI_TYPE_*` branded 常量与 `setBackend`/`getBackend` 已移除。C 内部类型 ID 用 `QW_T_*` enum（连续编号），kind 解析仅认字符串，不导出 JS。
+**状态：** Phase 0 + Phase 1 Spike + **Phase 2 已完成**——`qwcall` 为唯一后端（libffi 已删）；`ffiCall` 只收字符串 kind（`'hnd'`/`'ptr'`/`'i32'`…）；`FFI_TYPE_*` branded 常量与 `setBackend`/`getBackend` 已移除。C 内部类型 ID 用 `QW_T_*` enum（连续编号），kind 解析仅认字符串，不导出 JS。**ia32 i64/u64 已支持**：含 i64 签名走 `qw_call_ia32` 静态迷你 trampoline（4/8 字节混槽压栈 + 16B 对齐，非运行时生成代码），`qw_call_eligible` throw 已删；测试 DLL `_build/test_ffi_i64{,-x86}.dll`（`test/test_ffi_i64.c`，随 cc64/cc32 构建）。**ARM64 Windows 已就绪未测**：AAPCS64（x0–x7 + 8 字节栈槽）与 `intptr_t`+`QW_CASES` 天然匹配、无需 trampoline；`os.arch` 增报 `"arm64"`；`make cc-arm64` → `qwin-arm64.exe`（需 `aarch64-w64-mingw32-gcc`，本机无工具链、未实测）。

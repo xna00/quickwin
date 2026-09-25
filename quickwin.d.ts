@@ -340,7 +340,7 @@ declare module "os" {
         static parent: Worker;
     }
 
-    /** Process architecture (pointer width): `"x64"` or `"ia32"`. */
+    /** Process architecture: `"x64"`, `"ia32"`, or `"arm64"`. */
     const arch: string;
 }
 

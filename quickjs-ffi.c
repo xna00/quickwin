@@ -29,12 +29,13 @@ enum {
 #define QW_IS_IA32 0
 #endif
 
-#if QW_IS_IA32
-#define QW_SAPI __stdcall
-#define QW_CAPI __cdecl
+/* ARM64 Windows（AAPCS64，MS 文档确认）：整数/指针参数 x0–x7、溢出栈槽 8 字节、
+   SP 恒 16 字节对齐、返回 x0/x1——与 intptr_t 固定签名 + QW_CASES 天然匹配
+   （编译器生成标准调用序列），不需要 ia32 那套 4/8 字节混槽 trampoline。 */
+#if defined(_M_ARM64) || defined(__aarch64__)
+#define QW_IS_ARM64 1
 #else
-#define QW_SAPI
-#define QW_CAPI
+#define QW_IS_ARM64 0
 #endif
 
 static int qw_type_valid(int t)
@@ -189,80 +190,112 @@ static JSValue qw_make_return(JSContext *ctx, int ret_type, uint64_t ret)
 
 /* ── 纯 C 固定签名 wrapper（唯一调用后端） ── */
 
-/* 公共 arity 表：RET=返回类型，K=语句包装（void 不能 return 调用结果） */
-#define QW_CASES(ABI, RET, K) \
-    case 0: K(((RET (ABI *)(void))fp)()); \
-    case 1: K(((RET (ABI *)(intptr_t))fp)(a[0])); \
-    case 2: K(((RET (ABI *)(intptr_t, intptr_t))fp)(a[0], a[1])); \
-    case 3: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2])); \
-    case 4: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3])); \
-    case 5: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4])); \
-    case 6: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5])); \
-    case 7: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6])); \
-    case 8: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7])); \
-    case 9: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8])); \
-    case 10: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9])); \
-    case 11: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10])); \
-    case 12: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11])); \
-    case 13: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12])); \
-    case 14: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13])); \
-    case 15: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14])); \
-    case 16: K(((RET (ABI *)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]));
+/* 公共 arity 表（仅 x64/ARM64 使用，故无 ABI 参数）：
+   RET=返回类型，K=语句包装（void 不能 return 调用结果） */
+#define QW_CASES(RET, K) \
+    case 0: K(((RET (*)(void))fp)()); \
+    case 1: K(((RET (*)(intptr_t))fp)(a[0])); \
+    case 2: K(((RET (*)(intptr_t, intptr_t))fp)(a[0], a[1])); \
+    case 3: K(((RET (*)(intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2])); \
+    case 4: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3])); \
+    case 5: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4])); \
+    case 6: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5])); \
+    case 7: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6])); \
+    case 8: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7])); \
+    case 9: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8])); \
+    case 10: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9])); \
+    case 11: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10])); \
+    case 12: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11])); \
+    case 13: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12])); \
+    case 14: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13])); \
+    case 15: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14])); \
+    case 16: K(((RET (*)(intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t, intptr_t))fp)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11], a[12], a[13], a[14], a[15]));
 
 #define QW_K_RET(e)  return e
 #define QW_K_VOID(e) e; return 0
 
-#define QW_CASES_VAL(ABI)  QW_CASES(ABI, intptr_t, QW_K_RET)
-#define QW_CASES_VOID(ABI) QW_CASES(ABI, void,     QW_K_VOID)
+#define QW_CASES_VAL  QW_CASES(intptr_t, QW_K_RET)
+#define QW_CASES_VOID QW_CASES(void,     QW_K_VOID)
 
-static intptr_t qw_call_raw(void *fp, int n, int abi_cdecl, int is_void,
-                            const intptr_t *a)
+/* x64/ARM64 后端：intptr_t 固定签名（int 与 i64 均 8 字节槽，与平台 ABI 一致），
+   由编译器生成标准调用序列；ia32 的调用全部走 qw_call_ia32 不再经过这里 */
+#if !QW_IS_IA32
+static intptr_t qw_call_raw(void *fp, int n, int is_void, const intptr_t *a)
 {
     if (n < 0 || n > QW_MAX_ARGS)
         return 0;
-#if QW_IS_IA32
-    if (abi_cdecl)
-    {
-        if (is_void)
-            switch (n) { QW_CASES_VOID(QW_CAPI) }
-        else
-            switch (n) { QW_CASES_VAL(QW_CAPI) }
-    }
-    else
-    {
-        if (is_void)
-            switch (n) { QW_CASES_VOID(QW_SAPI) }
-        else
-            switch (n) { QW_CASES_VAL(QW_SAPI) }
-    }
-#else
-    (void)abi_cdecl;
     if (is_void)
-        switch (n) { QW_CASES_VOID(QW_SAPI) }
+        switch (n) { QW_CASES_VOID }
     else
-        switch (n) { QW_CASES_VAL(QW_SAPI) }
-#endif
+        switch (n) { QW_CASES_VAL }
     return 0;
 }
+#endif
 
-/* ia32：i64/u64 占 8 字节栈槽，intptr_t wrapper 无法正确传参 */
-static int qw_call_eligible(int n, const int *arg_types, int ret_type)
-{
 #if QW_IS_IA32
-    if (ret_type == QW_T_SINT64 || ret_type == QW_T_UINT64)
-        return 0;
+/* ia32 唯一调用后端：迷你 trampoline。i64/u64 占 8 字节栈槽、其余 4 字节
+   （MS x86 小端），按类型混槽压栈 → 16 字节对齐 → call → 自行恢复 esp
+   （cdecl/stdcall 皆可，无需区分 abi）。返回完整 edx:eax；调用方按 ret_type 截断。 */
+static uint64_t qw_call_ia32(void *fp, const int64_t *slots, const int *types, int n)
+{
+    uint8_t buf[QW_MAX_ARGS * 8];
+    int nbytes = 0;
     for (int i = 0; i < n; i++)
     {
-        if (arg_types[i] == QW_T_SINT64 || arg_types[i] == QW_T_UINT64)
-            return 0;
+        if (types[i] == QW_T_SINT64 || types[i] == QW_T_UINT64)
+        {
+            memcpy(buf + nbytes, &slots[i], 8);
+            nbytes += 8;
+        }
+        else
+        {
+            memcpy(buf + nbytes, &slots[i], 4); /* LE：低 4 字节即 32 位值 */
+            nbytes += 4;
+        }
     }
-#else
-    (void)n;
-    (void)arg_types;
-    (void)ret_type;
-#endif
-    return 1;
+    struct
+    {
+        void *fp;
+        const uint8_t *src;
+        int nbytes;
+        int pad_total;
+        uint32_t saved_esp;
+    } in;
+    in.fp = fp;
+    in.src = buf;
+    in.nbytes = nbytes;
+    in.pad_total = nbytes + ((16 - (nbytes & 15)) & 15);
+
+    uint64_t result;
+    __asm__ __volatile__(
+        /* 首条指令必须在改 ESP 前读输入（输入操作数可能 ESP 相对寻址） */
+        "movl %[in], %%eax\n\t"
+        "pushl %%ecx\n\t"
+        "pushl %%ebx\n\t"
+        "pushl %%esi\n\t"
+        "pushl %%edi\n\t"
+        "movl %%eax, %%ebx\n\t"
+        "movl %%esp, 16(%%ebx)\n\t"
+        "andl $-16, %%esp\n\t"
+        "subl 12(%%ebx), %%esp\n\t"
+        "movl %%esp, %%edi\n\t"
+        "movl 4(%%ebx), %%esi\n\t"
+        "movl 8(%%ebx), %%ecx\n\t"
+        "cld\n\t"
+        "rep movsb\n\t"
+        "movl (%%ebx), %%eax\n\t"
+        "calll *%%eax\n\t"
+        "movl 16(%%ebx), %%esp\n\t"
+        "popl %%edi\n\t"
+        "popl %%esi\n\t"
+        "popl %%ebx\n\t"
+        "popl %%ecx\n\t"
+        : "=&A"(result)
+        : [in] "r"(&in)
+        : "memory", "cc");
+    return result;
 }
+#endif
 
 static JSValue qw_do_call(JSContext *ctx, void *func, int n_args,
                           const int *arg_types, int ret_type, int abi_cdecl,
@@ -282,18 +315,25 @@ static JSValue qw_do_call(JSContext *ctx, void *func, int n_args,
             return JS_ThrowRangeError(ctx, "invalid FFI argument type");
     }
 
-    if (!qw_call_eligible(n_args, arg_types, ret_type))
-        return JS_ThrowRangeError(ctx, "i64/u64 not supported on ia32");
-
     if (qw_collect_args(ctx, n_args, arg_types, argv, slots) < 0)
         return JS_EXCEPTION;
 
+    /* ia32 自恢复 esp 无需区分 abi；x64/ARM64 单一调用约定 —— 两者皆不消费 */
+    (void)abi_cdecl;
+    uint64_t ret;
+#if QW_IS_IA32
+    /* ia32 唯一后端：trampoline 混槽 + 自恢复 esp（cdecl/stdcall 皆可）；
+       返回值恒取完整 edx:eax，非 64 位返回只读 eax，按 ret_type 截断 */
+    ret = qw_call_ia32(func, slots, arg_types, n_args);
+    if (ret_type != QW_T_SINT64 && ret_type != QW_T_UINT64)
+        ret = (uint32_t)ret;
+#else
     intptr_t a[QW_MAX_ARGS];
     for (int i = 0; i < n_args; i++)
         a[i] = (intptr_t)slots[i];
-    intptr_t raw = qw_call_raw(func, n_args, abi_cdecl,
-                               ret_type == QW_T_VOID, a);
-    uint64_t ret = (uint64_t)(uintptr_t)raw;
+    intptr_t raw = qw_call_raw(func, n_args, ret_type == QW_T_VOID, a);
+    ret = (uint64_t)(uintptr_t)raw;
+#endif
 
     if (JS_HasException(ctx))
         return JS_EXCEPTION;

@@ -4053,8 +4053,11 @@ void js_std_set_worker_free_rt_func(void (*func)(JSRuntime *rt))
 #endif
 }
 
-/* Process pointer width — compile-time, matches qwin.exe (x64) / qwin-x86.exe (ia32). */
-#if defined(_WIN64) || defined(__LP64__) || defined(_LP64) || \
+/* Process architecture — compile-time, matches qwin.exe (x64) / qwin-x86.exe (ia32).
+   ARM64 须在 _WIN64 之前判（arm64 也定义 _WIN64）。 */
+#if defined(_M_ARM64) || defined(__aarch64__)
+#define OS_ARCH "arm64"
+#elif defined(_WIN64) || defined(__LP64__) || defined(_LP64) || \
     (defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 8)
 #define OS_ARCH "x64"
 #else

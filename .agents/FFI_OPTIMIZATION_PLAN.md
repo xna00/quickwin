@@ -2,7 +2,7 @@
 
 > 对应 TODO：`.agents/TODO.md` 低优先级「系统性优化 FFI」  
 > 范围：**Windows-only**（x86 XP / x64，未来可能 **ARM64 Windows**）；不含 Linux/macOS  
-> 状态：Phase 0 + Phase 1 Spike + **Phase 2（删 libffi、qwcall 唯一后端、删 FFI_TYPE_*）已完成**
+> 状态：Phase 0 + Phase 1 Spike + **Phase 2（删 libffi、qwcall 唯一后端、删 FFI_TYPE_*）已完成** + **ia32 i64 trampoline（`qw_call_ia32` 静态混槽压栈，`qw_call_eligible` throw 已删）** + **ARM64 Windows 就绪未测（AAPCS64 与 `intptr_t`+`QW_CASES` 天然匹配，`make cc-arm64`，无工具链未实测）**
 
 ---
 
@@ -12,6 +12,7 @@
 2. **体积不是决策因子**（libffi.a ≈ 35–38KB）；决策因子 = **API 样板、x86 stdcall 正确性、依赖构建链、ARM64 可维护性**。
 3. **推荐主线：方案 A**——解析继续用 `LoadLibrary`/`GetModuleHandle` + `GetProcAddress`；**调用端**用纯 C 固定签名 wrapper（函数指针类型转型），删 libffi。
 4. **不要走运行时 trampoline**（ACG / I-cache / 失败面多）。
+   > 注：ia32 的 i64 支持用的是 `qw_call_ia32` **静态**迷你 trampoline（编译期 asm，压栈字节镜像 + 16B 对齐，不生成可执行页），与本条反对的「运行时生成代码」不同——已实现并经 XP 实测。
 5. **已拍板：** `i64`/`u64` = **策略 C**（`number | bigint` 双模，对齐 `std`）；绑定 API = **`ffi.dlopen`**；旧 `FFI_TYPE_*` Phase 0 deprecated、Phase 2 删。
 6. **分阶段：** Phase 0（与删 libffi 解耦）→ Phase 1 Spike → Phase 2 删 libffi → Phase 3+ 按需扩展。
 
