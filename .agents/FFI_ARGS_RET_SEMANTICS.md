@@ -36,6 +36,12 @@
 
 **`long double` 是唯一例外**：gcc/x86 是 80 位扩展（12/16 字节），MSVC 不支持（=double 8 字节）。KIND 表不含它，正好避开。
 
+### ffi-struct 字段顺序 = object 字面量顺序（ES [[OwnPropertyKeys]]）
+
+`lib/ffi-struct.ts` 的 `layout()` 用 `Object.keys(def)` 迭代字段并按该顺序算 offset，所以**布局顺序 = 字面量写法顺序**。这不是约定俗成，而是 ECMA-262 `[[OwnPropertyKeys]]`（`OrdinaryOwnPropertyKeys`）的确定顺序：整数索引键先按数值升序，其余字符串键按插入顺序，最后 Symbol。`Object.keys`/`for-in` 均遵循。
+
+**唯一陷阱**：字段名若是数字类字符串（如 `'0'`、`'1'`），会被规范按数值升序排到最前，破坏写法顺序。struct 字段名避免用数字键即可；布局可加校验拒绝。
+
 ### 历史教训：x86 栈错位
 
 把句柄（HWND/HDC/WPARAM…）在 ia32 上绑成 `FFI_TYPE_UINT64` → libffi 每参数压 8 字节、被调函数（stcall 读 4 字节）栈消费 4 字节 → **后续所有参数栈偏移错位** → DrawTextW 参数错乱、text-measure 测宽为 0。
