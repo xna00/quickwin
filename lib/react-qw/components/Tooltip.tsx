@@ -18,6 +18,7 @@ const TTTOOLINFOW = struct({
   hinst: 'ptr',
   lpszText: 'ptr',
   lParam: 'ptr',
+  lpReserved: 'ptr', // WinXP+ 追加字段（系统 sizeof 含之）
 })
 
 function buildToolInfo(hTarget: number, text: string): ArrayBuffer {
@@ -33,6 +34,7 @@ function buildToolInfo(hTarget: number, text: string): ArrayBuffer {
     hinst: 0,
     lpszText: ffi.bufferPtr(buf) + size,
     lParam: 0,
+    lpReserved: 0,
   }, buf)
   const dv = new DataView(buf)
   for (let i = 0; i < text.length; i++)

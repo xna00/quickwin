@@ -116,8 +116,9 @@ export const suite = {
         const TTTOOLINFOW = struct({
             cbSize: 'u32', uFlags: 'u32', hwnd: 'ptr', uId: 'ptr',
             rect: 'i32[4]', hinst: 'ptr', lpszText: 'ptr', lParam: 'ptr',
+            lpReserved: 'ptr', // WinXP+ 追加
         })
-        t.check('TTTOOLINFOW.size', is64 ? 64 : 44, TTTOOLINFOW.size)
+        t.check('TTTOOLINFOW.size', is64 ? 72 : 48, TTTOOLINFOW.size)
         t.check('TTTOOLINFOW.offsetOf lpszText', is64 ? 48 : 36, TTTOOLINFOW.offsetOf('lpszText'))
 
         const OPENFILENAMEW = struct({
@@ -127,8 +128,9 @@ export const suite = {
             lpstrInitialDir: 'ptr', lpstrTitle: 'ptr', Flags: 'u32',
             nFileOffset: 'u16', nFileExtension: 'u16',
             lpstrDefExt: 'ptr', lCustData: 'ptr', lpfnHook: 'ptr', lpTemplateName: 'ptr',
+            pvReserved: 'ptr', dwReserved: 'u32', FlagsEx: 'u32', // Win2000+ 追加
         })
-        t.check('OPENFILENAMEW.size', is64 ? 136 : 76, OPENFILENAMEW.size)
+        t.check('OPENFILENAMEW.size', is64 ? 152 : 88, OPENFILENAMEW.size)
         t.check('OPENFILENAMEW.offsetOf lpstrFile', is64 ? 48 : 28, OPENFILENAMEW.offsetOf('lpstrFile'))
         t.check('OPENFILENAMEW.offsetOf Flags', is64 ? 96 : 52, OPENFILENAMEW.offsetOf('Flags'))
         t.check('OPENFILENAMEW.offsetOf lpstrTitle', is64 ? 88 : 48, OPENFILENAMEW.offsetOf('lpstrTitle'))
@@ -140,5 +142,82 @@ export const suite = {
         t.check('BROWSEINFOW.size', is64 ? 64 : 32, BROWSEINFOW.size)
         t.check('BROWSEINFOW.offsetOf lpszTitle', is64 ? 24 : 12, BROWSEINFOW.offsetOf('lpszTitle'))
         t.check('BROWSEINFOW.offsetOf ulFlags', is64 ? 32 : 16, BROWSEINFOW.offsetOf('ulFlags'))
+
+        t.section('NMHDR（嵌套时 MSVC 尾 padding 传染）')
+        const NMHDR = struct({ hwndFrom: 'ptr', idFrom: 'ptr', code: 'i32' })
+        t.check('NMHDR.size', is64 ? 24 : 12, NMHDR.size)
+        t.check('NMHDR.offsetOf code', is64 ? 16 : 8, NMHDR.offsetOf('code'))
+
+        t.section('NMCUSTOMDRAW / NMLVCUSTOMDRAW (ListView custom draw)')
+        const NMCUSTOMDRAW = struct({
+            hdr: NMHDR,
+            dwDrawStage: 'u32', hdc: 'ptr', rc: 'i32[4]',
+            dwItemSpec: 'ptr', uItemState: 'u32', lItemlParam: 'ptr',
+        })
+        t.check('NMCUSTOMDRAW.size', is64 ? 80 : 48, NMCUSTOMDRAW.size)
+        t.check('NMCUSTOMDRAW.offsetOf dwDrawStage', is64 ? 24 : 12, NMCUSTOMDRAW.offsetOf('dwDrawStage'))
+        t.check('NMCUSTOMDRAW.offsetOf hdc', is64 ? 32 : 16, NMCUSTOMDRAW.offsetOf('hdc'))
+        t.check('NMCUSTOMDRAW.offsetOf dwItemSpec', is64 ? 56 : 36, NMCUSTOMDRAW.offsetOf('dwItemSpec'))
+        const NMLVCUSTOMDRAW = struct({
+            hdr: NMHDR,
+            dwDrawStage: 'u32', hdc: 'ptr', rc: 'i32[4]',
+            dwItemSpec: 'ptr', uItemState: 'u32', lItemlParam: 'ptr',
+            clrText: 'u32', clrTextBk: 'u32', iSubItem: 'i32', dwItemType: 'u32',
+        })
+        t.check('NMLVCUSTOMDRAW.size', is64 ? 96 : 64, NMLVCUSTOMDRAW.size)
+        t.check('NMLVCUSTOMDRAW.offsetOf clrText', is64 ? 80 : 48, NMLVCUSTOMDRAW.offsetOf('clrText'))
+        t.check('NMLVCUSTOMDRAW.offsetOf clrTextBk', is64 ? 84 : 52, NMLVCUSTOMDRAW.offsetOf('clrTextBk'))
+        t.check('NMLVCUSTOMDRAW.offsetOf iSubItem', is64 ? 88 : 56, NMLVCUSTOMDRAW.offsetOf('iSubItem'))
+
+        t.section('NMLISTVIEW / NMITEMACTIVATE')
+        const NMLISTVIEW = struct({
+            hdr: NMHDR,
+            iItem: 'i32', iSubItem: 'i32', uNewState: 'u32', uOldState: 'u32', uChanged: 'u32',
+            ptAction: 'i32[2]', lParam: 'ptr',
+        })
+        t.check('NMLISTVIEW.size', is64 ? 64 : 44, NMLISTVIEW.size)
+        t.check('NMLISTVIEW.offsetOf iItem', is64 ? 24 : 12, NMLISTVIEW.offsetOf('iItem'))
+        t.check('NMLISTVIEW.offsetOf iSubItem', is64 ? 28 : 16, NMLISTVIEW.offsetOf('iSubItem'))
+        t.check('NMLISTVIEW.offsetOf uNewState', is64 ? 32 : 20, NMLISTVIEW.offsetOf('uNewState'))
+        t.check('NMLISTVIEW.offsetOf uOldState', is64 ? 36 : 24, NMLISTVIEW.offsetOf('uOldState'))
+
+        t.section('LVITEMW / LVCOLUMNW')
+        const LVITEMW = struct({
+            mask: 'u32', iItem: 'i32', iSubItem: 'i32',
+            state: 'u32', stateMask: 'u32',
+            pszText: 'ptr', cchTextMax: 'i32', iImage: 'i32', lParam: 'ptr',
+            iIndent: 'i32', iGroupId: 'i32', cColumns: 'u32',
+            puColumns: 'ptr', piColFmt: 'ptr', iGroup: 'i32',
+        })
+        t.check('LVITEMW.size', is64 ? 88 : 60, LVITEMW.size)
+        t.check('LVITEMW.offsetOf iItem', 4, LVITEMW.offsetOf('iItem'))
+        t.check('LVITEMW.offsetOf pszText', is64 ? 24 : 20, LVITEMW.offsetOf('pszText'))
+        t.check('LVITEMW.offsetOf iImage', is64 ? 36 : 28, LVITEMW.offsetOf('iImage'))
+        t.check('LVITEMW.offsetOf lParam', is64 ? 40 : 32, LVITEMW.offsetOf('lParam'))
+        const LVCOLUMNW = struct({
+            mask: 'u32', fmt: 'i32', cx: 'i32',
+            pszText: 'ptr', cchTextMax: 'i32', iSubItem: 'i32', iImage: 'i32', iOrder: 'i32',
+            cxMin: 'i32', cxDefault: 'i32', cxIdeal: 'i32',
+        })
+        t.check('LVCOLUMNW.size', is64 ? 56 : 44, LVCOLUMNW.size)
+        t.check('LVCOLUMNW.offsetOf pszText', is64 ? 16 : 12, LVCOLUMNW.offsetOf('pszText'))
+        t.check('LVCOLUMNW.offsetOf iSubItem', is64 ? 28 : 20, LVCOLUMNW.offsetOf('iSubItem'))
+        t.check('LVCOLUMNW.offsetOf iOrder', is64 ? 36 : 28, LVCOLUMNW.offsetOf('iOrder'))
+
+        t.section('NMDATETIMECHANGE')
+        const SYSTEMTIME = struct({
+            wYear: 'u16', wMonth: 'u16', wDayOfWeek: 'u16', wDay: 'u16',
+            wHour: 'u16', wMinute: 'u16', wSecond: 'u16', wMilliseconds: 'u16',
+        })
+        const NMDATETIMECHANGE = struct({ hdr: NMHDR, dwFlags: 'u32', st: SYSTEMTIME })
+        t.check('NMDATETIMECHANGE.size', is64 ? 48 : 32, NMDATETIMECHANGE.size)
+        t.check('NMDATETIMECHANGE.offsetOf dwFlags', is64 ? 24 : 12, NMDATETIMECHANGE.offsetOf('dwFlags'))
+        t.check('NMDATETIMECHANGE.offsetOf st', is64 ? 28 : 16, NMDATETIMECHANGE.offsetOf('st'))
+
+        t.section('NMLINK szUrl offset')
+        const LITEM = struct({ mask: 'u32', iLink: 'i32', state: 'u32', stateMask: 'u32', szID: 'wstr[48]' })
+        const NMLINK = struct({ hdr: NMHDR, item: LITEM, szUrl: 'wstr[2084]' })
+        t.check('LITEM.offsetOf szID', 16, LITEM.offsetOf('szID'))
+        t.check('NMLINK.offsetOf szUrl', is64 ? 136 : 124, NMLINK.offsetOf('szUrl'))
     },
 }

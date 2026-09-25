@@ -2,6 +2,7 @@ import { forwardRef, useRef, useEffect, useState } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
 import { struct } from '../../ffi-struct.js'
+import { nmCode } from '../nmhdr.js'
 import type { WStyle } from '../jsx.d.ts'
 
 const TVITEM = struct({
@@ -38,11 +39,6 @@ function textToUtf16(s: string): ArrayBuffer {
   for (let i = 0; i < s.length; i++)
     dv.setUint16(i * 2, s.charCodeAt(i), true)
   return buf
-}
-
-function readI32(ptr: number, offset: number): number {
-  return ffi.readByte(ptr + offset) | (ffi.readByte(ptr + offset + 1) << 8) |
-    (ffi.readByte(ptr + offset + 2) << 16) | (ffi.readByte(ptr + offset + 3) << 24)
 }
 
 function bufPtr(buf: ArrayBuffer): number {
@@ -137,7 +133,7 @@ const TreeView = forwardRef(function TreeViewInner<D>(
       ref={ref}
       onEvent={(e) => {
         if (e.msg === gui.WmMsg.NOTIFY) {
-          const code = readI32(e.lParam, 16)
+          const code = nmCode(e.lParam)
           if (code === gui.TvNotifyCode.SELCHANGEDW) {
             const h = tvRef.current
             if (!h) return

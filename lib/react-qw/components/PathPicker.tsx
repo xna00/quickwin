@@ -2,45 +2,11 @@ import { forwardRef, useState, useRef } from 'react'
 import * as gui from 'gui'
 import * as ffi from 'ffi'
 import * as win from 'win'
-import { struct } from '../../ffi-struct.js'
+import { OPENFILENAMEW, BROWSEINFOW } from '../../win-common-structs.js'
 import type { WStyle } from '../jsx.d.ts'
 
 const FFI_PTR = ffi.FFI_TYPE_POINTER
 const FFI_U32 = ffi.FFI_TYPE_UINT32
-
-const OPENFILENAMEW = struct({
-  lStructSize: 'u32',
-  hwndOwner: 'ptr',
-  hInstance: 'ptr',
-  lpstrFilter: 'ptr',
-  lpstrCustomFilter: 'ptr',
-  nMaxCustFilter: 'u32',
-  nFilterIndex: 'u32',
-  lpstrFile: 'ptr',
-  nMaxFile: 'u32',
-  lpstrFileTitle: 'ptr',
-  nMaxFileTitle: 'u32',
-  lpstrInitialDir: 'ptr',
-  lpstrTitle: 'ptr',
-  Flags: 'u32',
-  nFileOffset: 'u16',
-  nFileExtension: 'u16',
-  lpstrDefExt: 'ptr',
-  lCustData: 'ptr',
-  lpfnHook: 'ptr',
-  lpTemplateName: 'ptr',
-})
-
-const BROWSEINFOW = struct({
-  hwndOwner: 'ptr',
-  pidlRoot: 'ptr',
-  pszDisplayName: 'ptr',
-  lpszTitle: 'ptr',
-  ulFlags: 'u32',
-  lpfn: 'ptr',
-  lParam: 'ptr',
-  iImage: 'i32',
-})
 
 let _GetOpenFileNameW = 0
 let _SHBrowseForFolderW = 0
@@ -110,6 +76,9 @@ function openFileDialog(
     lCustData: 0,
     lpfnHook: 0,
     lpTemplateName: 0,
+    pvReserved: 0,
+    dwReserved: 0,
+    FlagsEx: 0,
   })
 
   const ret = ffi.ffiCall(_GetOpenFileNameW, [FFI_PTR], [ofn], FFI_U32)
