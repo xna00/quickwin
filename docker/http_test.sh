@@ -51,6 +51,25 @@ if ! curl -sf -m 2 http://127.0.0.1:18923/ >/dev/null 2>&1; then
     echo "serve_test 启动失败"; exit 1; }
 fi
 
+# ── CI-DEBUG win7:文件探针（cmd 重定向到共享盘 → 宿主读，绕开管道捕获）──
+# 断定：文件有内容 ⇒ cmd 链正常、输出存在，仅“管道捕获”环节失效；
+#       文件无/空   ⇒ cmd/子进程端本身异常。文件名带时间戳避开 SMB 缓存。
+if [ "$VM" = "win7" ]; then
+  PROBE_FILE="ci_probe_$(date +%s).txt"
+  PB=$(printf '%s' "{\"cmd\":\"echo QWINPROBE > $PROBE_FILE\"}")
+  echo "POST :${FWD}/exec (file probe: $PROBE_FILE)"
+  PC=$(curl -sS -m 60 -o /dev/null -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${FWD}/exec" \
+    -H 'Content-Type: application/json' \
+    --data "$PB" || echo 000)
+  sleep 2
+  if [ -f "../_build/$PROBE_FILE" ]; then
+    echo "FILE-PROBE status=$PC content=$(tr -d '\r' < "../_build/$PROBE_FILE" | head -c 200)"
+  else
+    echo "FILE-PROBE status=$PC NOT-FOUND"
+  fi
+fi
+
 BODY=$(printf '%s' "{\"cmd\":\"$CMD\"}")
 echo "POST :${FWD}/exec  cmd=$CMD"
 
