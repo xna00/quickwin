@@ -433,7 +433,6 @@ npm-pkg: js wasm
 	cp $(BUILD_DIR)/main.js $(NPM_PKG_DIR)/main.js
 	@echo "npm package created at $(NPM_PKG_DIR)"
 
-# exec_server 默认恒定用 32-bit（qwin-x86.exe）。pipe worker 的 CreateProcess/管道
 # exec_server 默认打包 32 位 qwin-x86.exe（xp 只产出 32 位，双 VM 通用、最稳）。
 # 64 位 qwin-x64.exe 同样可用：worker 用 GetSystemInfo + 拆高/低 u32 的
 # rdPtr/wrPtr 正确处理 64 位句柄（曾因 JS 移位 mod 32 把句柄低 32 位重复写进
