@@ -87,6 +87,16 @@ function runInWorker(cmd: string): ExecHandle {
             case 'info':
                 innerPid = msg.pid ?? null
                 break
+            // ---- TEMP CI-DEBUG:probe 自检结果作为首个 chunk ----
+            case 'probe':
+                {
+                    const m = msg as { ok?: boolean; bytes?: number; error?: string | null; arch?: string; sysDir?: string }
+                    const line = `[probe] ok=${m.ok} bytes=${m.bytes} arch=${m.arch} sysdir=${m.sysDir}${m.error ? ' err=' + m.error : ''}\r\n`
+                    if (controller) controller.enqueue(new TextEncoder().encode(line))
+                }
+                settleReady({ ok: true })
+                break
+            // ---- TEMP CI-DEBUG end ----
             case 'data':
                 settleReady({ ok: true })
                 if (controller) controller.enqueue(msg.chunk as Uint8Array)

@@ -108,7 +108,65 @@ try {
 //   - 无 winpty.dll / winpty-agent.exe 依赖，纯 kernel32
 // 编码：无统一代码页转换，各程序输出原生字节（qwin= UTF-8、系统命令= GBK）。
 // 同步阻塞读循环（worker 线程自转），主线程事件循环不受影响。
+
+// ---- TEMP CI-DEBUG:自检同一个"CreatePipe+CreateProcess 捕获 stdout"机制 ----
+// topDown 用同款管道抓 `cmd /c echo`,确认继承/句柄在目标环境是否生效;
+// 与目标命令用独立管道,不干扰其输出。结论由 exec_server 作为首个 chunk 回显。
+function probePipe(): { ok: boolean; bytes: number; error?: string } {
+    try {
+        const pipes = zeroBuf(PTR * 2)
+        if (!K.createPipe(ffi.bufferPtr(pipes), ffi.bufferPtr(pipes) + PTR, 0, 0)) {
+            return { ok: false, bytes: 0, error: 'CreatePipe err=' + K.getLastError() }
+        }
+        const hRead = rdPtr(ffi.bufferPtr(pipes), 0)
+        const hWrite = rdPtr(ffi.bufferPtr(pipes), PTR)
+        K.setHandleInformation(hWrite, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)
+        K.setHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0)
+        const si = zeroBuf(L.siSize)
+        u32At(ffi.bufferPtr(si), 0, L.siSize)
+        u32At(ffi.bufferPtr(si), L.flags, STARTF_USESTDHANDLES)
+        wrPtr(ffi.bufferPtr(si), L.hOut, hWrite)
+        wrPtr(ffi.bufferPtr(si), L.hErr, hWrite)
+        const pi = zeroBuf(L.piSize)
+        const cmdline = `${sysDir}\\cmd.exe /c echo QWINPIPE_OK`
+        if (!K.createProcessW(null, cmdline, 0, 0, 1, 0, 0, null, ffi.bufferPtr(si), ffi.bufferPtr(pi))) {
+            K.closeHandle(hRead)
+            K.closeHandle(hWrite)
+            return { ok: false, bytes: 0, error: 'probe CreateProcessW err=' + K.getLastError() }
+        }
+        K.closeHandle(hWrite)
+        const buf = new Uint8Array(256)
+        const bp = ffi.bufferPtr(buf.buffer)
+        let total = 0
+        for (;;) {
+            u32At(nReadPtr, 0, 0)
+            if (!K.readFile(hRead, bp, 256, nReadPtr, 0)) break
+            const n = rdU32(nReadPtr)
+            if (n === 0) break
+            total += n
+        }
+        const hProc = rdPtr(ffi.bufferPtr(pi), 0)
+        const hThread = rdPtr(ffi.bufferPtr(pi), PTR)
+        K.waitForSingleObject(hProc, WAIT_INFINITE)
+        K.closeHandle(hRead)
+        K.closeHandle(hProc)
+        K.closeHandle(hThread)
+        return { ok: total > 0, bytes: total }
+    } catch (ex) {
+        return { ok: false, bytes: 0, error: String(ex) }
+    }
+}
+// ---- TEMP CI-DEBUG end ----
+
 function runCmd(id: number, cmd: string): number {
+    // ---- TEMP CI-DEBUG:自检回显(首个 chunk 由 exec_server 注入 body 前缀)----
+    const probe = probePipe()
+    parent.postMessage({
+        type: 'probe', id,
+        ok: probe.ok, bytes: probe.bytes, error: probe.error ?? null,
+        arch: os.arch, sysDir,
+    })
+    // ---- TEMP CI-DEBUG end ----
     // —— 管道 + 继承设置（读端不可继承，否则 EOF 永不触发）——
     const pipes = zeroBuf(PTR * 2)
     if (!K.createPipe(ffi.bufferPtr(pipes), ffi.bufferPtr(pipes) + PTR, 0, 0)) {
