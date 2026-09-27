@@ -100,18 +100,6 @@ function zeroBuf(n: number): ArrayBuffer {
     return b
 }
 
-function hex4(p: number, off: number): string {
-    let s = ''
-    for (let i = 3; i >= 0; i--) s += ffi.readByte(p + off + i).toString(16).padStart(2, '0')
-    return '0x' + s
-}
-
-function hex8(p: number, off: number): string {
-    let s = ''
-    for (let i = 7; i >= 0; i--) s += ffi.readByte(p + off + i).toString(16).padStart(2, '0')
-    return '0x' + s
-}
-
 // GetSystemDirectoryW 拼 cmd.exe 全路径。
 // 探针实测（XP/Win7 均如此）：CreateProcessW 的 lpCommandLine 第一个 token 若是
 // 裸 "cmd.exe"，PATH 解析在本环境失败（err 267 ERROR_DIRECTORY / 123 ERROR_INVALID_NAME），
@@ -136,24 +124,16 @@ try {
 //   - 无 winpty.dll / winpty-agent.exe 依赖，纯 kernel32
 // 编码：无统一代码页转换，各程序输出原生字节（qwin= UTF-8、系统命令= GBK）。
 // 同步阻塞读循环（worker 线程自转），主线程事件循环不受影响。
-function runCmd(id: number, cmd: string, diagnose = false): number {
-    const diag: string[] = []
-    if (diagnose) diag.push(`[diag] proc64=${IS_PROC_64} ptr=${PTR} siSize=${L.siSize} hOut@${L.hOut} hErr@${L.hErr} sysdir=${sysDir}`)
-
+function runCmd(id: number, cmd: string): number {
     // —— 管道 + 继承设置（读端不可继承，否则 EOF 永不触发）——
     const pipes = zeroBuf(PTR * 2)
-    const rcPipe = K.createPipe(ffi.bufferPtr(pipes), ffi.bufferPtr(pipes) + PTR, 0, 0)
-    if (diagnose) diag.push(`[diag] CreatePipe rc=${rcPipe} gle=${K.getLastError()} hRead=${hex8(ffi.bufferPtr(pipes), 0)} hWrite=${hex8(ffi.bufferPtr(pipes), PTR)}`)
-    if (!rcPipe) {
-        if (diagnose) parent.postMessage({ type: 'data', id, chunk: new TextEncoder().encode(diag.join('\n') + '\n') })
+    if (!K.createPipe(ffi.bufferPtr(pipes), ffi.bufferPtr(pipes) + PTR, 0, 0)) {
         throw new Error('CreatePipe err=' + K.getLastError())
     }
     const hRead = rdPtr(ffi.bufferPtr(pipes), 0)
     const hWrite = rdPtr(ffi.bufferPtr(pipes), PTR)
-    const rSh = K.setHandleInformation(hWrite, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)
-    if (diagnose) diag.push(`[diag] SetHandleInfo(write) rc=${rSh} gle=${K.getLastError()}`)
-    const rSr = K.setHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0)
-    if (diagnose) diag.push(`[diag] SetHandleInfo(read) rc=${rSr} gle=${K.getLastError()}`)
+    K.setHandleInformation(hWrite, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)
+    K.setHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0)
 
     // —— STARTUPINFO（写端作为子进程 stdout/stderr）——
     const si = zeroBuf(L.siSize)
@@ -161,16 +141,12 @@ function runCmd(id: number, cmd: string, diagnose = false): number {
     u32At(ffi.bufferPtr(si), L.flags, STARTF_USESTDHANDLES)
     wrPtr(ffi.bufferPtr(si), L.hOut, hWrite)
     wrPtr(ffi.bufferPtr(si), L.hErr, hWrite)
-    if (diagnose) diag.push(`[diag] si cb=${rdU32(ffi.bufferPtr(si))} flags=${hex4(ffi.bufferPtr(si), L.flags)} hStdOut=${hex8(ffi.bufferPtr(si), L.hOut)} hStdErr=${hex8(ffi.bufferPtr(si), L.hErr)}`)
 
     const pi = zeroBuf(L.piSize)
     const cmdline = `${sysDir}\\cmd.exe /c ${cmd}`
-    const rcSpawn = K.createProcessW(null, cmdline, 0, 0, 1, 0, 0, null, ffi.bufferPtr(si), ffi.bufferPtr(pi))
-    if (diagnose) diag.push(`[diag] CreateProcessW rc=${rcSpawn} gle=${K.getLastError()} hProc=${hex8(ffi.bufferPtr(pi), 0)} hThread=${hex8(ffi.bufferPtr(pi), PTR)} pid=${rdU32(ffi.bufferPtr(pi) + L.pidAt)}`)
-    if (!rcSpawn) {
+    if (!K.createProcessW(null, cmdline, 0, 0, 1, 0, 0, null, ffi.bufferPtr(si), ffi.bufferPtr(pi))) {
         K.closeHandle(hRead)
         K.closeHandle(hWrite)
-        if (diagnose) parent.postMessage({ type: 'data', id, chunk: new TextEncoder().encode(diag.join('\n') + '\n') })
         throw new Error('CreateProcessW err=' + K.getLastError() + ' cmd=' + cmdline)
     }
     const hProc = rdPtr(ffi.bufferPtr(pi), 0)
@@ -183,17 +159,10 @@ function runCmd(id: number, cmd: string, diagnose = false): number {
     // —— 同步阻塞读循环（子进程树全退出、写端全关 -> EOF -> 收尾）——
     const buf = new Uint8Array(4096)
     const bufPtr = ffi.bufferPtr(buf.buffer)
-    let readCalls = 0
     for (;;) {
         u32At(nReadPtr, 0, 0)
-        const rcRead = K.readFile(hRead, bufPtr, 4096, nReadPtr, 0)
-        readCalls++
-        if (!rcRead) {
-            if (diagnose) diag.push(`[diag] ReadFile#${readCalls} rc=${rcRead} gle=${K.getLastError()} EOF`)
-            break
-        }
+        if (!K.readFile(hRead, bufPtr, 4096, nReadPtr, 0)) break
         const n = rdU32(nReadPtr)
-        if (diagnose) diag.push(`[diag] ReadFile#${readCalls} n=${n}`)
         if (n === 0) break
         parent.postMessage({ type: 'data', id, chunk: buf.slice(0, n) })
     }
@@ -204,20 +173,16 @@ function runCmd(id: number, cmd: string, diagnose = false): number {
     const code = rdI32(ffi.bufferPtr(ec))
     K.closeHandle(hRead)
     K.closeHandle(hProc)
-    if (diagnose) {
-        diag.push(`[diag] wait exit code=${code}`)
-        parent.postMessage({ type: 'data', id, chunk: new TextEncoder().encode(diag.join('\n') + '\n') })
-    }
     return code
 }
 
 parent.onmessage = (e) => {
-    const msg = e.data as { type: string; id: number; cmd?: string; diagnose?: boolean }
+    const msg = e.data as { type: string; id: number; cmd?: string }
     if (msg.type !== 'run' || typeof msg.cmd !== 'string') return
     let code = -1
     let error: string | null = null
     try {
-        code = runCmd(msg.id, msg.cmd, !!msg.diagnose)
+        code = runCmd(msg.id, msg.cmd)
     } catch (ex) {
         error = String(ex)
     }

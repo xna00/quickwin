@@ -14,7 +14,7 @@ interface ExecHandle {
     kill: () => void
 }
 
-function runInWorker(cmd: string, diagnose = false): ExecHandle {
+function runInWorker(cmd: string): ExecHandle {
     // worker 内以 "system32\cmd.exe /c <cmd>" 启动，保留 cmd shell 语义（内部命令/管道/for），
     // cmd.exe 路径由 worker 用 GetSystemDirectoryW 拼（CreateProcess 直接 PATH 解析在本环境失败）。
     // 子进程树由 CreateProcessW 返回的 pid 定位，超时/断开时 taskkill /T 递归杀掉。
@@ -111,7 +111,7 @@ function runInWorker(cmd: string, diagnose = false): ExecHandle {
     })
 
     try {
-        worker.postMessage({ type: 'run', id, cmd: spawnCmd, diagnose })
+        worker.postMessage({ type: 'run', id, cmd: spawnCmd })
     } catch (ex) {
         finish(() => {
             failReady(ex instanceof Error ? ex : new Error(String(ex)))
@@ -130,8 +130,8 @@ const server = createServer(async (req) => {
     if (req.method === 'POST' && path === '/exec') {
         let out: ExecHandle
         try {
-            const body = await req.json() as { cmd: string; diagnose?: boolean }
-            out = runInWorker(body.cmd, !!body.diagnose)
+            const body = await req.json() as { cmd: string }
+            out = runInWorker(body.cmd)
         } catch (ex) {
             return new Response(JSON.stringify({ error: 'setup: ' + String(ex) }), {
                 status: 500,
