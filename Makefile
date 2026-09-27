@@ -433,17 +433,15 @@ npm-pkg: js wasm
 	cp $(BUILD_DIR)/main.js $(NPM_PKG_DIR)/main.js
 	@echo "npm package created at $(NPM_PKG_DIR)"
 
-# 优先 32-bit（XP 可跑）；否则用已有的 64-bit（CI win7 只编 cc64）。
-# 两者都没有才递归 make cc32（保持本地 clean 后 make exec_server 可用）。
+# exec_server 恒定用 32-bit（qwin-x86.exe）。pipe worker 的 CreateProcess/管道
+# 链路只在 32 位 exec_server 上验证过；64 位 exec_server（CI win7 曾因只编 cc64
+# 而 cp 到 qwin-x64.exe）下子进程 stdout 捕获会失效（exit 0 但 body 全空）。
+# 缺 x86 产物时递归 make cc32（保持本地 clean 后 make exec_server 可用）。
 exec_server: js
-	@if [ ! -f $(BUILD_DIR)/$(TARGET_NAME_32) ] && [ ! -f $(BUILD_DIR)/$(TARGET_NAME) ]; then \
+	@if [ ! -f $(BUILD_DIR)/$(TARGET_NAME_32) ]; then \
 		$(MAKE) cc32; \
 	fi
-	@if [ -f $(BUILD_DIR)/$(TARGET_NAME_32) ]; then \
-		cp $(BUILD_DIR)/$(TARGET_NAME_32) $(BUILD_DIR)/exec_server.exe; \
-	else \
-		cp $(BUILD_DIR)/$(TARGET_NAME) $(BUILD_DIR)/exec_server.exe; \
-	fi
+	@cp $(BUILD_DIR)/$(TARGET_NAME_32) $(BUILD_DIR)/exec_server.exe
 	node scripts/embed-js.mjs --exe $(BUILD_DIR)/exec_server.exe \
 	  --js $(BUILD_DIR)/examples/exec_server.js --compress
 
