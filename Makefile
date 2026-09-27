@@ -433,15 +433,19 @@ npm-pkg: js wasm
 	cp $(BUILD_DIR)/main.js $(NPM_PKG_DIR)/main.js
 	@echo "npm package created at $(NPM_PKG_DIR)"
 
-# exec_server 恒定用 32-bit（qwin-x86.exe）。pipe worker 的 CreateProcess/管道
+# exec_server 默认恒定用 32-bit（qwin-x86.exe）。pipe worker 的 CreateProcess/管道
 # 链路只在 32 位 exec_server 上验证过；64 位 exec_server（CI win7 曾因只编 cc64
 # 而 cp 到 qwin-x64.exe）下子进程 stdout 捕获会失效（exit 0 但 body 全空）。
 # 缺 x86 产物时递归 make cc32（保持本地 clean 后 make exec_server 可用）。
+# EXEC_ARCH=x64 时改用 qwin-x64.exe（诊断 64 位链路用，缺产物时递归 cc64）。
 exec_server: js
-	@if [ ! -f $(BUILD_DIR)/$(TARGET_NAME_32) ]; then \
-		$(MAKE) cc32; \
+	@if [ "$(EXEC_ARCH)" = "x64" ]; then \
+		if [ ! -f $(BUILD_DIR)/$(TARGET_NAME) ]; then $(MAKE) cc64; fi; \
+		cp $(BUILD_DIR)/$(TARGET_NAME) $(BUILD_DIR)/exec_server.exe; \
+	else \
+		if [ ! -f $(BUILD_DIR)/$(TARGET_NAME_32) ]; then $(MAKE) cc32; fi; \
+		cp $(BUILD_DIR)/$(TARGET_NAME_32) $(BUILD_DIR)/exec_server.exe; \
 	fi
-	@cp $(BUILD_DIR)/$(TARGET_NAME_32) $(BUILD_DIR)/exec_server.exe
 	node scripts/embed-js.mjs --exe $(BUILD_DIR)/exec_server.exe \
 	  --js $(BUILD_DIR)/examples/exec_server.js --compress
 

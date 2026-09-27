@@ -51,6 +51,17 @@ if ! curl -sf -m 2 http://127.0.0.1:18923/ >/dev/null 2>&1; then
     echo "serve_test 启动失败"; exit 1; }
 fi
 
+# ── CI-DEBUG:diagnose 通道（worker 装配步骤逐步回显到 body 尾部）──
+# 用于 64 位 exec_server 取证；正常时 cat 只多出尾部几行 [diag]，不干扰 Summary。
+DIAG_BODY=$(mktemp)
+PB=$(printf '%s' '{"cmd":"echo PROBE_DIAG","diagnose":true}')
+curl -sS -m 60 -o "$DIAG_BODY" -X POST "http://127.0.0.1:${FWD}/exec" \
+  -H 'Content-Type: application/json' --data "$PB" || true
+echo "--- DIAG(BODY) ---"
+cat "$DIAG_BODY"
+rm -f "$DIAG_BODY"
+echo "--- DIAG END ---"
+
 BODY=$(printf '%s' "{\"cmd\":\"$CMD\"}")
 echo "POST :${FWD}/exec  cmd=$CMD"
 
