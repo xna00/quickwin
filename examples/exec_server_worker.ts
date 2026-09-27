@@ -78,14 +78,19 @@ function rdI32(p: number): number {
 
 function rdPtr(p: number, off: number): number {
     if (PTR === 4) return rdU32(p + off)
-    let v = 0
-    for (let i = 0; i < 8; i++) v |= ffi.readByte(p + off + i) << (8 * i)
-    return v >>> 0
+    // 64 位：JS 位运算移位量取 mod 32（`<< 32` 等价 `<< 0`），
+    // 不能逐 8 位移位拼 8 字节；拆高/低两个 u32 各读一次再合成。
+    const lo = rdU32(p + off)
+    const hi = rdU32(p + off + 4)
+    return hi === 0 ? lo : hi * 0x100000000 + lo
 }
 
 function wrPtr(p: number, off: number, t: number): void {
     if (PTR === 4) { u32At(p, off, t >>> 0); return }
-    for (let i = 0; i < 8; i++) ffi.writeByte(p + off + i, (t >>> (8 * i)) & 0xff)
+    // 同上：`t >>> 32` 等价 `t >>> 0`，会把手柄/地址低 32 位重复写进高 32 位，
+    // 导致 SI 里 hStdOutput/hStdError 变成 0x000000f4000000f4 这类非法 64 位句柄。
+    u32At(p, off, t >>> 0)
+    u32At(p, off + 4, (t / 0x100000000) >>> 0)
 }
 
 function zeroBuf(n: number): ArrayBuffer {
