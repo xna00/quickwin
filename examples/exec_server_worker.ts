@@ -26,19 +26,30 @@ try {
         closeHandle: bind('kernel32.dll', 'CloseHandle', 'ptr -> i32'),
         getLastError: bind('kernel32.dll', 'GetLastError', ' -> u32'),
         getSystemDirectoryW: bind('kernel32.dll', 'GetSystemDirectoryW', 'ptr u32 -> u32'),
+        getSystemInfo: bind('kernel32.dll', 'GetSystemInfo', 'ptr -> void'),
     }
 } catch (ex) {
     diagFile('K-BIND-FAIL: ' + String(ex))
     throw ex
 }
 
-const PTR = os.arch === 'x64' ? 8 : 4
+// 布局长度由「调用进程位数」决定（CreateProcessW 以调用进程位数解析 STARTUPINFO）。
+// 不能用 os.arch：它报告的是系统原生架构，64 位 Win7 上运行 32 位 exec_server 时
+// os.arch='x64'，会误选 64 位布局，使 hStdOutput/hStdError 落在错误偏移，
+// 子进程全部 stdout/stderr 丢失（现象：exit code 0 但 body 全空）。
+// GetSystemInfo 报告进程视角架构（WOW64 下返回 INTEL=0），用它判定。
+const sysinfoBuf = new ArrayBuffer(64)
+K.getSystemInfo(ffi.bufferPtr(sysinfoBuf))
+const sysinfoPtr = ffi.bufferPtr(sysinfoBuf)
+const wArch = ffi.readByte(sysinfoPtr) | (ffi.readByte(sysinfoPtr + 1) << 8)
+const IS_PROC_64 = wArch === 9 /* PROCESSOR_ARCHITECTURE_AMD64 */
+const PTR = IS_PROC_64 ? 8 : 4
 const HANDLE_FLAG_INHERIT = 0x1
 const STARTF_USESTDHANDLES = 0x100
 const WAIT_INFINITE = 0xffffffff
-// STARTUPINFOW 字段偏移随字宽变化：x64 指针字段 8 字节（对齐后整体 104B），x86 68B。
-const L = PTR === 8 ? { flags: 60, hOut: 88, hErr: 96, siSize: 104, piSize: 24, pidAt: 16 }
-                    : { flags: 44, hOut: 60, hErr: 64, siSize: 68, piSize: 16, pidAt: 8 }
+// STARTUPINFOW 字段偏移随进程位数变化：x64 指针字段 8 字节（对齐后整体 104B），x86 68B。
+const L = IS_PROC_64 ? { flags: 60, hOut: 88, hErr: 96, siSize: 104, piSize: 24, pidAt: 16 }
+                     : { flags: 44, hOut: 60, hErr: 64, siSize: 68, piSize: 16, pidAt: 8 }
 
 const parent = os.Worker.parent
 const nRead = new ArrayBuffer(4)
@@ -164,7 +175,7 @@ function runCmd(id: number, cmd: string): number {
     parent.postMessage({
         type: 'probe', id,
         ok: probe.ok, bytes: probe.bytes, error: probe.error ?? null,
-        arch: os.arch, sysDir,
+        arch: os.arch, proc: IS_PROC_64 ? 'x64' : 'ia32', sysDir,
     })
     // ---- TEMP CI-DEBUG end ----
     // —— 管道 + 继承设置（读端不可继承，否则 EOF 永不触发）——
