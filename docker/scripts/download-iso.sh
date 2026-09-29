@@ -6,7 +6,7 @@ set -e
 #  用法: ./download-iso.sh <xp|7u|10|11|tiny11> [目标目录]
 #
 #  镜像源: download.testip.xyz (主), archive.org (备); 10/11 仍用 bobpony/files.dog
-#           tiny11 走 SourceForge
+#           tiny11 走 SourceForge (主), archive.org 备源
 #  下载完成后校验 SHA256
 # ============================================================
 
@@ -83,12 +83,15 @@ get_iso_info() {
             ;;
         "tiny11" )
             FILE="Tiny11Core-25H2-26200.8037-English-Pro-2026-08-23.iso"
-            SIZE="3175204864"
-            SHA="288df436eabf7ab5715df41ad83933b5b3bc9c94bcce03204a01eb0106c44c84"
+            SIZE=""
+            SHA=""
             # SourceForge 对所有镜像主机都先回一张 HTML 中转页，真实地址藏在
             # <noscript> 的 meta refresh 里（带时效签名 ts=）。必须靠 resolve_url 解析。
+            # 注意: SF 对数据中心 IP（如 GitHub runner）会被 Cloudflare bot 防护拦，
+            # 故备源为 archive.org 上的 NTDEV 官方镜像（文件名/校验不同，跳过 SHA）。
             URLS=(
                 "https://downloads.sourceforge.net/project/tiny-11-releases/Tiny11Core-Pro-25H2/${FILE}"
+                "https://archive.org/download/tiny11_25H2/tiny11core_25H2_Nov25.iso"
             )
             ;;
         * )
