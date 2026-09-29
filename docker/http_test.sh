@@ -19,7 +19,7 @@ FILTER="${2:-}"
 case "$VM" in
   win7)  FWD=8007 ;;
   xp)    FWD=8005 ;;
-  win11) FWD=8009 ;;
+  win11) FWD=8011 ;;
   *) echo "未知 VM: $VM（可选 win7|xp|win11）"; exit 1 ;;
 esac
 

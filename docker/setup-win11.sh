@@ -126,7 +126,7 @@ echo "QEMU 已启动 (PID=$QEMU_PID)，模拟按键以通过 'Press any key to b
 (
     for i in $(seq 1 20); do
         sleep 1
-        printf "sendkey ret\n" | socat - UNIX-CONNECT:/tmp/qemu-monitor-win11.sock 2>/dev/null
+        printf "sendkey ret\n" | socat - UNIX-CONNECT:/tmp/qemu-monitor-win11.sock >/dev/null 2>&1
     done
 ) &
 KEY_PID=$!
@@ -144,7 +144,7 @@ echo ""
 
 # ── Step 5: 清理 swtpm + 安装盘 → ready 盘 ──
 kill "$KEY_PID" 2>/dev/null || true
-kill "$(cat "$TPM_PID")" 2>/dev/null || true
+kill "$(cat "$TPM_PID" 2>/dev/null)" 2>/dev/null || true
 rm -f "$TPM_PID"
 mv "$DISK" "$SNAPSHOT"
 echo "安装完成，耗时 $(( $(date +%s) - START_TIME ))s"

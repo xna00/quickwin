@@ -6,7 +6,8 @@ cd "$(dirname "$0")"
 #  Bare QEMU — 常驻模式（win7 / xp / win11 共用）
 #  从 snapshot 启动，bootstrap.bat 挂 SMB 并跑 run.bat；
 #  run.bat 只做防火墙/portproxy + 启动 exec_server，不跑测试。
-#  测试经 hostfwd HTTP 下发（win7:8007 / xp:8005 / win11:8009 → guest:8080）。
+#  测试经 hostfwd HTTP 下发（win7:8007 / xp:8005 / win11:8011 → guest:8080）。
+#  端口助记：HTTP = 8000+版本号，noVNC = 6000+版本号（8009/6009 留空，Win9 未发布）。
 #
 #  用法: ./run.sh <win7|xp|win11> [--fresh] [--stop] [--restart]
 #    默认：已在跑则只做健康检查后退出（真常驻）
@@ -40,7 +41,7 @@ case "$VM" in
     SNAPSHOT="$(pwd)/snapshots/win11_ready.qcow2"
     OVERLAY="$(pwd)/snapshots/win11_test.qcow2"
     MONITOR=/tmp/qemu-monitor-win11.sock
-    MEM=8192; SMP=4; NETDEV=e1000e; FWD=8009
+    MEM=8192; SMP=4; NETDEV=e1000e; FWD=8011
     # UEFI + Secure Boot + TPM 2.0：需 OVMF_secboot 固件（pflash）+ swtpm
     # 注意: 新版 edk2-ovmf 的 2M OVMF 无 TPM 支持，Windows 11 会报 TPM 2.0 缺失；
     #       必须用 4M 版（qcow2 镜像）OVMF_CODE_4M.secboot.qcow2 / OVMF_VARS_4M.secboot.qcow2。
