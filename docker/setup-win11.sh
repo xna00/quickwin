@@ -42,7 +42,7 @@ fi
 ISO="$(ls iso/win11/*.iso 2>/dev/null | head -1)"
 if [ -z "$ISO" ]; then
     echo "ISO 不存在，尝试自动下载..."
-    scripts/download-iso.sh 11 iso/win11
+    scripts/download-iso.sh tiny11 iso/win11
     ISO="$(ls iso/win11/*.iso 2>/dev/null | head -1)"
 fi
 [ -n "$ISO" ] || { echo "找不到 ISO: iso/win11/*.iso"; exit 1; }
