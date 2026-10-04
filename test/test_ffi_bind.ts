@@ -3,8 +3,15 @@ import * as gui from 'gui'
 import * as ffi from 'ffi'
 import * as os from 'os'
 import { Tester } from './test_helper.js'
-import { bind, bindLib, closure } from '../lib/ffi/bind.js'
+import { bind, bindLib, closure, type Ptr } from '../lib/ffi/bind.js'
 import { structFromPtr, struct } from '../lib/ffi/struct.js'
+
+// 编译期断言工具（仅类型层，运行时无开销）
+type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends (<G>() => G extends B ? 1 : 2) ? true : false
+function expectType<T extends true>(_value?: T): void {}
+// 从签名串推导参数元组 / 返回类型（纯类型层，不执行 bind）
+type ParamsOf<S extends string> = Parameters<ReturnType<typeof bind<S, {}>>>
+type RetOf<S extends string> = ReturnType<ReturnType<typeof bind<S, {}>>>
 
 // 与 callPacked 相同的槽宽布局，供「ffiCall 直驱 closure」打包
 function packArgs(kinds: string[], vals: (number | bigint)[]): ArrayBuffer {
@@ -168,6 +175,25 @@ export const suite = {
             errBare = String(e)
         }
         t.checkTrue('bare "ptr" token rejected at bind time', errBare.includes('rejected'))
+
+        // 编译期：token → 参数/返回类型。锁住「裸 ptr / 拼错 token 静默漏成 number|null」的回归。
+        // 根因：`never extends X` 恒真，故 ArgToken/RetToken 必须在原始 token 上把关、
+        // 且裸 'ptr' 需要显式 never 分支（删掉那行 'ptr' 就会漏成 number|null）。
+        expectType<Equal<ParamsOf<'ptr <VOID>ptr -> i32'>[0], never>>()
+        expectType<Equal<ParamsOf<'i3z <VOID>ptr -> i32'>[0], never>>()
+        expectType<Equal<ParamsOf<'void <VOID>ptr -> i32'>[0], never>>()
+        expectType<Equal<ParamsOf<'<>ptr -> i32'>[0], number | null>>()
+        expectType<Equal<ParamsOf<'int -> i32'>[0], number>>()
+        expectType<Equal<ParamsOf<'DWORD -> i32'>[0], number>>()
+        expectType<Equal<ParamsOf<'u64n -> i32'>[0], bigint>>()
+        expectType<Equal<ParamsOf<'<VOID>ptr -> i32'>[0], ArrayBuffer | null>>()
+        expectType<Equal<ParamsOf<'LPCWSTR -> i32'>[0], string | null>>()
+        expectType<Equal<RetOf<'<>ptr -> ptr'>, never>>()
+        expectType<Equal<RetOf<'<>ptr -> i3z'>, never>>()
+        expectType<Equal<RetOf<'<>ptr -> <VOID>ptr'>, never>>()
+        expectType<Equal<RetOf<'<>ptr -> void'>, void>>()
+        expectType<Equal<RetOf<'<>ptr -> i32'>, number>>()
+        expectType<Equal<RetOf<'<>ptr -> <RECT>ptr'>, Ptr<'RECT'> | null>>()
 
         t.section('bigint 64-bit kinds: u64n / i64n')
         // 用 msvcrt 的 64 位字符串转换：win11(x64) kernel32 不导出 Interlocked*64

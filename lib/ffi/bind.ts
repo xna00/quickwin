@@ -3,7 +3,7 @@ import * as win from 'win'
 import * as os from 'os'
 import * as std from 'std'
 import '../text-codec.js'
-import { type Kind, type Norm, type Ptr, PTR_SIZE, normKind, normToken, ptrLayoutName } from './ctype.js'
+import { type Keys, type Kind, type Norm, type Ptr, PTR_SIZE, normKind, normToken, ptrLayoutName } from './ctype.js'
 
 // 标量 kind / C 别名表见 ./ctype.js；此处透传其公共类型与函数，保持 bind.js 深导入面不变。
 export * from './ctype.js'
@@ -63,12 +63,14 @@ type PtrArgType<N extends string, L> =
         : N extends 'WCHAR' ? string | null
             : Ptr<N> | null | (N extends keyof L ? LayoutValue<L[N]> : never)
 
+// 把关放在原始 token（T）上而非 Norm<T>：非法 token 会让 Norm<T> 塌成 never，
+// 而 `never extends '<>ptr'` 恒真，会静默放行成 number|null。
 // 裸 'ptr' 编译期拒绝（never）；'<>ptr' → 裸地址；<NAME>ptr → 布局；否则标量。
 type ArgToken<T extends string, L> =
-    Norm<T> extends '<>ptr' ? number | null
+    T extends Keys ? (Norm<T> extends '<>ptr' ? number | null
         : Norm<T> extends 'ptr' ? never
         : Norm<T> extends `<${infer N}>ptr` ? PtrArgType<N, L>
-        : ArgTypeOf[Norm<T> & keyof ArgTypeOf]
+        : ArgTypeOf[Norm<T> & keyof ArgTypeOf]) : never
 
 type ArgsOf<T extends string, L> =
     T extends '' ? []
@@ -77,14 +79,16 @@ type ArgsOf<T extends string, L> =
 
 type _Args<S extends string, L = {}> = S extends `${infer P} -> ${string}` ? ArgsOf<P, L> : never
 
+// 把关放在原始 token（T）上而非 Norm<T>：非法 token 会让 Norm<T> 塌成 never，
+// 而 `never extends '<>ptr'` 恒真，会静默放行成 number|null。
 // 返回位：'<>ptr' → number|null（裸地址）；用户 <STRUCT>ptr → Ptr<N>（不解码）；
 // VOID/WCHAR 返回非法；裸 'ptr' 编译期拒绝（never）。
 type RetToken<T extends string> =
-    Norm<T> extends '<>ptr' ? number | null
+    T extends Keys ? (Norm<T> extends '<>ptr' ? number | null
         : Norm<T> extends 'ptr' ? never
         : Norm<T> extends `<${infer N}>ptr`
             ? N extends 'VOID' | 'WCHAR' ? never : Ptr<N> | null
-        : RetTypeOf[Norm<T> & keyof RetTypeOf]
+        : RetTypeOf[Norm<T> & keyof RetTypeOf]) : never
 
 type _Ret<S extends string> = S extends `${string} -> ${infer R}` ? RetToken<R> : never
 

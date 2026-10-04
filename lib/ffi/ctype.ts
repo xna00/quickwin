@@ -16,7 +16,7 @@ import * as os from 'os'
 // §1 kind 词汇表
 //   用户面（可写进 CType）：CInteger | CFloat | CPointer<string> = FieldKind。
 //     指针必须带角括号 —— '<>ptr' 裸地址，'<NAME>ptr' 带名（品牌见 §2 Ptr<T>）。
-//   内部（lower 后运行时 IR 用）：BasicKind = CInteger|CFloat 的超集
+//   内部（lower 后运行时 IR 用）：Kind = CInteger|CFloat 的超集
 //     （多 'void'、裸 'ptr'、u64n/i64n 三个内部专用档）。裸 'ptr' 用户面已禁用、内部保留。
 //   本表是 bind 与 struct 共用的规范 kind 集合；C/Windows typedef 别名表见 §3。
 // ============================================================
@@ -29,18 +29,20 @@ export type CPointer<T extends string = ''> = `<${T}>ptr`
 // 导致 '<RECT>ptr' 等具体指针无法赋给 CType。
 export type FieldKind = CInteger | CFloat | CPointer<string>
 
-// 内部 kind 全集 = 用户面标量（CInteger|CFloat）+ 裸 'ptr' + 'void'，再加两个内部专用档：
+// 内部 kind 全集：KINDS 元组是唯一手写清单，Kind 与 KIND_SET 都从它派生
+// （此前 BasicKind 类型与 KIND_SET 列表各自抄了一遍这 14 个字符串）。
+//   = 用户面标量（CInteger|CFloat）+ 'void' + 裸 'ptr' + 两个内部专用档：
 //   u64n/i64n —— 无符号 / 有符号 64 位窄读（不是 C 类型，故不在 CInteger 里；u64/i64 是原生值）。
 // 裸 'ptr' 用户面已禁用，内部保留：它是唯一随架构变宽的标量档（见 §2 PTR_SIZE）。
 // 注意不能从 CInteger 派生 —— u64n/i64n 不在其中。
-type BasicKind = 'void' | 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64' | 'u64n' | 'i64n' | 'f32' | 'f64' | 'ptr'
-export type Kind = BasicKind
-
-// 运行时 kind 集合：KIND_SET<Kind> 让列表里的拼写错误在定义处就报错。
-const KIND_SET: ReadonlySet<Kind> = new Set<Kind>([
+const KINDS = [
     'void', 'u8', 'i8', 'u16', 'i16', 'u32', 'i32',
     'u64', 'i64', 'u64n', 'i64n', 'f32', 'f64', 'ptr',
-])
+] as const
+export type Kind = (typeof KINDS)[number]
+
+// 运行时 kind 集合，供 normKind 校验。
+const KIND_SET: ReadonlySet<Kind> = new Set(KINDS)
 
 // ============================================================
 // §2 指针布局与品牌
@@ -79,8 +81,13 @@ const C_ALIAS = {
     LPCWSTR: '<WCHAR>ptr', PCWSTR: '<WCHAR>ptr', LPWSTR: '<WCHAR>ptr',
 } as const satisfies Record<string, FieldKind>
 
-// token 的类型层归一（运行时对应 normToken）。
-export type Norm<T extends string> = T extends keyof typeof C_ALIAS ? (typeof C_ALIAS)[T] : T
+// 合法 token 全集 = typedef 别名 ∪ 规范 kind ∪ 指针 token。
+// 裸 'ptr' 是合法内部 Kind，但不是合法用户 token —— 由 ArgToken/RetToken 显式拒绝。
+export type Keys = keyof typeof C_ALIAS | Kind | CPointer<string>
+
+// token 的类型层归一（运行时对应 normToken）：别名查表；
+// 已是规范 kind / 指针 token 者原样返回（这两类不需要映射）。
+export type Norm<K extends Keys> = K extends keyof typeof C_ALIAS ? (typeof C_ALIAS)[K] : K
 
 // token 归一：C/Windows typedef 别名 → 规范形式（'HANDLE' → '<>ptr' 等）；非别名原样返回。
 export function normToken(t: string): string {
