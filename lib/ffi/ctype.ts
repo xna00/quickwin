@@ -63,7 +63,9 @@ export type CUnion = { tag: 'union'; member: readonly Member[], pack?: number }
 
 // C / Windows typedef → 规范 token。Windows x86/x64 均 LLP64：int/long 恒 32 位，
 // long long 恒 64 位；LONG_PTR/WPARAM/SIZE_T 等指针 typedef 一律归一到 '<>ptr'（裸地址）。
-// 单源常量（as const）：类型层 CTypeOf = typeof C_ALIAS 派生，无需手同步。
+// 单源常量（as const satisfies）：类型层 CTypeOf = typeof C_ALIAS 派生，无需手同步；
+// satisfies 让 value 也在定义处被校验（仅 as const 会静默放过 'u32' 写成 'u3z'，
+// 错误推迟到调用点变成诡异的 never 参数）。
 // LPCWSTR 等宽字符串 typedef 归一到 '<WCHAR>ptr' 指针布局。
 const C_ALIAS = {
     int: 'i32', long: 'i32', short: 'i16', char: 'i8', float: 'f32', double: 'f64',
@@ -74,7 +76,7 @@ const C_ALIAS = {
     HANDLE: '<>ptr', HWND: '<>ptr', HDC: '<>ptr', HMODULE: '<>ptr', HFONT: '<>ptr', HBRUSH: '<>ptr',
     HICON: '<>ptr', HBITMAP: '<>ptr', LPVOID: '<>ptr', LPCVOID: '<>ptr',
     LPCWSTR: '<WCHAR>ptr', PCWSTR: '<WCHAR>ptr', LPWSTR: '<WCHAR>ptr',
-} as const
+} as const satisfies Record<string, FieldKind>
 
 export type CTypeOf = typeof C_ALIAS
 
