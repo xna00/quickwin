@@ -1,10 +1,10 @@
 import '../text-codec.js'
 import * as ffi from 'ffi'
 import {
-    PTR_SIZE, type StructPtr, type Ptr, type CPointer,
-    type CInteger, type CFloat,
+    PTR_SIZE, type StructPtr, type Ptr,
     type CType, type CString, type CArray,
     type CStruct, type CUnion, type Member, type Encoding,
+    C_Number,
 } from './ctype.js'
 
 // ============================================================
@@ -25,8 +25,8 @@ import {
 // 指针成员：'<>ptr' → number（T='' 品牌退化）；'<NAME>ptr' → Ptr<NAME>（品牌 number）。
 // 该品牌 number 可直接喂 bind 的 <NAME>ptr 形参（裸地址透传）。
 type ValOf<C extends CType> =
-    C extends CPointer<infer T> ? Ptr<T>
-    : C extends CInteger | CFloat ? number
+    C extends `<${infer T}>ptr` ? Ptr<T>
+    : C extends C_Number ? number
     : C extends CString ? string
     : C extends CArray ? Tuple<ValOf<C['ctype']>, C['length']>
     : C extends CStruct | CUnion ? ShapeOfC<C['member']>
@@ -55,10 +55,10 @@ type FieldShape<M extends Member> =
 // ============================================================
 
 // lower 后指针统一归一为内部 kind 'ptr'（用户面写 '<>ptr' 裸地址或 '<NAME>ptr' 带名指针）。
-type RuntimeKind = CInteger | CFloat | 'ptr'
+type RuntimeKind = C_Number | 'ptr'
 
 // kind → size/align（不含指针：指针统一 PTR_SIZE，见 lower）。
-const SizeAlign: Record<CInteger | CFloat, number> = {
+const SizeAlign: Record<C_Number, number> = {
     u8: 1, i8: 1,
     u16: 2, i16: 2,
     u32: 4, i32: 4,
@@ -124,17 +124,21 @@ function isBarePtr(t: string): t is 'ptr' {
     return t === 'ptr'
 }
 
+function isPtr(t: string): t is `<${string}>ptr` {
+    return PTR_CTYPE_RE.test(t)
+}
+
 // CType → { size, align, FieldType }：聚合递归进 computeStructLayout。
 // 每个子树每层只 lower 一次（array 元素复用同一结果），不再分别算 size 和 type。
 function lower(t: CType): { size: number, align: number, type: FieldType } {
     if (typeof t === 'string') {
         if (isBarePtr(t))
             throw new Error(`ffi-struct: bare "ptr" rejected — use "<>ptr" for a raw address or "<NAME>ptr" for a typed pointer`)
-        if (PTR_CTYPE_RE.test(t))
+        if (isPtr(t))
             return { size: PTR_SIZE, align: PTR_SIZE, type: { tag: 'basic', kind: 'ptr' } }
-        const s = SizeAlign[t as CInteger | CFloat]
+        const s = SizeAlign[t]
         if (s === undefined) throw new Error(`ffi-struct: unknown kind "${t}"`)
-        return { size: s, align: s, type: { tag: 'basic', kind: t as CInteger | CFloat } }
+        return { size: s, align: s, type: { tag: 'basic', kind: t } }
     }
     if (t.tag === 'string') {
         if (!Number.isInteger(t.length) || t.length < 1)

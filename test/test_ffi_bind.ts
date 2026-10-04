@@ -3,8 +3,9 @@ import * as gui from 'gui'
 import * as ffi from 'ffi'
 import * as os from 'os'
 import { Tester } from './test_helper.js'
-import { bind, bindLib, closure, type Ptr } from '../lib/ffi/bind.js'
+import { bind, bindLib, closure} from '../lib/ffi/bind.js'
 import { structFromPtr, struct } from '../lib/ffi/struct.js'
+import { Ptr } from '../lib/ffi/ctype.js'
 
 // 编译期断言工具（仅类型层，运行时无开销）
 type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends (<G>() => G extends B ? 1 : 2) ? true : false
@@ -186,11 +187,11 @@ export const suite = {
         expectType<Equal<ParamsOf<'int -> i32'>[0], number>>()
         expectType<Equal<ParamsOf<'DWORD -> i32'>[0], number>>()
         expectType<Equal<ParamsOf<'u64n -> i32'>[0], bigint>>()
-        expectType<Equal<ParamsOf<'<VOID>ptr -> i32'>[0], ArrayBuffer | null>>()
-        expectType<Equal<ParamsOf<'LPCWSTR -> i32'>[0], string | null>>()
+        expectType<Equal<ParamsOf<'<VOID>ptr -> i32'>[0], ArrayBuffer | Ptr<"VOID"> | null>>()
+        expectType<Equal<ParamsOf<'LPCWSTR -> i32'>[0], string | Ptr<"WCHAR"> | null>>()
         expectType<Equal<RetOf<'<>ptr -> ptr'>, never>>()
         expectType<Equal<RetOf<'<>ptr -> i3z'>, never>>()
-        expectType<Equal<RetOf<'<>ptr -> <VOID>ptr'>, never>>()
+        expectType<Equal<RetOf<'<>ptr -> <VOID>ptr'>, Ptr<"VOID"> | null>>()
         expectType<Equal<RetOf<'<>ptr -> void'>, void>>()
         expectType<Equal<RetOf<'<>ptr -> i32'>, number>>()
         expectType<Equal<RetOf<'<>ptr -> <RECT>ptr'>, Ptr<'RECT'> | null>>()

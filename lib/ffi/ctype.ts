@@ -20,14 +20,13 @@ import * as os from 'os'
 //     （多 'void'、裸 'ptr'、u64n/i64n 三个内部专用档）。裸 'ptr' 用户面已禁用、内部保留。
 //   本表是 bind 与 struct 共用的规范 kind 集合；C/Windows typedef 别名表见 §3。
 // ============================================================
-export type CInteger = 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64'
-export type CFloat = 'f32' | 'f64'
-export type CPointer<T extends string = ''> = `<${T}>ptr`
+// export type CInteger = 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64'
+// export type CFloat = 'f32' | 'f64'
+// type CPointer<T extends string = ''> = `<${T}>ptr`
 
 // 用户面标量全集：可作 struct 成员 type / bind 签名 token。
 // 注意用 CPointer<string>（非默认 ''）：默认参数会把它收缩成字面量 '<>ptr'，
 // 导致 '<RECT>ptr' 等具体指针无法赋给 CType。
-export type FieldKind = CInteger | CFloat | CPointer<string>
 
 // 内部 kind 全集：KINDS 元组是唯一手写清单，Kind 与 KIND_SET 都从它派生
 // （此前 BasicKind 类型与 KIND_SET 列表各自抄了一遍这 14 个字符串）。
@@ -53,9 +52,10 @@ export const PTR_SIZE = os.arch === 'x64' ? 8 : 4
 // 指针的编译期品牌（运行期擦除，值就是 number）：'<>ptr'（T=''）直接退化成 number，
 // 带名 '<NAME>ptr' 提供名义约束 —— 不同 <NAME>ptr 不可互串，裸 number 不可传给 <NAME>ptr。
 declare const ptrBrand: unique symbol
-export type Ptr<T extends string = ''> =
-    [T] extends [''] ? number : number & { readonly [ptrBrand]: T }
-// 旧名别名（bind 参数/返回、StructAlloc.ptr 仍在用，保持兼容）。
+export type Ptr<T extends string> =
+    T extends '' ? number : number & { readonly [ptrBrand]: T }
+
+type NullablePtr<T extends string> = (T extends '' ? number : number & { readonly [ptrBrand]: T }) | null
 export type StructPtr<N extends string> = Ptr<N>
 
 // <NAME>ptr 指针布局的 NAME。
@@ -70,7 +70,17 @@ const PTR_LAYOUT_RE = /^<(\w+)>ptr$/
 //   satisfies 让 value 也在定义处被校验（仅 as const 会静默放过 'u32' 写成 'u3z'，
 //   错误推迟到调用点变成诡异的 never 参数）。
 // ============================================================
+
+export type C_Number = 'u8' | 'i8' | 'u16' | 'i16'
+    | 'u32' | 'i32' | 'u64' | 'i64' | 'f32' | 'f64'
+
+type C_Basic_Type = 'void' | C_Number | 'u64n' | 'i64n'
+
+type C_Type = C_Basic_Type | `<${string}>ptr`
+
 const C_ALIAS = {
+    void: 'void', u8: 'u8', i8: 'i8', u16: 'u16', i16: 'i16', u32: 'u32', i32: 'i32',
+    u64: 'u64', i64: 'i64', f32: 'f32', f64: 'f64', i64n: 'i64n', u64n: 'u64n',
     int: 'i32', long: 'i32', short: 'i16', char: 'i8', float: 'f32', double: 'f64',
     DWORD: 'u32', UINT: 'u32', ULONG: 'u32', LONG: 'i32', BOOL: 'i32', HRESULT: 'i32',
     SHORT: 'i16', USHORT: 'u16', BYTE: 'u8', WCHAR: 'u16',
@@ -79,15 +89,33 @@ const C_ALIAS = {
     HANDLE: '<>ptr', HWND: '<>ptr', HDC: '<>ptr', HMODULE: '<>ptr', HFONT: '<>ptr', HBRUSH: '<>ptr',
     HICON: '<>ptr', HBITMAP: '<>ptr', LPVOID: '<>ptr', LPCVOID: '<>ptr',
     LPCWSTR: '<WCHAR>ptr', PCWSTR: '<WCHAR>ptr', LPWSTR: '<WCHAR>ptr',
-} as const satisfies Record<string, FieldKind>
+} as const satisfies Record<string, C_Type>
+
+export type C_ALIAS_MAP = typeof C_ALIAS
+
+export type C_TypeJsTypeMap = {
+    u8: number; i8: number; u16: number; i16: number
+    u32: number; i32: number; u64: number; i64: number
+    u64n: bigint; i64n: bigint; f32: number; f64: number
+}
+
+export type C_TypeReturnJsTypeMap = C_TypeJsTypeMap & { void: void }
+
+type Norm<K extends string> = K extends `<${string}>ptr` ? K : C_ALIAS_MAP[K & keyof C_ALIAS_MAP]
+
+export type JsTypeOfC_Type<K extends string, M, L, D> =
+    Norm<K> extends infer S ?
+    S extends `<${infer N}>ptr` ? NullablePtr<N> | L[N & keyof L] :
+    M[S & keyof M] extends never ? D
+    : M[S & keyof M]
+    : never
 
 // 合法 token 全集 = typedef 别名 ∪ 规范 kind ∪ 指针 token。
 // 裸 'ptr' 是合法内部 Kind，但不是合法用户 token —— 由 ArgToken/RetToken 显式拒绝。
-export type Keys = keyof typeof C_ALIAS | Kind | CPointer<string>
+// export type Keys = keyof typeof C_ALIAS | Kind | CPointer<string>
 
 // token 的类型层归一（运行时对应 normToken）：别名查表；
 // 已是规范 kind / 指针 token 者原样返回（这两类不需要映射）。
-export type Norm<K extends Keys> = K extends keyof typeof C_ALIAS ? (typeof C_ALIAS)[K] : K
 
 // token 归一：C/Windows typedef 别名 → 规范形式（'HANDLE' → '<>ptr' 等）；非别名原样返回。
 export function normToken(t: string): string {
@@ -135,10 +163,12 @@ export type CArray = {
 //   匿名聚合：struct / union（C11 匿名字段，其字段被 splice 提升进父结构）
 // alignas 抬对齐下限（pack 压上限）；bitfield 暂不支持。
 export type Member =
-    | { name: string;     type: CType;            alignas?: number }
+    | { name: string; type: CType; alignas?: number }
     | { name?: undefined; type: CStruct | CUnion; alignas?: number }
 
 export type CStruct = { tag: 'struct'; member: readonly Member[], pack?: number }
 export type CUnion = { tag: 'union'; member: readonly Member[], pack?: number }
 
-export type CType = FieldKind | CString | CArray | CStruct | CUnion
+export type FieldKind = Exclude<C_Type, 'void'>
+
+export type CType = C_Number | `<${string}>ptr` | CString | CArray | CStruct | CUnion
