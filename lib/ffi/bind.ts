@@ -26,19 +26,27 @@ function loadDll(dll: string): win.HMODULE {
     return loaded
 }
 
-/* ---- 指针布局 codec：把 JS 值编码成原生指针 ---- */
+/* ---- 指针布局 codec：把 JS 值编码成原生指针 ----
+ * ABI 上一律是 PTR_SIZE 槽装一个地址；codec 只负责「怎么从 JS 值造出这个地址」。
+ * <NAME>ptr 的 NAME 即点向的 C 类型，NAME 顺带选定 codec：
+ *   <BYTE>ptr   BYTE*   —— 收 ArrayBuffer，自动 bufferPtr + 调用期 pin
+ *   <WCHAR>ptr  WCHAR*  —— 收 string，utf-16le + '\0' 编码后 pin
+ *   <RECT>ptr   RECT*   —— 收布局形（编码成 buffer）或 Ptr<'RECT'>（裸地址透传）
+ *   <>ptr       void*   —— 收裸地址 number|null，不编码不 pin
+ * BYTE/WCHAR 只有内建 codec，运行期不接受裸 number（无句柄可 pin），也不可作返回类型。
+ */
 
 type PtrCodec = {
     name: string
     encode(v: unknown, held: ArrayBuffer[]): number
 }
 
-const VOID_PTR: PtrCodec = {
-    name: 'VOID',
+const BYTE_PTR: PtrCodec = {
+    name: 'BYTE',
     encode(v, held) {
         if (v === null || v === undefined) return 0
         if (!(v instanceof ArrayBuffer)) {
-            throw new Error(`ffi-bind: <VOID>ptr expects ArrayBuffer|null, got ${typeof v}; use "<>ptr" for a raw address, or ffi.bufferPtr(buf)`)
+            throw new Error(`ffi-bind: <BYTE>ptr expects ArrayBuffer|null, got ${typeof v}; use "<>ptr" for a raw address, or ffi.bufferPtr(buf)`)
         }
         held.push(v)  // 调用期 pin：GC 在 ffiCall 返回前不可回收
         return ffi.bufferPtr(v)
@@ -59,7 +67,7 @@ const WCHAR_PTR: PtrCodec = {
     },
 }
 
-const BUILTIN_PTR_CODECS: Record<string, PtrCodec> = { VOID: VOID_PTR, WCHAR: WCHAR_PTR }
+const BUILTIN_PTR_CODECS: Record<string, PtrCodec> = { BYTE: BYTE_PTR, WCHAR: WCHAR_PTR }
 
 // 用户布局 codec：延迟解析 —— 只有真的收到「结构形」实参时才要求 layouts 里存在该布局；
 // 纯 brand number / null 透传不需要 layout（与参数类型层一致，bind 期不再抛）。
@@ -81,7 +89,7 @@ function userPtrCodec(name: string, layouts: LayoutMap | undefined): PtrCodec {
     }
 }
 
-// 解析一个 <NAME>ptr codec：内建（VOID/WCHAR）即时取 —— 保持其严格类型校验；
+// 解析一个 <NAME>ptr codec：内建（BYTE/WCHAR）即时取 —— 保持其严格类型校验；
 // 用户布局延迟到 encode（收到结构形）时才查。
 function ptrCodec(name: string, layouts: LayoutMap | undefined): PtrCodec {
     return BUILTIN_PTR_CODECS[name] ?? userPtrCodec(name, layouts)
@@ -103,7 +111,7 @@ function argSpecOf(tok: string, layouts?: LayoutMap): ArgSpec {
     return { t: 'val', k: normKind(norm) }
 }
 
-// token → RetSpec：裸 'ptr' 拒绝；'<>ptr' → 裸地址；<NAME>ptr → 只读指针（VOID/WCHAR 非法）。
+// token → RetSpec：裸 'ptr' 拒绝；'<>ptr' → 裸地址；<NAME>ptr → 只读指针（BYTE/WCHAR 非法）。
 function retSpecOf(tok: string): RetSpec {
     const norm = normToken(tok)
     if (norm === 'ptr')
@@ -111,7 +119,7 @@ function retSpecOf(tok: string): RetSpec {
     if (norm === '<>ptr') return { t: 'val', k: 'ptr' }
     const name = ptrLayoutName(norm)
     if (name !== undefined) {
-        if (name === 'VOID' || name === 'WCHAR')
+        if (name === 'BYTE' || name === 'WCHAR')
             throw new Error(`ffi-bind: "<${name}>ptr" cannot be a return type (use "<>ptr")`)
         // 宽松：返回只读指针，不要求 layouts 里注册该布局（品牌是编译期的）。
         return { t: 'ptr', name }
@@ -216,11 +224,11 @@ function writeSlot(dv: DataView, off: number, k: Kind, v: unknown): void {
     }
 }
 
-// <>ptr 参数 → 裸地址整数；number 直通，null/undefined →0，其余报错并提示 <VOID>ptr。
+// <>ptr 参数 → 裸地址整数；number 直通，null/undefined →0，其余报错并提示 <BYTE>ptr。
 function slotRawPtr(v: unknown): number {
     if (v === null || v === undefined) return 0
     if (typeof v === 'number') return v
-    throw new Error(`ffi-bind: <>ptr expects number|null, got ${typeof v}; use <VOID>ptr to pass an ArrayBuffer, or ffi.bufferPtr(buf)`)
+    throw new Error(`ffi-bind: <>ptr expects number|null, got ${typeof v}; use <BYTE>ptr to pass an ArrayBuffer, or ffi.bufferPtr(buf)`)
 }
 
 // 从 retBuf 按返回类型解码。'ptr' 布局返回读指针宽、NULL→null；标量按声明宽度截断/扩展。
@@ -268,7 +276,7 @@ export function bind<const S extends string, const L extends LayoutMap = {}>(
         [K in keyof L]: L[K] extends Layout<infer V> ? V : never
     } & {
         WCHAR: string;
-        VOID: ArrayBuffer;
+        BYTE: ArrayBuffer;
     }
     const proc = win.GetProcAddress(loadDll(dll), name)
     if (!proc) throw new Error(`ffi-bind: proc "${name}" not found in ${dll}`)
@@ -281,7 +289,7 @@ export function bindLib<const M extends Record<string, string>, const L extends 
         [K in keyof L]: L[K] extends Layout<infer V> ? V : never
     } & {
         WCHAR: string;
-        VOID: ArrayBuffer;
+        BYTE: ArrayBuffer;
     }
     const out: Record<string, (...a: unknown[]) => unknown> = {}
     const h = loadDll(dll)
