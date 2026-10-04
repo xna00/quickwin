@@ -1,7 +1,7 @@
 import * as os from 'os'
 
 // ============================================================
-// AST IR —— struct/bind 的类型描述树（CType = FieldKind|CString|CArray|CStruct|CUnion）。
+// AST IR —— struct/bind 的类型描述树（CType = C_Number|<..>ptr|CString|CArray|CStruct|CUnion）。
 // 标量直接写 kind 字符串（如 'i32'）；指针必须写 '<>ptr'（裸地址）或 '<NAME>ptr'（带名），
 // 复合类型才是带 tag 的对象。
 // 只描述「C 声明怎么写」（unit/length/encoding 等意图）；内存布局与读写视图由
@@ -13,32 +13,28 @@ import * as os from 'os'
 // ============================================================
 
 // ============================================================
-// §1 kind 词汇表
-//   用户面（可写进 CType）：CInteger | CFloat | CPointer<string> = FieldKind。
-//     指针必须带角括号 —— '<>ptr' 裸地址，'<NAME>ptr' 带名（品牌见 §2 Ptr<T>）。
-//   内部（lower 后运行时 IR 用）：Kind = CInteger|CFloat 的超集
-//     （多 'void'、裸 'ptr'、u64n/i64n 三个内部专用档）。裸 'ptr' 用户面已禁用、内部保留。
-//   本表是 bind 与 struct 共用的规范 kind 集合；C/Windows typedef 别名表见 §3。
+// §1 kind 词汇表 —— KINDS 是唯一手写源，下列集合全从 Kind 派生
+//   Kind         内部 kind 全集（14）：bind 签名 token / lower 后 IR 共用
+//   C_Number     结构体字段的数字档（10）
+//   Token        规范 token 全集（13 + 指针）：C_ALIAS / Norm / JsTypeOfToken 的操作面
+//   RuntimeKind  lower 后的字段 kind（11）= C_Number | 'ptr'
+//   CType        成员类型 IR 节点（见 §4）
+// 排除项各有理由：'void' 无大小；u64n/i64n 非 C 类型；裸 'ptr' 非合法用户 token（写 '<>ptr'）；
+// lower 后所有指针归一为 kind 'ptr'，名字被擦掉。别名表见 §3。
 // ============================================================
-// export type CInteger = 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64'
-// export type CFloat = 'f32' | 'f64'
-// type CPointer<T extends string = ''> = `<${T}>ptr`
-
-// 用户面标量全集：可作 struct 成员 type / bind 签名 token。
-// 注意用 CPointer<string>（非默认 ''）：默认参数会把它收缩成字面量 '<>ptr'，
-// 导致 '<RECT>ptr' 等具体指针无法赋给 CType。
-
-// 内部 kind 全集：KINDS 元组是唯一手写清单，Kind 与 KIND_SET 都从它派生
-// （此前 BasicKind 类型与 KIND_SET 列表各自抄了一遍这 14 个字符串）。
-//   = 用户面标量（CInteger|CFloat）+ 'void' + 裸 'ptr' + 两个内部专用档：
-//   u64n/i64n —— 无符号 / 有符号 64 位窄读（不是 C 类型，故不在 CInteger 里；u64/i64 是原生值）。
+// KINDS 元组是唯一手写清单：Kind / KIND_SET 与本文件其余集合都从它派生。
+//   = 10 个 C 数字档 + 'void' + 裸 'ptr' + 两个内部专用档 u64n/i64n。
+//   u64n/i64n —— 钉死「恰 64 位」的传输档，不是 C 类型（u64/i64 才是）。
 // 裸 'ptr' 用户面已禁用，内部保留：它是唯一随架构变宽的标量档（见 §2 PTR_SIZE）。
-// 注意不能从 CInteger 派生 —— u64n/i64n 不在其中。
 const KINDS = [
     'void', 'u8', 'i8', 'u16', 'i16', 'u32', 'i32',
     'u64', 'i64', 'u64n', 'i64n', 'f32', 'f64', 'ptr',
 ] as const
 export type Kind = (typeof KINDS)[number]
+
+// C 的数字类型档：可作结构体字段 / bind 签名 token。
+// 排除 'void'（无大小）、u64n/i64n（传输档，非 C 类型）、裸 'ptr'（内部指针档）。
+export type C_Number = Exclude<Kind, 'void' | 'u64n' | 'i64n' | 'ptr'>
 
 // 运行时 kind 集合，供 normKind 校验。
 const KIND_SET: ReadonlySet<Kind> = new Set(KINDS)
@@ -56,10 +52,13 @@ export type Ptr<T extends string> =
     T extends '' ? number : number & { readonly [ptrBrand]: T }
 
 type NullablePtr<T extends string> = (T extends '' ? number : number & { readonly [ptrBrand]: T }) | null
-export type StructPtr<N extends string> = Ptr<N>
 
-// <NAME>ptr 指针布局的 NAME。
-const PTR_LAYOUT_RE = /^<(\w+)>ptr$/
+// 指针 token 判定。NAME 允许为空（'<>ptr' 裸地址），但不许空白或尖括号嵌套 ——
+// 真实的 C 类型名是 \w+。struct 侧原有 /^<.*>ptr$/ 会放过 '<a b>ptr>' 这类怪写法。
+const PTR_TOKEN_RE = /^<([^<>\s]*)>ptr$/
+
+// 用户面指针 CType：'<>ptr'（裸地址）或 '<NAME>ptr'（带名）。
+export function isCPtrToken(t: string): t is `<${string}>ptr` { return PTR_TOKEN_RE.test(t) }
 
 // ============================================================
 // §3 C 别名与 token 归一
@@ -71,12 +70,11 @@ const PTR_LAYOUT_RE = /^<(\w+)>ptr$/
 //   错误推迟到调用点变成诡异的 never 参数）。
 // ============================================================
 
-export type C_Number = 'u8' | 'i8' | 'u16' | 'i16'
-    | 'u32' | 'i32' | 'u64' | 'i64' | 'f32' | 'f64'
-
-type C_Basic_Type = 'void' | C_Number | 'u64n' | 'i64n'
-
-type C_Type = C_Basic_Type | `<${string}>ptr`
+// 规范 token 全集 = 规范 kind（去裸 'ptr'）∪ 指针 token。
+// C_ALIAS 的值、Norm 的输入输出、JsTypeOfToken 的键都在这个集合上。
+// 不含裸 'ptr' —— 用户必须写 '<>ptr'，这是裸 ptr 拒绝在类型层的体现。
+// （原名 C_Type 与 §4 的 CType 仅差一个下划线，含义完全不同，故改名。）
+type Token = Exclude<Kind, 'ptr'> | `<${string}>ptr`
 
 const C_ALIAS = {
     void: 'void', u8: 'u8', i8: 'i8', u16: 'u16', i16: 'i16', u32: 'u32', i32: 'i32',
@@ -89,33 +87,31 @@ const C_ALIAS = {
     HANDLE: '<>ptr', HWND: '<>ptr', HDC: '<>ptr', HMODULE: '<>ptr', HFONT: '<>ptr', HBRUSH: '<>ptr',
     HICON: '<>ptr', HBITMAP: '<>ptr', LPVOID: '<>ptr', LPCVOID: '<>ptr',
     LPCWSTR: '<WCHAR>ptr', PCWSTR: '<WCHAR>ptr', LPWSTR: '<WCHAR>ptr',
-} as const satisfies Record<string, C_Type>
+} as const satisfies Record<string, Token>
 
 export type C_ALIAS_MAP = typeof C_ALIAS
 
-export type C_TypeJsTypeMap = {
+export type TokenJsTypeMap = {
     u8: number; i8: number; u16: number; i16: number
     u32: number; i32: number; u64: number; i64: number
     u64n: bigint; i64n: bigint; f32: number; f64: number
 }
 
-export type C_TypeReturnJsTypeMap = C_TypeJsTypeMap & { void: void }
+export type TokenReturnJsTypeMap = TokenJsTypeMap & { void: void }
 
+// token 的类型层归一（运行时对应 normToken）。约束刻意保持 string 而非 Token：
+// 非法 token（如 'i3z'）要塌成 never 而不是报 TS2344 —— `& keyof` 把交集约成 never，
+// 索引出 never 让调用点拿到 never。收紧到 Token 会把「拼错 token」从 never 变成硬错误。
 type Norm<K extends string> = K extends `<${string}>ptr` ? K : C_ALIAS_MAP[K & keyof C_ALIAS_MAP]
 
-export type JsTypeOfC_Type<K extends string, M, L, D> =
+// token → JS 类型。M = kind→JS 映射（实参表 / 返回表）；L = 布局名→JS 形；
+// D = 落不到任何映射时的默认（实参传 never，使 'void' 等非法档报 never）。
+export type JsTypeOfToken<K extends string, M, L, D> =
     Norm<K> extends infer S ?
     S extends `<${infer N}>ptr` ? NullablePtr<N> | L[N & keyof L] :
     M[S & keyof M] extends never ? D
     : M[S & keyof M]
     : never
-
-// 合法 token 全集 = typedef 别名 ∪ 规范 kind ∪ 指针 token。
-// 裸 'ptr' 是合法内部 Kind，但不是合法用户 token —— 由 ArgToken/RetToken 显式拒绝。
-// export type Keys = keyof typeof C_ALIAS | Kind | CPointer<string>
-
-// token 的类型层归一（运行时对应 normToken）：别名查表；
-// 已是规范 kind / 指针 token 者原样返回（这两类不需要映射）。
 
 // token 归一：C/Windows typedef 别名 → 规范形式（'HANDLE' → '<>ptr' 等）；非别名原样返回。
 export function normToken(t: string): string {
@@ -130,10 +126,9 @@ export function normKind(t: string): Kind {
 }
 
 // token（C 别名归一后）是否为 <NAME>ptr 指针布局；是则返回 NAME，否则 undefined。
-// 注意 '<>ptr'（空名裸指针）不匹配 —— 调用方按裸指针另行处理。
 export function ptrLayoutName(t: string): string | undefined {
-    const m = PTR_LAYOUT_RE.exec(normToken(t))
-    return m ? m[1]! : undefined
+    const m = PTR_TOKEN_RE.exec(normToken(t))
+    return m?.[1] || undefined   // '<>ptr' 空名 → undefined，调用方按裸指针另行处理
 }
 
 // ============================================================
@@ -168,7 +163,5 @@ export type Member =
 
 export type CStruct = { tag: 'struct'; member: readonly Member[], pack?: number }
 export type CUnion = { tag: 'union'; member: readonly Member[], pack?: number }
-
-export type FieldKind = Exclude<C_Type, 'void'>
 
 export type CType = C_Number | `<${string}>ptr` | CString | CArray | CStruct | CUnion

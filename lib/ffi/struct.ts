@@ -1,10 +1,10 @@
 import '../text-codec.js'
 import * as ffi from 'ffi'
 import {
-    PTR_SIZE, type StructPtr, type Ptr,
+    PTR_SIZE, type Ptr, type Kind, type C_Number,
     type CType, type CString, type CArray,
     type CStruct, type CUnion, type Member, type Encoding,
-    C_Number,
+    isCPtrToken,
 } from './ctype.js'
 
 // ============================================================
@@ -55,7 +55,8 @@ type FieldShape<M extends Member> =
 // ============================================================
 
 // lower 后指针统一归一为内部 kind 'ptr'（用户面写 '<>ptr' 裸地址或 '<NAME>ptr' 带名指针）。
-type RuntimeKind = C_Number | 'ptr'
+// = Kind 去掉 'void'（无大小）与 u64n/i64n（传输档，非 C 类型）—— 只剩能占内存的档。
+type RuntimeKind = Exclude<Kind, 'void' | 'u64n' | 'i64n'>
 
 // kind → size/align（不含指针：指针统一 PTR_SIZE，见 lower）。
 const SizeAlign: Record<C_Number, number> = {
@@ -95,7 +96,7 @@ export type StructDef<T extends CStruct | CUnion, N extends string = never> = {
 
 export type StructAlloc<S, N extends string = never> = {
     readonly buffer: ArrayBuffer
-    readonly ptr: [N] extends [never] ? number : StructPtr<N>
+    readonly ptr: [N] extends [never] ? number : Ptr<N>
     decode(offset?: number): S
 }
 
@@ -115,17 +116,10 @@ type Layout = {
     fields: Fields,
 }
 
-// 用户面指针 CType：'<>ptr' / '<NAME>ptr'（'ptr' 已被拒绝，见 lower）。
-const PTR_CTYPE_RE = /^<.*>ptr$/
-
 // 用户面已拒绝裸 'ptr'，但运行时仍可能收到（手写 IR / 迁移残留）—— 统一在此报错。
-// 用类型守卫绕开「FieldKind 已不含 'ptr'」的收窄报错。
+// 用类型守卫绕开「CType 已不含 'ptr'」的收窄报错。
 function isBarePtr(t: string): t is 'ptr' {
     return t === 'ptr'
-}
-
-function isPtr(t: string): t is `<${string}>ptr` {
-    return PTR_CTYPE_RE.test(t)
 }
 
 // CType → { size, align, FieldType }：聚合递归进 computeStructLayout。
@@ -134,7 +128,7 @@ function lower(t: CType): { size: number, align: number, type: FieldType } {
     if (typeof t === 'string') {
         if (isBarePtr(t))
             throw new Error(`ffi-struct: bare "ptr" rejected — use "<>ptr" for a raw address or "<NAME>ptr" for a typed pointer`)
-        if (isPtr(t))
+        if (isCPtrToken(t))
             return { size: PTR_SIZE, align: PTR_SIZE, type: { tag: 'basic', kind: 'ptr' } }
         const s = SizeAlign[t]
         if (s === undefined) throw new Error(`ffi-struct: unknown kind "${t}"`)

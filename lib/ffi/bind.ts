@@ -3,7 +3,7 @@ import * as os from 'os'
 import * as std from 'std'
 import * as win from 'win'
 import '../text-codec.js'
-import { type Kind, C_TypeJsTypeMap, C_TypeReturnJsTypeMap, JsTypeOfC_Type, PTR_SIZE, normKind, normToken, ptrLayoutName } from './ctype.js'
+import { type Kind, TokenJsTypeMap, TokenReturnJsTypeMap, JsTypeOfToken, PTR_SIZE, normKind, normToken, ptrLayoutName } from './ctype.js'
 
 // 用户布局：把 JS 形编码成 buffer 供 <NAME>ptr 输入。ffi-struct 的 struct()
 // 结果（StructDef）结构上即满足（encode(v) -> ArrayBuffer）。
@@ -263,34 +263,31 @@ function readRet(ret: RetSpec, retBuf: ArrayBuffer): unknown {
 
 type ParseArgStr<S extends string, L, Acc extends unknown[] = []> =
     S extends `${infer F} ${infer R}`
-    ? ParseArgStr<R, L, [...Acc, JsTypeOfC_Type<F, C_TypeJsTypeMap, L, never>]>
+    ? ParseArgStr<R, L, [...Acc, JsTypeOfToken<F, TokenJsTypeMap, L, never>]>
     : S extends ''
-    ? Acc : [...Acc, JsTypeOfC_Type<S, C_TypeJsTypeMap, L, never>]
+    ? Acc : [...Acc, JsTypeOfToken<S, TokenJsTypeMap, L, never>]
+
+// 布局表：用户布局解包成 JS 形，并注入两个内建 codec 的值域，
+// 使 <BYTE>ptr / <WCHAR>ptr 形参在类型层拿到 ArrayBuffer / string。
+type BindLayouts<L> = {
+    [K in keyof L]: L[K] extends Layout<infer V> ? V : never
+} & {
+    WCHAR: string;
+    BYTE: ArrayBuffer;
+}
 
 type BindFn<S extends string, L> =
-    S extends `${infer ArgStr} -> ${infer RetStr}` ? ((...args: ParseArgStr<ArgStr, L>) => JsTypeOfC_Type<RetStr, C_TypeReturnJsTypeMap, {}, unknown>) : never
+    S extends `${infer ArgStr} -> ${infer RetStr}` ? ((...args: ParseArgStr<ArgStr, L>) => JsTypeOfToken<RetStr, TokenReturnJsTypeMap, {}, unknown>) : never
 
 export function bind<const S extends string, const L extends LayoutMap = {}>(
     dll: string, name: string, sig: S, layouts?: L) {
-    type LL = {
-        [K in keyof L]: L[K] extends Layout<infer V> ? V : never
-    } & {
-        WCHAR: string;
-        BYTE: ArrayBuffer;
-    }
     const proc = win.GetProcAddress(loadDll(dll), name)
     if (!proc) throw new Error(`ffi-bind: proc "${name}" not found in ${dll}`)
-    return makeFn(proc, sig, layouts) as unknown as BindFn<S, LL>
+    return makeFn(proc, sig, layouts) as unknown as BindFn<S, BindLayouts<L>>
 }
 
 export function bindLib<const M extends Record<string, string>, const L extends LayoutMap = {}>(
     dll: string, map: M, layouts?: L) {
-    type LL = {
-        [K in keyof L]: L[K] extends Layout<infer V> ? V : never
-    } & {
-        WCHAR: string;
-        BYTE: ArrayBuffer;
-    }
     const out: Record<string, (...a: unknown[]) => unknown> = {}
     const h = loadDll(dll)
     for (const [name, sig] of Object.entries(map)) {
@@ -298,7 +295,7 @@ export function bindLib<const M extends Record<string, string>, const L extends 
         if (!proc) throw new Error(`ffi-bind: proc "${name}" not found in ${dll}`)
         out[name] = makeFn(proc, sig, layouts)
     }
-    return out as { [K in keyof M]: BindFn<M[K], LL> }
+    return out as { [K in keyof M]: BindFn<M[K], BindLayouts<L>> }
 }
 
 /* ---- 闭包（回调）：JS 函数 → 可传给 Win32 API 的函数指针 ---- */
