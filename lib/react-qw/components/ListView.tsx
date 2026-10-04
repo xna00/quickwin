@@ -60,21 +60,46 @@ const LV_WS = gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle
 
 // ListView 通知结构（嵌套 NMHDR 以复现 MSVC 尾 padding 传染，offsetOf 保证 ia32/x64 均正确）。
 const NMCUSTOMDRAW = struct({
-  hdr: NMHDR,
-  dwDrawStage: 'u32', hdc: 'ptr', rc: 'i32[4]',
-  dwItemSpec: 'ptr', uItemState: 'u32', lItemlParam: 'ptr',
+  tag: 'struct',
+  member: [
+    { name: 'hdr', type: NMHDR.__struct },
+    { name: 'dwDrawStage', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'hdc', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'rc', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 4 } },
+    { name: 'dwItemSpec', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'uItemState', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'lItemlParam', type: { tag: 'basic', kind: 'ptr' } },
+  ],
 })
 const NMLVCUSTOMDRAW = struct({
-  hdr: NMHDR,
-  dwDrawStage: 'u32', hdc: 'ptr', rc: 'i32[4]',
-  dwItemSpec: 'ptr', uItemState: 'u32', lItemlParam: 'ptr',
-  clrText: 'u32', clrTextBk: 'u32', iSubItem: 'i32', dwItemType: 'u32',
+  tag: 'struct',
+  member: [
+    { name: 'hdr', type: NMHDR.__struct },
+    { name: 'dwDrawStage', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'hdc', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'rc', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 4 } },
+    { name: 'dwItemSpec', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'uItemState', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'lItemlParam', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'clrText', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'clrTextBk', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'dwItemType', type: { tag: 'basic', kind: 'u32' } },
+  ],
 })
 // NMLISTVIEW / NMITEMACTIVATE 前缀字段布局一致（iItem..uChanged）
 const NMLISTVIEW = struct({
-  hdr: NMHDR,
-  iItem: 'i32', iSubItem: 'i32', uNewState: 'u32', uOldState: 'u32', uChanged: 'u32',
-  ptAction: 'i32[2]', lParam: 'ptr',
+  tag: 'struct',
+  member: [
+    { name: 'hdr', type: NMHDR.__struct },
+    { name: 'iItem', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'uNewState', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'uOldState', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'uChanged', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'ptAction', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 2 } },
+    { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+  ],
 })
 const CD_STAGE = NMCUSTOMDRAW.offsetOf('dwDrawStage')
 const CD_HDC = NMCUSTOMDRAW.offsetOf('hdc')
@@ -88,17 +113,41 @@ const NMLV_UNEW = NMLISTVIEW.offsetOf('uNewState')
 const NMLV_UOLD = NMLISTVIEW.offsetOf('uOldState')
 
 const LVITEMW = struct({
-  mask: 'u32', iItem: 'i32', iSubItem: 'i32',
-  state: 'u32', stateMask: 'u32',
-  pszText: 'ptr', cchTextMax: 'i32', iImage: 'i32', lParam: 'ptr',
-  iIndent: 'i32', iGroupId: 'i32', cColumns: 'u32',
-  puColumns: 'ptr', piColFmt: 'ptr', iGroup: 'i32',
+  tag: 'struct',
+  member: [
+    { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'iItem', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'state', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'stateMask', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'iIndent', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'iGroupId', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'cColumns', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'puColumns', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'piColFmt', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'iGroup', type: { tag: 'basic', kind: 'i32' } },
+  ],
 })
 
 const LVCOLUMNW = struct({
-  mask: 'u32', fmt: 'i32', cx: 'i32',
-  pszText: 'ptr', cchTextMax: 'i32', iSubItem: 'i32', iImage: 'i32', iOrder: 'i32',
-  cxMin: 'i32', cxDefault: 'i32', cxIdeal: 'i32',
+  tag: 'struct',
+  member: [
+    { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'fmt', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'cx', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'iOrder', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'cxMin', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'cxDefault', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'cxIdeal', type: { tag: 'basic', kind: 'i32' } },
+  ],
 })
 
 const fontCache = new Map<string, number>()

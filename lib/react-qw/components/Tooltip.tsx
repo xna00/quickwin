@@ -10,15 +10,18 @@ export interface TooltipProps {
 }
 
 const TTTOOLINFOW = struct({
-  cbSize: 'u32',
-  uFlags: 'u32',
-  hwnd: 'ptr',
-  uId: 'ptr',
-  rect: 'i32[4]',
-  hinst: 'ptr',
-  lpszText: 'ptr',
-  lParam: 'ptr',
-  lpReserved: 'ptr', // WinXP+ 追加字段（系统 sizeof 含之）
+  tag: 'struct',
+  member: [
+    { name: 'cbSize', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'uFlags', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'hwnd', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'uId', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'rect', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 4 } },
+    { name: 'hinst', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'lpszText', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'lpReserved', type: { tag: 'basic', kind: 'ptr' } }, // WinXP+ 追加字段（系统 sizeof 含之）
+  ],
 })
 
 function buildToolInfo(hTarget: number, text: string): ArrayBuffer {

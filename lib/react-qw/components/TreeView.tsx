@@ -6,18 +6,28 @@ import { nmCode } from '../nmhdr.js'
 import type { WStyle } from '../jsx.d.ts'
 
 const TVITEM = struct({
-    mask: 'u32',
-    hItem: 'ptr',
-    state: 'u32',
-    stateMask: 'u32',
-    pszText: 'ptr',
-    cchTextMax: 'i32',
-    iImage: 'i32',
-    iSelectedImage: 'i32',
-    cChildren: 'i32',
-    lParam: 'ptr',
+    tag: 'struct',
+    member: [
+        { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
+        { name: 'hItem', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'state', type: { tag: 'basic', kind: 'u32' } },
+        { name: 'stateMask', type: { tag: 'basic', kind: 'u32' } },
+        { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
+        { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
+        { name: 'iSelectedImage', type: { tag: 'basic', kind: 'i32' } },
+        { name: 'cChildren', type: { tag: 'basic', kind: 'i32' } },
+        { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+    ],
 })
-const TVINSERTSTRUCT = struct({ hParent: 'ptr', hInsertAfter: 'ptr', item: TVITEM })
+const TVINSERTSTRUCT = struct({
+    tag: 'struct',
+    member: [
+        { name: 'hParent', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'hInsertAfter', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'item', type: TVITEM.__struct },
+    ],
+})
 
 export interface TreeNode<D = unknown> {
   key?: string
