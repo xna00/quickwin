@@ -1,5 +1,11 @@
 import * as os from 'os'
 
+// ============================================================
+// AST IR —— struct/bind 的类型描述树（CType = CBasic|CString|CArray|CStruct|CUnion）。
+// 只描述「C 声明怎么写」（unit/length/encoding 等意图）；内存布局与读写视图由
+// struct.ts 的 computeStructLayout/lowerType 单独 lower 成 layout IR。
+// ============================================================
+
 // 标量 kind 词汇表（bind 与 struct 共用）：规范 kind 集合、C/Windows typedef 别名表、
 // token 归一化与校验。刻意不依赖 win/std/text-codec，可作叶子模块被 struct 直接引用，
 // 避免「只用 struct」的调用方被动加载整个 bind 运行时。
@@ -21,10 +27,12 @@ export type CPointer = 'ptr'
 export type FieldKind = CInteger | CFloat | CPointer
 
 // 字符串解释方式（与 printf 的 %d/%u 类比：encoding 只决定「把这段字节怎么看成 JS string」）。
-//   utf16  每 2 字节 1 码元（宽字符）
-//   latin1 每 1 字节 1 字符 ↔ U+0000..00FF（不是 Windows ANSI codepage）
+// 直接复用 TextDecoder/TextEncoder 的标准标签，读写统一走 lib/text-codec.js：
+//   utf-8    变长编解码
+//   utf-16le 每 2 字节 1 码元（宽字符）
+// 定长字段：写入超长即截断到 size，读取到 NUL 为止。
 // unit+length 共同决定 layout；encoding 只在 decode/encode 时使用，可与任意 unit 组合。
-export type Encoding = 'utf16' | 'latin1'
+export type Encoding = 'utf-8' | 'utf-16le'
 
 export type CType = CBasic | CString | CArray | CStruct | CUnion
 export type CBasic = {

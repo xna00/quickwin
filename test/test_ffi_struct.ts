@@ -118,28 +118,28 @@ export const suite = {
         t.check('short -7', -7, m.s)
         t.check('LONG_PTR', 0x11223344, m.q)
 
-        t.section('utf16 string[8] roundtrip & truncation')
+        t.section('utf-16le string[8] roundtrip & truncation')
         const W = struct({
             tag: 'struct',
-            member: [{ name: 'name', type: { tag: 'string', unit: 'u16', length: 8, encoding: 'utf16' } }],
+            member: [{ name: 'name', type: { tag: 'string', unit: 'u16', length: 8, encoding: 'utf-16le' } }],
         })
         t.check('utf16[8].size == 16', 16, W.size)
         const wb = W.encode({ name: 'hello' })
         t.check('read back "hello"', 'hello', W.decode(wb).name)
         const lb = W.encode({ name: 'a very long string over' })
-        t.check('truncated to 7 chars', 'a very ', W.decode(lb).name)
+        t.check('truncated to 8 chars', 'a very l', W.decode(lb).name)
 
-        t.section("latin1 string[8] roundtrip & truncation")
+        t.section("utf-8 string[8] roundtrip & truncation")
         const C = struct({
             tag: 'struct',
-            member: [{ name: 'name', type: { tag: 'string', unit: 'u8', length: 8, encoding: 'latin1' } }],
+            member: [{ name: 'name', type: { tag: 'string', unit: 'u8', length: 8, encoding: 'utf-8' } }],
         })
         t.check('char[8].size == 8', 8, C.size)
         const cb = C.encode({ name: 'hi' })
         t.check('read back "hi"', 'hi', C.decode(cb).name)
         t.check('NUL at [2]', 0, new DataView(cb).getUint8(2))
         const ctrunc = C.encode({ name: '1234567890' })
-        t.check('truncated to 7 chars', '1234567', C.decode(ctrunc).name)
+        t.check('truncated to 8 chars', '12345678', C.decode(ctrunc).name)
 
         t.section('numeric arrays roundtrip (CArray)')
         const A = struct({
@@ -450,7 +450,7 @@ export const suite = {
                 { name: 'iLink', type: { tag: 'basic', kind: 'i32' } },
                 { name: 'state', type: { tag: 'basic', kind: 'u32' } },
                 { name: 'stateMask', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'szID', type: { tag: 'string', unit: 'u16', length: 48, encoding: 'utf16' } },
+                { name: 'szID', type: { tag: 'string', unit: 'u16', length: 48, encoding: 'utf-16le' } },
             ],
         })
         const NMLINK = struct({
@@ -458,7 +458,7 @@ export const suite = {
             member: [
                 { name: 'hdr', type: NMHDR.__struct },
                 { name: 'item', type: LITEM.__struct },
-                { name: 'szUrl', type: { tag: 'string', unit: 'u16', length: 2084, encoding: 'utf16' } },
+                { name: 'szUrl', type: { tag: 'string', unit: 'u16', length: 2084, encoding: 'utf-16le' } },
             ],
         })
         t.check('LITEM.offsetOf szID', 16, LITEM.offsetOf('szID'))

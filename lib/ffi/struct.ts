@@ -1,3 +1,4 @@
+import '../text-codec.js'
 import * as ffi from 'ffi'
 import {
     PTR_SIZE, type StructPtr, type FieldKind,
@@ -56,13 +57,19 @@ const SizeAlign: Record<FieldKind, number> = {
     ptr: PTR_SIZE,
 }
 
-// 运行时 Field = CType + name/offset/size；struct/union 分支内嵌整棵子布局（member: Field[]），
-// 且子成员的 offset 已平移到「相对父 buffer 起点」的绝对偏移（见 computeStructLayout / deepMap）。
-// 匿名成员已被 splice 提升，不出现在这里。
-export type Field = (CBasic | CString | CArray | (Omit<(CStruct | CUnion), 'member'> & { member: Field[] })) & {
+// 运行时 Field：IR 的 lowered 视图（独立于 CType，不保留 Member/alignas）。
+// computeStructLayout 在 lowering 时把子布局内嵌进 FieldType（struct/union→fields，
+// array→elementType+elementSize），运行期 read/write 零查表；offset 相对本层起点。
+type FieldType =
+    { tag: 'basic', kind: FieldKind }
+    | { tag: 'string', encoding: Encoding }
+    | { tag: 'struct' | 'union', fields: Field[] }
+    | { tag: 'array', elementType: FieldType, elementSize: number }
+export type Field = {
     name: string
     offset: number
     size: number
+    type: FieldType
 }
 export type Fields = Field[]
 
@@ -84,7 +91,8 @@ export type StructAlloc<S, N extends string = never> = {
 }
 
 // ============================================================
-// 布局
+// Layout IR —— computeStructLayout/lowerType 把 CType AST IR lower 到此。
+// 自包含：子布局在 lowering 时内嵌、offset 相对本层起点，运行期 read/write 不回查 AST IR。
 // ============================================================
 
 /** 向上对齐（a 必须是 2 的幂）。 */
@@ -92,115 +100,94 @@ function alignUp(v: number, a: number): number {
     return (v + a - 1) & ~(a - 1)
 }
 
+/** 单个 CType 的布局 size/align（不含 pack/alignas 修正，由 computeStructLayout 施加）。 */
+function typeSizeAlign(t: CType): { size: number, align: number } {
+    switch (t.tag) {
+        case 'basic': {
+            const s = SizeAlign[t.kind]
+            return { size: s, align: s }
+        }
+        case 'string': {
+            const s = SizeAlign[t.unit]
+            return { size: s * t.length, align: s }
+        }
+        case 'struct':
+        case 'union': {
+            const l = computeStructLayout(t)
+            return { size: l.size, align: l.maxEffectiveAlign }
+        }
+        case 'array':
+            return computeArray(t)
+    }
+}
+
 export function computeArray(t: CArray): { align: number, size: number } {
     if (!Number.isInteger(t.length) || t.length < 1)
         throw new Error(`ffi-struct: array length must be an integer >= 1, got ${t.length}`)
-    if (t.ctype.tag === 'basic') {
-        const s = SizeAlign[t.ctype.kind]
-        return { align: s, size: s * t.length }
-    } else if (t.ctype.tag === 'string') {
-        const s = SizeAlign[t.ctype.unit]
-        return { align: s, size: s * t.length * t.ctype.length }
-    } else if (t.ctype.tag === 'struct' || t.ctype.tag === 'union') {
-        const ret = computeStructLayout(t.ctype)
-        return { align: ret.maxEffectiveAlign, size: ret.size * t.length }
-    } else {
-        const ret = computeArray(t.ctype)
-        return { align: ret.align, size: ret.size * t.length }
-    }
+    const el = typeSizeAlign(t.ctype)
+    return { align: el.align, size: el.size * t.length }
 }
 
-// 把整棵子布局（含更深层 member）的 offset 全部平移 offset。
-const deepMap = (offsets: Fields, offset: number): Fields => {
-    const ret: Fields = []
-    for (const n of offsets) {
-        if (n.tag === 'struct' || n.tag === 'union') {
-            ret.push({ ...n, offset: n.offset + offset, member: deepMap(n.member, offset) })
-        } else {
-            ret.push({ ...n, offset: n.offset + offset })
-        }
-    }
-    return ret
-}
-
-export function computeStructLayout(t: CStruct | CUnion): {
+type Layout = {
     size: number,
     maxEffectiveAlign: number,
     fields: Fields,
-} {
+}
+
+// 按聚合 IR 对象身份缓存布局（IR 为模块级常量；同一子类型可被多个父复用）。
+const layoutCache = new WeakMap<CStruct | CUnion, Layout>()
+
+// CType → FieldType：lowering 时把子布局内嵌（聚合→fields，array→elementType+elementSize），
+// 运行期读写不再回查 IR；string 只留 encoding，字节跨度已由 unit+length 固化进 Field.size。
+function lowerType(t: CType): FieldType {
+    switch (t.tag) {
+        case 'basic': return { tag: 'basic', kind: t.kind }
+        case 'string': return { tag: 'string', encoding: t.encoding }
+        case 'struct': return { tag: 'struct', fields: computeStructLayout(t).fields }
+        case 'union': return { tag: 'union', fields: computeStructLayout(t).fields }
+        case 'array': return { tag: 'array', elementType: lowerType(t.ctype), elementSize: typeSizeAlign(t.ctype).size }
+    }
+}
+
+export function computeStructLayout(t: CStruct | CUnion): Layout {
+    const hit = layoutCache.get(t)
+    if (hit) return hit
+
     const isStruct = t.tag === 'struct'
     let maxEffectiveAlign = 1
     let maxMemberSize = 0
-    let fields: Fields = []
+    const fields: Fields = []
     const pack = t.pack ?? 8
 
     let cursor = 0
 
     for (const m of t.member) {
-        let size: number
-        let align: number
-        let offset: number
-        if (m.type.tag === 'basic') {
-            size = SizeAlign[m.type.kind]
-            align = size
-            if (pack > 0) align = Math.min(pack, align)
-            if (m.alignas) align = Math.max(align, m.alignas)
-            offset = alignUp(cursor, align)
-            fields.push({ ...m.type, name: m.name!, offset, size })
-        } else if (m.type.tag === 'string') {
-            const unit_size = SizeAlign[m.type.unit]
-            align = unit_size
-            if (pack > 0) align = Math.min(pack, align)
-            if (m.alignas) align = Math.max(align, m.alignas)
-            size = unit_size * m.type.length
-            offset = alignUp(cursor, align)
-            fields.push({ ...m.type, name: m.name!, offset, size })
-        } else if (m.type.tag === 'struct') {
-            const ret = computeStructLayout(m.type)
-            size = ret.size
-            align = ret.maxEffectiveAlign
-            if (pack > 0) align = Math.min(pack, align)
-            if (m.alignas) align = Math.max(align, m.alignas)
-            offset = alignUp(cursor, align)
-            if (m.name !== undefined) {
-                fields.push({ ...m.type, name: m.name, offset, size, member: deepMap(ret.fields, offset) })
-            } else {
-                fields.push(...deepMap(ret.fields, offset))
-            }
-        } else if (m.type.tag === 'union') {
-            const ret = computeStructLayout(m.type)
-            size = ret.size
-            align = ret.maxEffectiveAlign
-            if (pack > 0) align = Math.min(pack, align)
-            if (m.alignas) align = Math.max(align, m.alignas)
-            offset = alignUp(cursor, align)
-            if (m.name !== undefined) {
-                fields.push({ ...m.type, name: m.name, offset, size, member: deepMap(ret.fields, offset) })
-            } else {
-                fields.push(...deepMap(ret.fields, offset))
-            }
+        const { size, align: natural } = typeSizeAlign(m.type)
+        let align = natural
+        if (pack > 0) align = Math.min(pack, align)
+        if (m.alignas) align = Math.max(align, m.alignas)
+        const offset = alignUp(cursor, align)
+
+        if (m.name !== undefined) {
+            fields.push({ name: m.name, offset, size, type: lowerType(m.type) })
         } else {
-            const ret = computeArray(m.type)
-            size = ret.size
-            align = ret.align
-            if (pack > 0) align = Math.min(pack, align)
-            if (m.alignas) align = Math.max(align, m.alignas)
-            offset = alignUp(cursor, align)
-            fields.push({ ...m.type, name: m.name!, offset, size })
+            // 匿名聚合：子字段 splice 提升，offset 从子起点平移到本成员起点。
+            for (const cf of computeStructLayout(m.type).fields)
+                fields.push({ ...cf, offset: cf.offset + offset })
         }
 
-        if (isStruct) {
-            cursor = offset + size
-        }
+        if (isStruct) cursor = offset + size
         maxEffectiveAlign = Math.max(maxEffectiveAlign, align)
         maxMemberSize = Math.max(maxMemberSize, size)
     }
 
-    return {
+    const ret: Layout = {
         size: isStruct ? alignUp(cursor, maxEffectiveAlign) : alignUp(maxMemberSize, maxEffectiveAlign),
         maxEffectiveAlign,
         fields,
     }
+    layoutCache.set(t, ret)
+    return ret
 }
 
 // ============================================================
@@ -249,99 +236,82 @@ function writePtr(dv: DataView, off: number, val: number): void {
     else dv.setUint32(off, val >>> 0, true)
 }
 
-function readString(dv: DataView, off: number, count: number, kind: FieldKind, enc: Encoding): string {
-    const step = enc === 'utf16' ? 2 : 1
-    const mask = enc === 'utf16' ? 0xFFFF : 0xFF
-    let s = ''
-    for (let i = 0; i < count; i++) {
-        const u = readScalar(dv, off + i * step, kind) & mask
-        if (u === 0) break
-        s += String.fromCharCode(u)
+// 字符串读写统一走 TextEncoder/TextDecoder（polyfill 见 lib/text-codec.js）。
+// 定长字段：写入把编码结果截断到 size，读取扫到 NUL 终止符为止。
+const stringEncoders: Record<Encoding, TextEncoder> = {
+    'utf-8': new TextEncoder('utf-8'),
+    'utf-16le': new TextEncoder('utf-16le'),
+}
+
+const stringDecoders: Record<Encoding, TextDecoder> = {
+    'utf-8': new TextDecoder('utf-8', { ignoreBOM: true }),
+    'utf-16le': new TextDecoder('utf-16le', { ignoreBOM: true }),
+}
+
+function readString(dv: DataView, off: number, size: number, enc: Encoding): string {
+    const bytes = new Uint8Array(dv.buffer, dv.byteOffset + off, size)
+    const unit = enc === 'utf-16le' ? 2 : 1
+    let end = size
+    for (let i = 0; i + unit <= size; i += unit) {
+        if (bytes[i] === 0 && (unit === 1 || bytes[i + 1] === 0)) { end = i; break }
     }
-    return s
+    return stringDecoders[enc].decode(bytes.subarray(0, end))
 }
 
-function writeString(dv: DataView, off: number, count: number, kind: FieldKind, enc: Encoding, v: unknown): void {
-    const step = enc === 'utf16' ? 2 : 1
-    for (let i = 0; i < count; i++) writeScalar(dv, off + i * step, kind, 0)
-    const s = String(v ?? '')
-    const n = Math.min(s.length, count - 1)
-    for (let i = 0; i < n; i++) writeScalar(dv, off + i * step, kind, s.charCodeAt(i))
+function writeString(dv: DataView, off: number, size: number, enc: Encoding, v: unknown): void {
+    const bytes = new Uint8Array(dv.buffer, dv.byteOffset + off, size)
+    bytes.fill(0)
+    const src = stringEncoders[enc].encode(String(v ?? ''))
+    bytes.set(src.subarray(0, Math.min(src.length, size)))
 }
 
-function readField(dv: DataView, base: number, f: Field): unknown {
-    const off = base + f.offset
-    switch (f.tag) {
-        case 'basic':
-            return readScalar(dv, off, f.kind)
-        case 'string':
-            return readString(dv, off, f.length, f.unit, f.encoding)
-        case 'array': {
-            if (f.ctype.tag === 'struct' || f.ctype.tag === 'union') {
-                const child = computeStructLayout(f.ctype)
-                const out: unknown[] = []
-                for (let i = 0; i < f.length; i++)
-                    out.push(doDecode(child.fields, dv.buffer as ArrayBuffer, off + i * child.size))
-                return out
-            }
-            if (f.ctype.tag !== 'basic')
-                throw new Error(`ffi-struct: unsupported array element <${f.ctype.tag}>`)
-            const out: number[] = []
-            const step = SizeAlign[f.ctype.kind]
-            for (let i = 0; i < f.length; i++) out.push(readScalar(dv, off + i * step, f.ctype.kind))
-            return out
-        }
-        case 'struct':
-        case 'union':
-            // f.member 的 offset 已包含 f.offset（相对父 buffer 起点），故传 base 而非 off。
-            return doDecode(f.member, dv.buffer as ArrayBuffer, base)
-    }
-}
+type ArrayFieldType = Extract<FieldType, { tag: 'array' }>
 
-function writeField(dv: DataView, base: number, f: Field, v: unknown): void {
-    const off = base + f.offset
-    switch (f.tag) {
-        case 'basic':
-            writeScalar(dv, off, f.kind, Number(v))
-            break
-        case 'string':
-            writeString(dv, off, f.length, f.unit, f.encoding, v)
-            break
-        case 'array': {
-            if (f.ctype.tag === 'struct' || f.ctype.tag === 'union') {
-                const child = computeStructLayout(f.ctype)
-                const list = (v ?? []) as Record<string, unknown>[]
-                for (let i = 0; i < f.length; i++)
-                    doEncode(child.fields, child.size, list[i] ?? {}, dv.buffer as ArrayBuffer, off + i * child.size)
-            } else if (f.ctype.tag === 'basic') {
-                const step = SizeAlign[f.ctype.kind]
-                const list = (v ?? []) as number[]
-                for (let i = 0; i < f.length; i++) writeScalar(dv, off + i * step, f.ctype.kind, list[i] ?? 0)
-            } else {
-                throw new Error(`ffi-struct: unsupported array element <${f.ctype.tag}>`)
-            }
-            break
-        }
-        case 'struct':
-        case 'union':
-            // 同 readField：f.member offset 已含 f.offset，传 base。
-            doEncode(f.member, f.size, v as Record<string, unknown>, dv.buffer as ArrayBuffer, base)
-            break
-    }
-}
-
-function doDecode(fields: Fields, buf: ArrayBuffer, offset: number): Record<string, unknown> {
-    const out: Record<string, unknown> = {}
-    const dv = new DataView(buf)
-    for (const f of fields) out[f.name] = readField(dv, offset, f)
+function readArray(dv: DataView, off: number, size: number, t: ArrayFieldType): unknown[] {
+    const count = t.elementSize > 0 ? size / t.elementSize : 0
+    const out: unknown[] = []
+    for (let i = 0; i < count; i++)
+        out.push(readElement(dv, off + i * t.elementSize, t.elementType, t.elementSize))
     return out
 }
 
-function doEncode(fields: Fields, size: number, v: Record<string, unknown>, buf?: ArrayBuffer, offset = 0): ArrayBuffer {
-    buf = buf ?? new ArrayBuffer(size)
-    const dv = new DataView(buf)
-    for (const f of fields) writeField(dv, offset, f, v[f.name])
-    return buf
+function writeArray(dv: DataView, off: number, size: number, t: ArrayFieldType, v: unknown): void {
+    const count = t.elementSize > 0 ? size / t.elementSize : 0
+    const list = (v ?? []) as unknown[]
+    for (let i = 0; i < count; i++)
+        writeElement(dv, off + i * t.elementSize, t.elementType, t.elementSize, list[i])
+}
+
+function readElement(dv: DataView, off: number, t: FieldType, size: number): unknown {
+    switch (t.tag) {
+        case 'basic': return readScalar(dv, off, t.kind)
+        case 'string': return readString(dv, off, size, t.encoding)
+        case 'struct':
+        case 'union': return doDecode(dv, off, t.fields)
+        case 'array': return readArray(dv, off, size, t)
+    }
+}
+
+function writeElement(dv: DataView, off: number, t: FieldType, size: number, val: unknown): void {
+    switch (t.tag) {
+        case 'basic': writeScalar(dv, off, t.kind, Number(val ?? 0)); break
+        case 'string': writeString(dv, off, size, t.encoding, val); break
+        case 'struct':
+        case 'union': doEncode(dv, off, t.fields, (val ?? {}) as Record<string, unknown>); break
+        case 'array': writeArray(dv, off, size, t, val); break
+    }
+}
+
+function doDecode(dv: DataView, base: number, fields: Fields): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const f of fields)
+        out[f.name] = readElement(dv, base + f.offset, f.type, f.size)
+    return out
+}
+
+function doEncode(dv: DataView, base: number, fields: Fields, v: Record<string, unknown>): void {
+    for (const f of fields)
+        writeElement(dv, base + f.offset, f.type, f.size, v[f.name])
 }
 
 // ============================================================
@@ -354,8 +324,12 @@ function createStruct(t: CStruct): any {
         __struct: t,
         size,
         structAlign: maxEffectiveAlign,
-        decode: (buf: ArrayBuffer, offset = 0) => doDecode(fields, buf, offset),
-        encode: (v: any, buf?: ArrayBuffer, offset = 0) => doEncode(fields, size, v, buf, offset),
+        decode: (buf: ArrayBuffer, offset = 0) => doDecode(new DataView(buf), offset, fields),
+        encode: (v: any, buf?: ArrayBuffer, offset = 0) => {
+            const out = buf ?? new ArrayBuffer(size)
+            doEncode(new DataView(out), offset, fields, v)
+            return out
+        },
         offsetOf: (name: string) => {
             for (const f of fields) if (f.name === name) return f.offset
             throw new Error(`ffi-struct: no field "${name}"`)
@@ -365,7 +339,7 @@ function createStruct(t: CStruct): any {
             return {
                 buffer,
                 ptr: ffi.bufferPtr(buffer),
-                decode: (offset = 0) => doDecode(fields, buffer, offset),
+                decode: (offset = 0) => doDecode(new DataView(buffer), offset, fields),
             }
         },
     }

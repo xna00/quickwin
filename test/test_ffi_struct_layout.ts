@@ -65,10 +65,10 @@ export const suite = {
             t.check('offset a', 0, r.fields[0]!.offset)
             t.check('offset b', 4, r.fields[1]!.offset)  // b 自身偏移
             const b = r.fields[1]!
-            t.checkTrue('b 内嵌子布局', b.tag === 'struct')
-            if (b.tag === 'struct') {
-                t.check('b.x (含父偏移)', 4, b.member[0]!.offset)   // inner.x 绝对偏移 4
-                t.check('b.y (含父偏移)', 8, b.member[1]!.offset)   // inner.y 绝对偏移 8
+            t.checkTrue('b 是 struct 成员', b.type.tag === 'struct')
+            if (b.type.tag === 'struct') {
+                t.check('b.x (相对子起点)', 0, b.type.fields[0]!.offset)
+                t.check('b.y (相对子起点)', 4, b.type.fields[1]!.offset)
             }
         }
 
@@ -114,10 +114,10 @@ export const suite = {
             t.check('offset a', 0, r.fields[0]!.offset)
             t.check('offset u', 4, r.fields[1]!.offset)
             const uf = r.fields[1]!
-            t.checkTrue('u 内嵌子布局', uf.tag === 'union')
-            if (uf.tag === 'union') {
-                t.check('u.a', 4, uf.member[0]!.offset)   // union member 同偏移
-                t.check('u.b', 4, uf.member[1]!.offset)
+            t.checkTrue('u 是 union 成员', uf.type.tag === 'union')
+            if (uf.type.tag === 'union') {
+                t.check('u.a', 0, uf.type.fields[0]!.offset)   // union member 同偏移
+                t.check('u.b', 0, uf.type.fields[1]!.offset)
             }
             t.check('offset c', 8, r.fields[2]!.offset)
         }
@@ -192,7 +192,7 @@ export const suite = {
 
         t.section('CString')
         {
-            const s: CString = { tag: 'string', unit: 'u16', length: 10, encoding: 'utf16' }
+            const s: CString = { tag: 'string', unit: 'u16', length: 10, encoding: 'utf-16le' }
             const r = computeStructLayout({ tag: 'struct', member: [{ name: 'name', type: s }] })
             t.check('size', 20, r.size)  // 2 * 10
             t.check('align', 2, r.maxEffectiveAlign)
