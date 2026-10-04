@@ -8,23 +8,23 @@ import type { WStyle } from '../jsx.d.ts'
 const TVITEM = struct({
     tag: 'struct',
     member: [
-        { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
-        { name: 'hItem', type: { tag: 'basic', kind: 'ptr' } },
-        { name: 'state', type: { tag: 'basic', kind: 'u32' } },
-        { name: 'stateMask', type: { tag: 'basic', kind: 'u32' } },
-        { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
-        { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'iSelectedImage', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'cChildren', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'mask', type: 'u32' },
+        { name: 'hItem', type: 'ptr' },
+        { name: 'state', type: 'u32' },
+        { name: 'stateMask', type: 'u32' },
+        { name: 'pszText', type: 'ptr' },
+        { name: 'cchTextMax', type: 'i32' },
+        { name: 'iImage', type: 'i32' },
+        { name: 'iSelectedImage', type: 'i32' },
+        { name: 'cChildren', type: 'i32' },
+        { name: 'lParam', type: 'ptr' },
     ],
 })
 const TVINSERTSTRUCT = struct({
     tag: 'struct',
     member: [
-        { name: 'hParent', type: { tag: 'basic', kind: 'ptr' } },
-        { name: 'hInsertAfter', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'hParent', type: 'ptr' },
+        { name: 'hInsertAfter', type: 'ptr' },
         { name: 'item', type: TVITEM.__struct },
     ],
 })

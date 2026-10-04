@@ -12,9 +12,9 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'c', type: { tag: 'basic', kind: 'u32' } },
+                    { name: 'a', type: 'u32' },
+                    { name: 'b', type: 'u32' },
+                    { name: 'c', type: 'u32' },
                 ]
             }
             const r = computeStructLayout(s)
@@ -30,9 +30,9 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'c', type: { tag: 'basic', kind: 'u8' } },
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32' },
+                    { name: 'c', type: 'u8' },
                 ]
             }
             const r = computeStructLayout(s)
@@ -49,14 +49,14 @@ export const suite = {
             const inner: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'x', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'y', type: { tag: 'basic', kind: 'u32' } },
+                    { name: 'x', type: 'u32' },
+                    { name: 'y', type: 'u32' },
                 ]
             }
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
+                    { name: 'a', type: 'u8' },
                     { name: 'b', type: inner },
                 ]
             }
@@ -79,9 +79,9 @@ export const suite = {
             const u: CUnion = {
                 tag: 'union',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'c', type: { tag: 'basic', kind: 'u64' } },
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32' },
+                    { name: 'c', type: 'u64' },
                 ]
             }
             const r = computeStructLayout(u)
@@ -97,16 +97,16 @@ export const suite = {
             const u: CUnion = {
                 tag: 'union',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' } },
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32' },
                 ]
             }
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
+                    { name: 'a', type: 'u8' },
                     { name: 'u', type: u },
-                    { name: 'c', type: { tag: 'basic', kind: 'u8' } },
+                    { name: 'c', type: 'u8' },
                 ]
             }
             const r = computeStructLayout(s)
@@ -129,14 +129,14 @@ export const suite = {
             const inner: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'x', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'y', type: { tag: 'basic', kind: 'u32' } },
+                    { name: 'x', type: 'u32' },
+                    { name: 'y', type: 'u32' },
                 ]
             }
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
+                    { name: 'a', type: 'u8' },
                     { type: inner },   // 匿名：字段被提升
                 ]
             }
@@ -152,7 +152,7 @@ export const suite = {
 
         t.section('Array of basic')
         {
-            const arr: CArray = { tag: 'array', ctype: { tag: 'basic', kind: 'u32' }, length: 4 }
+            const arr: CArray = { tag: 'array', ctype: 'u32', length: 4 }
             const r = computeArray(arr)
             t.check('size', 16, r.size)
             t.check('align', 4, r.align)
@@ -163,8 +163,8 @@ export const suite = {
             const inner: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'x', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'y', type: { tag: 'basic', kind: 'u32' } },
+                    { name: 'x', type: 'u32' },
+                    { name: 'y', type: 'u32' },
                 ]
             }
             const arr: CArray = { tag: 'array', ctype: inner, length: 3 }
@@ -178,8 +178,8 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'arr', type: { tag: 'array', ctype: { tag: 'basic', kind: 'u32' }, length: 4 } },
+                    { name: 'a', type: 'u8' },
+                    { name: 'arr', type: { tag: 'array', ctype: 'u32', length: 4 } },
                 ]
             }
             const r = computeStructLayout(s)
@@ -206,9 +206,9 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct', pack: 1,
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' } },
-                    { name: 'c', type: { tag: 'basic', kind: 'u8' } },
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32' },
+                    { name: 'c', type: 'u8' },
                 ]
             }
             const r = computeStructLayout(s)
@@ -223,8 +223,8 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct', pack: 4,
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u64' } },  // natural align 8, capped to 4
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u64' },  // natural align 8, capped to 4
                 ]
             }
             const r = computeStructLayout(s)
@@ -239,8 +239,8 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' }, alignas: 8 },
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32', alignas: 8 },
                 ]
             }
             const r = computeStructLayout(s)
@@ -253,8 +253,8 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct',
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' }, alignas: 2 },  // natural is 4, alignas is 2
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32', alignas: 2 },  // natural is 4, alignas is 2
                 ]
             }
             const r = computeStructLayout(s)
@@ -269,8 +269,8 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct', pack: 1,
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' }, alignas: 8 },  // alignas wins over pack
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32', alignas: 8 },  // alignas wins over pack
                 ]
             }
             const r = computeStructLayout(s)
@@ -283,8 +283,8 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct', pack: 4,
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u64' }, alignas: 2 },  // natural 8, pack 4, alignas 2
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u64', alignas: 2 },  // natural 8, pack 4, alignas 2
                 ]
             }
             const r = computeStructLayout(s)
@@ -297,8 +297,8 @@ export const suite = {
             const s: CStruct = {
                 tag: 'struct', pack: 4,
                 member: [
-                    { name: 'a', type: { tag: 'basic', kind: 'u8' } },
-                    { name: 'b', type: { tag: 'basic', kind: 'u32' }, alignas: 16 },  // alignas(16) > pack(4)
+                    { name: 'a', type: 'u8' },
+                    { name: 'b', type: 'u32', alignas: 16 },  // alignas(16) > pack(4)
                 ]
             }
             const r = computeStructLayout(s)

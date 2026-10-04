@@ -10,33 +10,33 @@ function expectType<T extends true>(_value?: T): void {}
 const RECT = struct('RECT', {
     tag: 'struct',
     member: [
-        { name: 'left', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'top', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'right', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'bottom', type: { tag: 'basic', kind: 'i32' } },
+        { name: 'left', type: 'i32' },
+        { name: 'top', type: 'i32' },
+        { name: 'right', type: 'i32' },
+        { name: 'bottom', type: 'i32' },
     ],
 })
 
 const TVITEM = struct({
     tag: 'struct',
     member: [
-        { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
-        { name: 'hItem', type: { tag: 'basic', kind: 'ptr' } },
-        { name: 'state', type: { tag: 'basic', kind: 'u32' } },
-        { name: 'stateMask', type: { tag: 'basic', kind: 'u32' } },
-        { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
-        { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'iSelectedImage', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'cChildren', type: { tag: 'basic', kind: 'i32' } },
-        { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'mask', type: 'u32' },
+        { name: 'hItem', type: 'ptr' },
+        { name: 'state', type: 'u32' },
+        { name: 'stateMask', type: 'u32' },
+        { name: 'pszText', type: 'ptr' },
+        { name: 'cchTextMax', type: 'i32' },
+        { name: 'iImage', type: 'i32' },
+        { name: 'iSelectedImage', type: 'i32' },
+        { name: 'cChildren', type: 'i32' },
+        { name: 'lParam', type: 'ptr' },
     ],
 })
 const TVINSERTSTRUCT = struct({
     tag: 'struct',
     member: [
-        { name: 'hParent', type: { tag: 'basic', kind: 'ptr' } },
-        { name: 'hInsertAfter', type: { tag: 'basic', kind: 'ptr' } },
+        { name: 'hParent', type: 'ptr' },
+        { name: 'hInsertAfter', type: 'ptr' },
         { name: 'item', type: TVITEM.__struct },
     ],
 })
@@ -102,11 +102,11 @@ export const suite = {
         const M = struct({
             tag: 'struct',
             member: [
-                { name: 'n', type: { tag: 'basic', kind: 'i32' } },      // int
-                { name: 'd', type: { tag: 'basic', kind: 'u32' } },      // DWORD
-                { name: 'w', type: { tag: 'basic', kind: 'ptr' } },      // LPARAM
-                { name: 's', type: { tag: 'basic', kind: 'i16' } },      // short
-                { name: 'q', type: { tag: 'basic', kind: 'ptr' } },      // LONG_PTR
+                { name: 'n', type: 'i32' },      // int
+                { name: 'd', type: 'u32' },      // DWORD
+                { name: 'w', type: 'ptr' },      // LPARAM
+                { name: 's', type: 'i16' },      // short
+                { name: 'q', type: 'ptr' },      // LONG_PTR
             ],
         })
         t.check(`aliased size (${os.arch})`, is64 ? 32 : 20, M.size)
@@ -145,8 +145,8 @@ export const suite = {
         const A = struct({
             tag: 'struct',
             member: [
-                { name: 'v', type: { tag: 'array', ctype: { tag: 'basic', kind: 'u16' }, length: 4 } },
-                { name: 'k', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 2 } },
+                { name: 'v', type: { tag: 'array', ctype: 'u16', length: 4 } },
+                { name: 'k', type: { tag: 'array', ctype: 'i32', length: 2 } },
             ],
         })
         t.check('size == 16', 16, A.size)
@@ -160,7 +160,7 @@ export const suite = {
         t.section('T[1] stays an array (no scalar degradation)')
         const ONE = struct({
             tag: 'struct',
-            member: [{ name: 'v', type: { tag: 'array', ctype: { tag: 'basic', kind: 'u16' }, length: 1 } }],
+            member: [{ name: 'v', type: { tag: 'array', ctype: 'u16', length: 1 } }],
         })
         t.check('size == 2', 2, ONE.size)
         const one = ONE.decode(ONE.encode({ v: [42] }))
@@ -171,14 +171,14 @@ export const suite = {
         const PT = struct({
             tag: 'struct',
             member: [
-                { name: 'x', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'y', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'x', type: 'i32' },
+                { name: 'y', type: 'i32' },
             ],
         })
         const POLY = struct({
             tag: 'struct',
             member: [
-                { name: 'count', type: { tag: 'basic', kind: 'u32' } },
+                { name: 'count', type: 'u32' },
                 { name: 'pts', type: { tag: 'array', ctype: PT.__struct, length: 3 } },
             ],
         })
@@ -198,15 +198,15 @@ export const suite = {
         expectType<Equal<ReturnType<typeof POLY.decode>['pts'][0], ReturnType<typeof PT.decode>>>()
 
         let rejected = false
-        try { struct({ tag: 'struct', member: [{ name: 'v', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 0 } }] }) } catch { rejected = true }
+        try { struct({ tag: 'struct', member: [{ name: 'v', type: { tag: 'array', ctype: 'i32', length: 0 } }] }) } catch { rejected = true }
         t.check('array length 0 rejected', true, rejected)
 
         t.section('f32/f64 layout (MSVC: f@0, double@8)')
         const FL = struct({
             tag: 'struct',
             member: [
-                { name: 'f', type: { tag: 'basic', kind: 'f32' } },      // float
-                { name: 'd', type: { tag: 'basic', kind: 'f64' } },      // double
+                { name: 'f', type: 'f32' },      // float
+                { name: 'd', type: 'f64' },      // double
             ],
         })
         t.check('size == 16 (f@0, double aligned @8)', 16, FL.size)
@@ -219,13 +219,13 @@ export const suite = {
         const TCITEMW = struct({
             tag: 'struct',
             member: [
-                { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'dwState', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'dwStateMask', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+                { name: 'mask', type: 'u32' },
+                { name: 'dwState', type: 'u32' },
+                { name: 'dwStateMask', type: 'u32' },
+                { name: 'pszText', type: 'ptr' },
+                { name: 'cchTextMax', type: 'i32' },
+                { name: 'iImage', type: 'i32' },
+                { name: 'lParam', type: 'ptr' },
             ],
         })
         t.check('TCITEMW.size', is64 ? 40 : 28, TCITEMW.size)
@@ -235,15 +235,15 @@ export const suite = {
         const TTTOOLINFOW = struct({
             tag: 'struct',
             member: [
-                { name: 'cbSize', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'uFlags', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'hwnd', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'uId', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'rect', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 4 } },
-                { name: 'hinst', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpszText', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpReserved', type: { tag: 'basic', kind: 'ptr' } }, // WinXP+ 追加
+                { name: 'cbSize', type: 'u32' },
+                { name: 'uFlags', type: 'u32' },
+                { name: 'hwnd', type: 'ptr' },
+                { name: 'uId', type: 'ptr' },
+                { name: 'rect', type: { tag: 'array', ctype: 'i32', length: 4 } },
+                { name: 'hinst', type: 'ptr' },
+                { name: 'lpszText', type: 'ptr' },
+                { name: 'lParam', type: 'ptr' },
+                { name: 'lpReserved', type: 'ptr' }, // WinXP+ 追加
             ],
         })
         t.check('TTTOOLINFOW.size', is64 ? 72 : 48, TTTOOLINFOW.size)
@@ -252,29 +252,29 @@ export const suite = {
         const OPENFILENAMEW = struct({
             tag: 'struct',
             member: [
-                { name: 'lStructSize', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'hwndOwner', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'hInstance', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpstrFilter', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpstrCustomFilter', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'nMaxCustFilter', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'nFilterIndex', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lpstrFile', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'nMaxFile', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lpstrFileTitle', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'nMaxFileTitle', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lpstrInitialDir', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpstrTitle', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'Flags', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'nFileOffset', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'nFileExtension', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'lpstrDefExt', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lCustData', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpfnHook', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpTemplateName', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'pvReserved', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'dwReserved', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'FlagsEx', type: { tag: 'basic', kind: 'u32' } }, // Win2000+ 追加
+                { name: 'lStructSize', type: 'u32' },
+                { name: 'hwndOwner', type: 'ptr' },
+                { name: 'hInstance', type: 'ptr' },
+                { name: 'lpstrFilter', type: 'ptr' },
+                { name: 'lpstrCustomFilter', type: 'ptr' },
+                { name: 'nMaxCustFilter', type: 'u32' },
+                { name: 'nFilterIndex', type: 'u32' },
+                { name: 'lpstrFile', type: 'ptr' },
+                { name: 'nMaxFile', type: 'u32' },
+                { name: 'lpstrFileTitle', type: 'ptr' },
+                { name: 'nMaxFileTitle', type: 'u32' },
+                { name: 'lpstrInitialDir', type: 'ptr' },
+                { name: 'lpstrTitle', type: 'ptr' },
+                { name: 'Flags', type: 'u32' },
+                { name: 'nFileOffset', type: 'u16' },
+                { name: 'nFileExtension', type: 'u16' },
+                { name: 'lpstrDefExt', type: 'ptr' },
+                { name: 'lCustData', type: 'ptr' },
+                { name: 'lpfnHook', type: 'ptr' },
+                { name: 'lpTemplateName', type: 'ptr' },
+                { name: 'pvReserved', type: 'ptr' },
+                { name: 'dwReserved', type: 'u32' },
+                { name: 'FlagsEx', type: 'u32' }, // Win2000+ 追加
             ],
         })
         t.check('OPENFILENAMEW.size', is64 ? 152 : 88, OPENFILENAMEW.size)
@@ -285,14 +285,14 @@ export const suite = {
         const BROWSEINFOW = struct({
             tag: 'struct',
             member: [
-                { name: 'hwndOwner', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'pidlRoot', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'pszDisplayName', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lpszTitle', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'ulFlags', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lpfn', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'hwndOwner', type: 'ptr' },
+                { name: 'pidlRoot', type: 'ptr' },
+                { name: 'pszDisplayName', type: 'ptr' },
+                { name: 'lpszTitle', type: 'ptr' },
+                { name: 'ulFlags', type: 'u32' },
+                { name: 'lpfn', type: 'ptr' },
+                { name: 'lParam', type: 'ptr' },
+                { name: 'iImage', type: 'i32' },
             ],
         })
         t.check('BROWSEINFOW.size', is64 ? 64 : 32, BROWSEINFOW.size)
@@ -303,9 +303,9 @@ export const suite = {
         const NMHDR = struct({
             tag: 'struct',
             member: [
-                { name: 'hwndFrom', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'idFrom', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'code', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'hwndFrom', type: 'ptr' },
+                { name: 'idFrom', type: 'ptr' },
+                { name: 'code', type: 'i32' },
             ],
         })
         t.check('NMHDR.size', is64 ? 24 : 12, NMHDR.size)
@@ -316,12 +316,12 @@ export const suite = {
             tag: 'struct',
             member: [
                 { name: 'hdr', type: NMHDR.__struct },
-                { name: 'dwDrawStage', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'hdc', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'rc', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 4 } },
-                { name: 'dwItemSpec', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'uItemState', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lItemlParam', type: { tag: 'basic', kind: 'ptr' } },
+                { name: 'dwDrawStage', type: 'u32' },
+                { name: 'hdc', type: 'ptr' },
+                { name: 'rc', type: { tag: 'array', ctype: 'i32', length: 4 } },
+                { name: 'dwItemSpec', type: 'ptr' },
+                { name: 'uItemState', type: 'u32' },
+                { name: 'lItemlParam', type: 'ptr' },
             ],
         })
         t.check('NMCUSTOMDRAW.size', is64 ? 80 : 48, NMCUSTOMDRAW.size)
@@ -332,16 +332,16 @@ export const suite = {
             tag: 'struct',
             member: [
                 { name: 'hdr', type: NMHDR.__struct },
-                { name: 'dwDrawStage', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'hdc', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'rc', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 4 } },
-                { name: 'dwItemSpec', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'uItemState', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lItemlParam', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'clrText', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'clrTextBk', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'dwItemType', type: { tag: 'basic', kind: 'u32' } },
+                { name: 'dwDrawStage', type: 'u32' },
+                { name: 'hdc', type: 'ptr' },
+                { name: 'rc', type: { tag: 'array', ctype: 'i32', length: 4 } },
+                { name: 'dwItemSpec', type: 'ptr' },
+                { name: 'uItemState', type: 'u32' },
+                { name: 'lItemlParam', type: 'ptr' },
+                { name: 'clrText', type: 'u32' },
+                { name: 'clrTextBk', type: 'u32' },
+                { name: 'iSubItem', type: 'i32' },
+                { name: 'dwItemType', type: 'u32' },
             ],
         })
         t.check('NMLVCUSTOMDRAW.size', is64 ? 96 : 64, NMLVCUSTOMDRAW.size)
@@ -354,13 +354,13 @@ export const suite = {
             tag: 'struct',
             member: [
                 { name: 'hdr', type: NMHDR.__struct },
-                { name: 'iItem', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'uNewState', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'uOldState', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'uChanged', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'ptAction', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 2 } },
-                { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+                { name: 'iItem', type: 'i32' },
+                { name: 'iSubItem', type: 'i32' },
+                { name: 'uNewState', type: 'u32' },
+                { name: 'uOldState', type: 'u32' },
+                { name: 'uChanged', type: 'u32' },
+                { name: 'ptAction', type: { tag: 'array', ctype: 'i32', length: 2 } },
+                { name: 'lParam', type: 'ptr' },
             ],
         })
         t.check('NMLISTVIEW.size', is64 ? 64 : 44, NMLISTVIEW.size)
@@ -373,21 +373,21 @@ export const suite = {
         const LVITEMW = struct({
             tag: 'struct',
             member: [
-                { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'iItem', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'state', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'stateMask', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'iIndent', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iGroupId', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'cColumns', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'puColumns', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'piColFmt', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'iGroup', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'mask', type: 'u32' },
+                { name: 'iItem', type: 'i32' },
+                { name: 'iSubItem', type: 'i32' },
+                { name: 'state', type: 'u32' },
+                { name: 'stateMask', type: 'u32' },
+                { name: 'pszText', type: 'ptr' },
+                { name: 'cchTextMax', type: 'i32' },
+                { name: 'iImage', type: 'i32' },
+                { name: 'lParam', type: 'ptr' },
+                { name: 'iIndent', type: 'i32' },
+                { name: 'iGroupId', type: 'i32' },
+                { name: 'cColumns', type: 'u32' },
+                { name: 'puColumns', type: 'ptr' },
+                { name: 'piColFmt', type: 'ptr' },
+                { name: 'iGroup', type: 'i32' },
             ],
         })
         t.check('LVITEMW.size', is64 ? 88 : 60, LVITEMW.size)
@@ -398,17 +398,17 @@ export const suite = {
         const LVCOLUMNW = struct({
             tag: 'struct',
             member: [
-                { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'fmt', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'cx', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
-                { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iSubItem', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'iOrder', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'cxMin', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'cxDefault', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'cxIdeal', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'mask', type: 'u32' },
+                { name: 'fmt', type: 'i32' },
+                { name: 'cx', type: 'i32' },
+                { name: 'pszText', type: 'ptr' },
+                { name: 'cchTextMax', type: 'i32' },
+                { name: 'iSubItem', type: 'i32' },
+                { name: 'iImage', type: 'i32' },
+                { name: 'iOrder', type: 'i32' },
+                { name: 'cxMin', type: 'i32' },
+                { name: 'cxDefault', type: 'i32' },
+                { name: 'cxIdeal', type: 'i32' },
             ],
         })
         t.check('LVCOLUMNW.size', is64 ? 56 : 44, LVCOLUMNW.size)
@@ -420,21 +420,21 @@ export const suite = {
         const SYSTEMTIME = struct({
             tag: 'struct',
             member: [
-                { name: 'wYear', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'wMonth', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'wDayOfWeek', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'wDay', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'wHour', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'wMinute', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'wSecond', type: { tag: 'basic', kind: 'u16' } },
-                { name: 'wMilliseconds', type: { tag: 'basic', kind: 'u16' } },
+                { name: 'wYear', type: 'u16' },
+                { name: 'wMonth', type: 'u16' },
+                { name: 'wDayOfWeek', type: 'u16' },
+                { name: 'wDay', type: 'u16' },
+                { name: 'wHour', type: 'u16' },
+                { name: 'wMinute', type: 'u16' },
+                { name: 'wSecond', type: 'u16' },
+                { name: 'wMilliseconds', type: 'u16' },
             ],
         })
         const NMDATETIMECHANGE = struct({
             tag: 'struct',
             member: [
                 { name: 'hdr', type: NMHDR.__struct },
-                { name: 'dwFlags', type: { tag: 'basic', kind: 'u32' } },
+                { name: 'dwFlags', type: 'u32' },
                 { name: 'st', type: SYSTEMTIME.__struct },
             ],
         })
@@ -446,10 +446,10 @@ export const suite = {
         const LITEM = struct({
             tag: 'struct',
             member: [
-                { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'iLink', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'state', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'stateMask', type: { tag: 'basic', kind: 'u32' } },
+                { name: 'mask', type: 'u32' },
+                { name: 'iLink', type: 'i32' },
+                { name: 'state', type: 'u32' },
+                { name: 'stateMask', type: 'u32' },
                 { name: 'szID', type: { tag: 'string', unit: 'u16', length: 48, encoding: 'utf-16le' } },
             ],
         })

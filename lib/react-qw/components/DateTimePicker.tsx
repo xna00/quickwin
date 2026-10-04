@@ -8,21 +8,21 @@ import type { WStyle } from '../jsx.d.ts'
 const SYSTEMTIME = struct({
   tag: 'struct',
   member: [
-    { name: 'wYear', type: { tag: 'basic', kind: 'u16' } },
-    { name: 'wMonth', type: { tag: 'basic', kind: 'u16' } },
-    { name: 'wDayOfWeek', type: { tag: 'basic', kind: 'u16' } },
-    { name: 'wDay', type: { tag: 'basic', kind: 'u16' } },
-    { name: 'wHour', type: { tag: 'basic', kind: 'u16' } },
-    { name: 'wMinute', type: { tag: 'basic', kind: 'u16' } },
-    { name: 'wSecond', type: { tag: 'basic', kind: 'u16' } },
-    { name: 'wMilliseconds', type: { tag: 'basic', kind: 'u16' } },
+    { name: 'wYear', type: 'u16' },
+    { name: 'wMonth', type: 'u16' },
+    { name: 'wDayOfWeek', type: 'u16' },
+    { name: 'wDay', type: 'u16' },
+    { name: 'wHour', type: 'u16' },
+    { name: 'wMinute', type: 'u16' },
+    { name: 'wSecond', type: 'u16' },
+    { name: 'wMilliseconds', type: 'u16' },
   ],
 })
 const NMDATETIMECHANGE = struct({
   tag: 'struct',
   member: [
     { name: 'hdr', type: NMHDR.__struct },
-    { name: 'dwFlags', type: { tag: 'basic', kind: 'u32' } },
+    { name: 'dwFlags', type: 'u32' },
     { name: 'st', type: SYSTEMTIME.__struct },
   ],
 })

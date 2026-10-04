@@ -11,9 +11,9 @@ export const PTR_SIZE = IS64 ? 8 : 4
 export const NMHDR = struct({
   tag: 'struct',
   member: [
-    { name: 'hwndFrom', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'idFrom', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'code', type: { tag: 'basic', kind: 'i32' } },
+    { name: 'hwndFrom', type: 'ptr' },
+    { name: 'idFrom', type: 'ptr' },
+    { name: 'code', type: 'i32' },
   ],
 })
 export const NMHDR_SIZE = NMHDR.size // 24 (x64) / 12 (ia32)

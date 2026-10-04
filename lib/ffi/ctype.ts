@@ -1,9 +1,10 @@
 import * as os from 'os'
 
 // ============================================================
-// AST IR —— struct/bind 的类型描述树（CType = CBasic|CString|CArray|CStruct|CUnion）。
+// AST IR —— struct/bind 的类型描述树（CType = FieldKind|CString|CArray|CStruct|CUnion）。
+// 标量直接写 kind 字符串（如 'i32'/'ptr'），复合类型才是带 tag 的对象。
 // 只描述「C 声明怎么写」（unit/length/encoding 等意图）；内存布局与读写视图由
-// struct.ts 的 computeStructLayout/lowerType 单独 lower 成 layout IR。
+// struct.ts 的 computeStructLayout/lower 单独 lower 成 layout IR。
 // ============================================================
 
 // 标量 kind 词汇表（bind 与 struct 共用）：规范 kind 集合、C/Windows typedef 别名表、
@@ -34,11 +35,7 @@ export type FieldKind = CInteger | CFloat | CPointer
 // unit+length 共同决定 layout；encoding 只在 decode/encode 时使用，可与任意 unit 组合。
 export type Encoding = 'utf-8' | 'utf-16le'
 
-export type CType = CBasic | CString | CArray | CStruct | CUnion
-export type CBasic = {
-    tag: 'basic',
-    kind: FieldKind
-}
+export type CType = FieldKind | CString | CArray | CStruct | CUnion
 export type CString = {
     tag: 'string',
     unit: 'u8' | 'u16',   // 存储单元类型（决定槽宽与对齐）
@@ -51,7 +48,7 @@ export type CArray = {
     length: number
 }
 // 成员分两支，用 name 判别：
-//   命名成员：basic / string / array（没有可提升的子布局，必须命名）
+//   命名成员：标量 kind / string / array（没有可提升的子布局，必须命名）
 //   匿名聚合：struct / union（C11 匿名字段，其字段被 splice 提升进父结构）
 // alignas 抬对齐下限（pack 压上限）；bitfield 暂不支持。
 export type Member =

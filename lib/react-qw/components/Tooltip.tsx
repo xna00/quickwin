@@ -12,15 +12,15 @@ export interface TooltipProps {
 const TTTOOLINFOW = struct({
   tag: 'struct',
   member: [
-    { name: 'cbSize', type: { tag: 'basic', kind: 'u32' } },
-    { name: 'uFlags', type: { tag: 'basic', kind: 'u32' } },
-    { name: 'hwnd', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'uId', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'rect', type: { tag: 'array', ctype: { tag: 'basic', kind: 'i32' }, length: 4 } },
-    { name: 'hinst', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'lpszText', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'lpReserved', type: { tag: 'basic', kind: 'ptr' } }, // WinXP+ 追加字段（系统 sizeof 含之）
+    { name: 'cbSize', type: 'u32' },
+    { name: 'uFlags', type: 'u32' },
+    { name: 'hwnd', type: 'ptr' },
+    { name: 'uId', type: 'ptr' },
+    { name: 'rect', type: { tag: 'array', ctype: 'i32', length: 4 } },
+    { name: 'hinst', type: 'ptr' },
+    { name: 'lpszText', type: 'ptr' },
+    { name: 'lParam', type: 'ptr' },
+    { name: 'lpReserved', type: 'ptr' }, // WinXP+ 追加字段（系统 sizeof 含之）
   ],
 })
 

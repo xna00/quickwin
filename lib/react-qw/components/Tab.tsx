@@ -8,13 +8,13 @@ import type { WStyle } from '../jsx.d.ts'
 const TCITEMW = struct({
   tag: 'struct',
   member: [
-    { name: 'mask', type: { tag: 'basic', kind: 'u32' } },
-    { name: 'dwState', type: { tag: 'basic', kind: 'u32' } },
-    { name: 'dwStateMask', type: { tag: 'basic', kind: 'u32' } },
-    { name: 'pszText', type: { tag: 'basic', kind: 'ptr' } },
-    { name: 'cchTextMax', type: { tag: 'basic', kind: 'i32' } },
-    { name: 'iImage', type: { tag: 'basic', kind: 'i32' } },
-    { name: 'lParam', type: { tag: 'basic', kind: 'ptr' } },
+    { name: 'mask', type: 'u32' },
+    { name: 'dwState', type: 'u32' },
+    { name: 'dwStateMask', type: 'u32' },
+    { name: 'pszText', type: 'ptr' },
+    { name: 'cchTextMax', type: 'i32' },
+    { name: 'iImage', type: 'i32' },
+    { name: 'lParam', type: 'ptr' },
   ],
 })
 

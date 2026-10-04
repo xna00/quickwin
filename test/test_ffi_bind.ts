@@ -196,9 +196,9 @@ export const suite = {
         const LOGBRUSH = struct({
             tag: 'struct',
             member: [
-                { name: 'lbStyle', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lbColor', type: { tag: 'basic', kind: 'u32' } },
-                { name: 'lbHatch', type: { tag: 'basic', kind: 'ptr' } },
+                { name: 'lbStyle', type: 'u32' },
+                { name: 'lbColor', type: 'u32' },
+                { name: 'lbHatch', type: 'ptr' },
             ],
         })
         const deleteObject = bind('gdi32.dll', 'DeleteObject', 'ptr -> i32')
@@ -211,16 +211,16 @@ export const suite = {
         const POINT = struct({
             tag: 'struct',
             member: [
-                { name: 'x', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'y', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'x', type: 'i32' },
+                { name: 'y', type: 'i32' },
             ],
         })
         const LOGPEN = struct({
             tag: 'struct',
             member: [
-                { name: 'lopnStyle', type: { tag: 'basic', kind: 'u32' } },
+                { name: 'lopnStyle', type: 'u32' },
                 { name: 'lopnWidth', type: POINT.__struct },
-                { name: 'lopnColor', type: { tag: 'basic', kind: 'u32' } },
+                { name: 'lopnColor', type: 'u32' },
             ],
         })
         const createPenIndirect = bind('gdi32.dll', 'CreatePenIndirect', '<LOGPEN>ptr -> ptr', { LOGPEN })
@@ -251,10 +251,10 @@ export const suite = {
         const RECT = struct('RECT', {
             tag: 'struct',
             member: [
-                { name: 'left', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'top', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'right', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'bottom', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'left', type: 'i32' },
+                { name: 'top', type: 'i32' },
+                { name: 'right', type: 'i32' },
+                { name: 'bottom', type: 'i32' },
             ],
         })
         const getWindowRect = bind('user32.dll', 'GetWindowRect', 'ptr <RECT>ptr -> i32', { RECT })
@@ -272,15 +272,15 @@ export const suite = {
         const TM = struct({
             tag: 'struct',
             member: [
-                { name: 'tm_sec', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_min', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_hour', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_mday', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_mon', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_year', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_wday', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_yday', type: { tag: 'basic', kind: 'i32' } },
-                { name: 'tm_isdst', type: { tag: 'basic', kind: 'i32' } },
+                { name: 'tm_sec', type: 'i32' },
+                { name: 'tm_min', type: 'i32' },
+                { name: 'tm_hour', type: 'i32' },
+                { name: 'tm_mday', type: 'i32' },
+                { name: 'tm_mon', type: 'i32' },
+                { name: 'tm_year', type: 'i32' },
+                { name: 'tm_wday', type: 'i32' },
+                { name: 'tm_yday', type: 'i32' },
+                { name: 'tm_isdst', type: 'i32' },
             ],
         })
         const localtime = bind('msvcrt.dll', 'localtime', '<VOID>ptr -> <TM>ptr')

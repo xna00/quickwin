@@ -2,7 +2,7 @@ import '../text-codec.js'
 import * as ffi from 'ffi'
 import {
     PTR_SIZE, type StructPtr, type FieldKind,
-    type CType, type CBasic, type CString, type CArray,
+    type CType, type CString, type CArray,
     type CStruct, type CUnion, type Member, type Encoding,
 } from './ctype.js'
 
@@ -19,7 +19,7 @@ import {
 // 类型推导 — CType IR
 // ============================================================
 
-type ValOf<C extends CType> = C extends CBasic ? number
+type ValOf<C extends CType> = C extends FieldKind ? number
     : C extends CString ? string
     : C extends CArray ? Tuple<ValOf<C['ctype']>, C['length']>
     : C extends CStruct | CUnion ? ShapeOfC<C['member']>
@@ -109,9 +109,9 @@ type Layout = {
 // CType → { size, align, FieldType }：聚合递归进 computeStructLayout。
 // 每个子树每层只 lower 一次（array 元素复用同一结果），不再分别算 size 和 type。
 function lower(t: CType): { size: number, align: number, type: FieldType } {
-    if (t.tag === 'basic') {
-        const s = SizeAlign[t.kind]
-        return { size: s, align: s, type: { tag: 'basic', kind: t.kind } }
+    if (typeof t === 'string') {
+        const s = SizeAlign[t]
+        return { size: s, align: s, type: { tag: 'basic', kind: t } }
     }
     if (t.tag === 'string') {
         const s = SizeAlign[t.unit]
