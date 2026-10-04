@@ -1,7 +1,7 @@
 import * as os from 'os'
 import { Tester } from './test_helper.js'
 import { struct } from '../lib/ffi/struct.js'
-import { bind } from '../lib/ffi/bind.js'
+import { bind, type Ptr } from '../lib/ffi/bind.js'
 
 // 编译期断言工具（仅类型层，运行时无开销）
 type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends (<G>() => G extends B ? 1 : 2) ? true : false
@@ -16,19 +16,19 @@ const RECT = struct('RECT', [
 
 const TVITEM = struct([
     { name: 'mask', type: 'u32' },
-    { name: 'hItem', type: 'ptr' },
+    { name: 'hItem', type: '<>ptr' },
     { name: 'state', type: 'u32' },
     { name: 'stateMask', type: 'u32' },
-    { name: 'pszText', type: 'ptr' },
+    { name: 'pszText', type: '<>ptr' },
     { name: 'cchTextMax', type: 'i32' },
     { name: 'iImage', type: 'i32' },
     { name: 'iSelectedImage', type: 'i32' },
     { name: 'cChildren', type: 'i32' },
-    { name: 'lParam', type: 'ptr' },
+    { name: 'lParam', type: '<>ptr' },
 ])
 const TVINSERTSTRUCT = struct([
-    { name: 'hParent', type: 'ptr' },
-    { name: 'hInsertAfter', type: 'ptr' },
+    { name: 'hParent', type: '<>ptr' },
+    { name: 'hInsertAfter', type: '<>ptr' },
     { name: 'item', type: TVITEM.__struct },
 ])
 
@@ -49,9 +49,9 @@ export const suite = {
         t.check('offsetOf bottom', 12, RECT.offsetOf('bottom'))
 
         t.section('GetWindowRect fills RECT buffer')
-        const getWindowRect = bind('user32.dll', 'GetWindowRect', 'ptr <VOID>ptr -> int')
-        const getWindowRectLayout = bind('user32.dll', 'GetWindowRect', 'ptr <RECT>ptr -> int', { RECT })
-        const getDesktopWindow = bind('user32.dll', 'GetDesktopWindow', ' -> ptr')
+        const getWindowRect = bind('user32.dll', 'GetWindowRect', '<>ptr <VOID>ptr -> int')
+        const getWindowRectLayout = bind('user32.dll', 'GetWindowRect', '<>ptr <RECT>ptr -> int', { RECT })
+        const getDesktopWindow = bind('user32.dll', 'GetDesktopWindow', ' -> <>ptr')
         const hwnd = getDesktopWindow()
         const wrect = new ArrayBuffer(16)
         const ok = getWindowRect(hwnd, wrect)
@@ -59,7 +59,7 @@ export const suite = {
         const wr = RECT.decode(wrect)
         t.checkTrue('screen RECT non-empty', wr.right > 0 && wr.bottom > 0)
 
-        // out 参数：命名 struct 的 alloc() 句柄 → .ptr 为 StructPtr<'RECT'>，直接喂 <RECT>ptr
+        // out 参数：命名 struct 的 alloc() 句柄 → .ptr 为 Ptr<'RECT'>，直接喂 <RECT>ptr
         t.section('RECT.alloc() out-param handle')
         const out = RECT.alloc()
         t.checkTrue('alloc() exposes buffer + ptr', out.buffer instanceof ArrayBuffer && typeof out.ptr === 'number')
@@ -91,11 +91,11 @@ export const suite = {
 
         t.section('C typedef aliases (int/DWORD/LPARAM/LONG_PTR/short)')
         const M = struct([
-            { name: 'n', type: 'i32' },      // int
-            { name: 'd', type: 'u32' },      // DWORD
-            { name: 'w', type: 'ptr' },      // LPARAM
-            { name: 's', type: 'i16' },      // short
-            { name: 'q', type: 'ptr' },      // LONG_PTR
+            { name: 'n', type: 'i32' },             // int
+            { name: 'd', type: 'u32' },             // DWORD
+            { name: 'w', type: '<>ptr' },            // LPARAM
+            { name: 's', type: 'i16' },             // short
+            { name: 'q', type: '<>ptr' },            // LONG_PTR
         ])
         t.check(`aliased size (${os.arch})`, is64 ? 32 : 20, M.size)
         const mb = M.encode({ n: -5, d: 0xFFFFFFFF, w: 0xAABBCCDD, s: -7, q: 0x11223344 })
@@ -173,6 +173,29 @@ export const suite = {
         try { struct([{ name: 'v', type: { tag: 'array', ctype: 'i32', length: 0 } }]) } catch { rejected = true }
         t.check('array length 0 rejected', true, rejected)
 
+        let rejectedBare = false
+        try { (struct as any)([{ name: 'p', type: 'ptr' }]) } catch { rejectedBare = true }
+        t.check('bare "ptr" member rejected', true, rejectedBare)
+
+        t.section("pointer member '<>ptr' raw vs '<T>ptr' branded")
+        const PTR = struct([
+            { name: 'raw', type: '<>ptr' },
+            { name: 'r', type: '<RECT>ptr' },
+            { name: 'tag', type: 'u32' },
+        ])
+        t.check('PTR.size', is64 ? 24 : 12, PTR.size)
+        t.check('offsetOf raw', 0, PTR.offsetOf('raw'))
+        t.check('offsetOf r', is64 ? 8 : 4, PTR.offsetOf('r'))
+        t.check('offsetOf tag', is64 ? 16 : 8, PTR.offsetOf('tag'))
+        const rawOut = RECT.alloc()
+        const pd = PTR.decode(PTR.encode({ raw: rawOut.ptr, r: rawOut.ptr, tag: 7 }))
+        t.check('raw roundtrip', rawOut.ptr, pd.raw)
+        t.check('r roundtrip', rawOut.ptr, pd.r)
+        t.check('tag', 7, pd.tag)
+        // 编译期：'<>ptr' → number（T='' 品牌退化）；'<RECT>ptr' → Ptr<'RECT'>（品牌）
+        expectType<Equal<ReturnType<typeof PTR.decode>['raw'], number>>()
+        expectType<Equal<ReturnType<typeof PTR.decode>['r'], Ptr<'RECT'>>>()
+
         t.section('f32/f64 layout (MSVC: f@0, double@8)')
         const FL = struct([
             { name: 'f', type: 'f32' },      // float
@@ -189,10 +212,10 @@ export const suite = {
             { name: 'mask', type: 'u32' },
             { name: 'dwState', type: 'u32' },
             { name: 'dwStateMask', type: 'u32' },
-            { name: 'pszText', type: 'ptr' },
+            { name: 'pszText', type: '<>ptr' },
             { name: 'cchTextMax', type: 'i32' },
             { name: 'iImage', type: 'i32' },
-            { name: 'lParam', type: 'ptr' },
+            { name: 'lParam', type: '<>ptr' },
         ])
         t.check('TCITEMW.size', is64 ? 40 : 28, TCITEMW.size)
         t.check('TCITEMW.offsetOf pszText', is64 ? 16 : 12, TCITEMW.offsetOf('pszText'))
@@ -201,39 +224,39 @@ export const suite = {
         const TTTOOLINFOW = struct([
             { name: 'cbSize', type: 'u32' },
             { name: 'uFlags', type: 'u32' },
-            { name: 'hwnd', type: 'ptr' },
-            { name: 'uId', type: 'ptr' },
+            { name: 'hwnd', type: '<>ptr' },
+            { name: 'uId', type: '<>ptr' },
             { name: 'rect', type: { tag: 'array', ctype: 'i32', length: 4 } },
-            { name: 'hinst', type: 'ptr' },
-            { name: 'lpszText', type: 'ptr' },
-            { name: 'lParam', type: 'ptr' },
-            { name: 'lpReserved', type: 'ptr' }, // WinXP+ 追加
+            { name: 'hinst', type: '<>ptr' },
+            { name: 'lpszText', type: '<>ptr' },
+            { name: 'lParam', type: '<>ptr' },
+            { name: 'lpReserved', type: '<>ptr' }, // WinXP+ 追加
         ])
         t.check('TTTOOLINFOW.size', is64 ? 72 : 48, TTTOOLINFOW.size)
         t.check('TTTOOLINFOW.offsetOf lpszText', is64 ? 48 : 36, TTTOOLINFOW.offsetOf('lpszText'))
 
         const OPENFILENAMEW = struct([
             { name: 'lStructSize', type: 'u32' },
-            { name: 'hwndOwner', type: 'ptr' },
-            { name: 'hInstance', type: 'ptr' },
-            { name: 'lpstrFilter', type: 'ptr' },
-            { name: 'lpstrCustomFilter', type: 'ptr' },
+            { name: 'hwndOwner', type: '<>ptr' },
+            { name: 'hInstance', type: '<>ptr' },
+            { name: 'lpstrFilter', type: '<>ptr' },
+            { name: 'lpstrCustomFilter', type: '<>ptr' },
             { name: 'nMaxCustFilter', type: 'u32' },
             { name: 'nFilterIndex', type: 'u32' },
-            { name: 'lpstrFile', type: 'ptr' },
+            { name: 'lpstrFile', type: '<>ptr' },
             { name: 'nMaxFile', type: 'u32' },
-            { name: 'lpstrFileTitle', type: 'ptr' },
+            { name: 'lpstrFileTitle', type: '<>ptr' },
             { name: 'nMaxFileTitle', type: 'u32' },
-            { name: 'lpstrInitialDir', type: 'ptr' },
-            { name: 'lpstrTitle', type: 'ptr' },
+            { name: 'lpstrInitialDir', type: '<>ptr' },
+            { name: 'lpstrTitle', type: '<>ptr' },
             { name: 'Flags', type: 'u32' },
             { name: 'nFileOffset', type: 'u16' },
             { name: 'nFileExtension', type: 'u16' },
-            { name: 'lpstrDefExt', type: 'ptr' },
-            { name: 'lCustData', type: 'ptr' },
-            { name: 'lpfnHook', type: 'ptr' },
-            { name: 'lpTemplateName', type: 'ptr' },
-            { name: 'pvReserved', type: 'ptr' },
+            { name: 'lpstrDefExt', type: '<>ptr' },
+            { name: 'lCustData', type: '<>ptr' },
+            { name: 'lpfnHook', type: '<>ptr' },
+            { name: 'lpTemplateName', type: '<>ptr' },
+            { name: 'pvReserved', type: '<>ptr' },
             { name: 'dwReserved', type: 'u32' },
             { name: 'FlagsEx', type: 'u32' }, // Win2000+ 追加
         ])
@@ -243,13 +266,13 @@ export const suite = {
         t.check('OPENFILENAMEW.offsetOf lpstrTitle', is64 ? 88 : 48, OPENFILENAMEW.offsetOf('lpstrTitle'))
 
         const BROWSEINFOW = struct([
-            { name: 'hwndOwner', type: 'ptr' },
-            { name: 'pidlRoot', type: 'ptr' },
-            { name: 'pszDisplayName', type: 'ptr' },
-            { name: 'lpszTitle', type: 'ptr' },
+            { name: 'hwndOwner', type: '<>ptr' },
+            { name: 'pidlRoot', type: '<>ptr' },
+            { name: 'pszDisplayName', type: '<>ptr' },
+            { name: 'lpszTitle', type: '<>ptr' },
             { name: 'ulFlags', type: 'u32' },
-            { name: 'lpfn', type: 'ptr' },
-            { name: 'lParam', type: 'ptr' },
+            { name: 'lpfn', type: '<>ptr' },
+            { name: 'lParam', type: '<>ptr' },
             { name: 'iImage', type: 'i32' },
         ])
         t.check('BROWSEINFOW.size', is64 ? 64 : 32, BROWSEINFOW.size)
@@ -258,8 +281,8 @@ export const suite = {
 
         t.section('NMHDR（嵌套时 MSVC 尾 padding 传染）')
         const NMHDR = struct([
-            { name: 'hwndFrom', type: 'ptr' },
-            { name: 'idFrom', type: 'ptr' },
+            { name: 'hwndFrom', type: '<>ptr' },
+            { name: 'idFrom', type: '<>ptr' },
             { name: 'code', type: 'i32' },
         ])
         t.check('NMHDR.size', is64 ? 24 : 12, NMHDR.size)
@@ -269,11 +292,11 @@ export const suite = {
         const NMCUSTOMDRAW = struct([
             { name: 'hdr', type: NMHDR.__struct },
             { name: 'dwDrawStage', type: 'u32' },
-            { name: 'hdc', type: 'ptr' },
+            { name: 'hdc', type: '<>ptr' },
             { name: 'rc', type: { tag: 'array', ctype: 'i32', length: 4 } },
-            { name: 'dwItemSpec', type: 'ptr' },
+            { name: 'dwItemSpec', type: '<>ptr' },
             { name: 'uItemState', type: 'u32' },
-            { name: 'lItemlParam', type: 'ptr' },
+            { name: 'lItemlParam', type: '<>ptr' },
         ])
         t.check('NMCUSTOMDRAW.size', is64 ? 80 : 48, NMCUSTOMDRAW.size)
         t.check('NMCUSTOMDRAW.offsetOf dwDrawStage', is64 ? 24 : 12, NMCUSTOMDRAW.offsetOf('dwDrawStage'))
@@ -282,11 +305,11 @@ export const suite = {
         const NMLVCUSTOMDRAW = struct([
             { name: 'hdr', type: NMHDR.__struct },
             { name: 'dwDrawStage', type: 'u32' },
-            { name: 'hdc', type: 'ptr' },
+            { name: 'hdc', type: '<>ptr' },
             { name: 'rc', type: { tag: 'array', ctype: 'i32', length: 4 } },
-            { name: 'dwItemSpec', type: 'ptr' },
+            { name: 'dwItemSpec', type: '<>ptr' },
             { name: 'uItemState', type: 'u32' },
-            { name: 'lItemlParam', type: 'ptr' },
+            { name: 'lItemlParam', type: '<>ptr' },
             { name: 'clrText', type: 'u32' },
             { name: 'clrTextBk', type: 'u32' },
             { name: 'iSubItem', type: 'i32' },
@@ -306,7 +329,7 @@ export const suite = {
             { name: 'uOldState', type: 'u32' },
             { name: 'uChanged', type: 'u32' },
             { name: 'ptAction', type: { tag: 'array', ctype: 'i32', length: 2 } },
-            { name: 'lParam', type: 'ptr' },
+            { name: 'lParam', type: '<>ptr' },
         ])
         t.check('NMLISTVIEW.size', is64 ? 64 : 44, NMLISTVIEW.size)
         t.check('NMLISTVIEW.offsetOf iItem', is64 ? 24 : 12, NMLISTVIEW.offsetOf('iItem'))
@@ -321,15 +344,15 @@ export const suite = {
             { name: 'iSubItem', type: 'i32' },
             { name: 'state', type: 'u32' },
             { name: 'stateMask', type: 'u32' },
-            { name: 'pszText', type: 'ptr' },
+            { name: 'pszText', type: '<>ptr' },
             { name: 'cchTextMax', type: 'i32' },
             { name: 'iImage', type: 'i32' },
-            { name: 'lParam', type: 'ptr' },
+            { name: 'lParam', type: '<>ptr' },
             { name: 'iIndent', type: 'i32' },
             { name: 'iGroupId', type: 'i32' },
             { name: 'cColumns', type: 'u32' },
-            { name: 'puColumns', type: 'ptr' },
-            { name: 'piColFmt', type: 'ptr' },
+            { name: 'puColumns', type: '<>ptr' },
+            { name: 'piColFmt', type: '<>ptr' },
             { name: 'iGroup', type: 'i32' },
         ])
         t.check('LVITEMW.size', is64 ? 88 : 60, LVITEMW.size)
@@ -341,7 +364,7 @@ export const suite = {
             { name: 'mask', type: 'u32' },
             { name: 'fmt', type: 'i32' },
             { name: 'cx', type: 'i32' },
-            { name: 'pszText', type: 'ptr' },
+            { name: 'pszText', type: '<>ptr' },
             { name: 'cchTextMax', type: 'i32' },
             { name: 'iSubItem', type: 'i32' },
             { name: 'iImage', type: 'i32' },

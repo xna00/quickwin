@@ -62,20 +62,20 @@ const LV_WS = gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle
 const NMCUSTOMDRAW = struct([
   { name: 'hdr', type: NMHDR.__struct },
   { name: 'dwDrawStage', type: 'u32' },
-  { name: 'hdc', type: 'ptr' },
+  { name: 'hdc', type: '<>ptr' },
   { name: 'rc', type: { tag: 'array', ctype: 'i32', length: 4 } },
-  { name: 'dwItemSpec', type: 'ptr' },
+  { name: 'dwItemSpec', type: '<>ptr' },
   { name: 'uItemState', type: 'u32' },
-  { name: 'lItemlParam', type: 'ptr' },
+  { name: 'lItemlParam', type: '<>ptr' },
 ])
 const NMLVCUSTOMDRAW = struct([
   { name: 'hdr', type: NMHDR.__struct },
   { name: 'dwDrawStage', type: 'u32' },
-  { name: 'hdc', type: 'ptr' },
+  { name: 'hdc', type: '<>ptr' },
   { name: 'rc', type: { tag: 'array', ctype: 'i32', length: 4 } },
-  { name: 'dwItemSpec', type: 'ptr' },
+  { name: 'dwItemSpec', type: '<>ptr' },
   { name: 'uItemState', type: 'u32' },
-  { name: 'lItemlParam', type: 'ptr' },
+  { name: 'lItemlParam', type: '<>ptr' },
   { name: 'clrText', type: 'u32' },
   { name: 'clrTextBk', type: 'u32' },
   { name: 'iSubItem', type: 'i32' },
@@ -90,7 +90,7 @@ const NMLISTVIEW = struct([
   { name: 'uOldState', type: 'u32' },
   { name: 'uChanged', type: 'u32' },
   { name: 'ptAction', type: { tag: 'array', ctype: 'i32', length: 2 } },
-  { name: 'lParam', type: 'ptr' },
+  { name: 'lParam', type: '<>ptr' },
 ])
 const CD_STAGE = NMCUSTOMDRAW.offsetOf('dwDrawStage')
 const CD_HDC = NMCUSTOMDRAW.offsetOf('hdc')
@@ -109,15 +109,15 @@ const LVITEMW = struct([
   { name: 'iSubItem', type: 'i32' },
   { name: 'state', type: 'u32' },
   { name: 'stateMask', type: 'u32' },
-  { name: 'pszText', type: 'ptr' },
+  { name: 'pszText', type: '<>ptr' },
   { name: 'cchTextMax', type: 'i32' },
   { name: 'iImage', type: 'i32' },
-  { name: 'lParam', type: 'ptr' },
+  { name: 'lParam', type: '<>ptr' },
   { name: 'iIndent', type: 'i32' },
   { name: 'iGroupId', type: 'i32' },
   { name: 'cColumns', type: 'u32' },
-  { name: 'puColumns', type: 'ptr' },
-  { name: 'piColFmt', type: 'ptr' },
+  { name: 'puColumns', type: '<>ptr' },
+  { name: 'piColFmt', type: '<>ptr' },
   { name: 'iGroup', type: 'i32' },
 ])
 
@@ -125,7 +125,7 @@ const LVCOLUMNW = struct([
   { name: 'mask', type: 'u32' },
   { name: 'fmt', type: 'i32' },
   { name: 'cx', type: 'i32' },
-  { name: 'pszText', type: 'ptr' },
+  { name: 'pszText', type: '<>ptr' },
   { name: 'cchTextMax', type: 'i32' },
   { name: 'iSubItem', type: 'i32' },
   { name: 'iImage', type: 'i32' },
@@ -148,9 +148,9 @@ function ensureGdi(): GdiFns | null {
   if (gdiFns) return gdiFns
   try {
     gdiFns = {
-      createFontIndirectW: bind('gdi32.dll', 'CreateFontIndirectW', '<VOID>ptr -> ptr'),
-      selectObjectFn: bind('gdi32.dll', 'SelectObject', 'ptr ptr -> ptr'),
-      getObjectW: bind('gdi32.dll', 'GetObjectW', 'ptr i32 <VOID>ptr -> i32'),
+      createFontIndirectW: bind('gdi32.dll', 'CreateFontIndirectW', '<VOID>ptr -> <>ptr'),
+      selectObjectFn: bind('gdi32.dll', 'SelectObject', '<>ptr <>ptr -> <>ptr'),
+      getObjectW: bind('gdi32.dll', 'GetObjectW', '<>ptr i32 <VOID>ptr -> i32'),
     }
   } catch {
     return null
@@ -169,9 +169,9 @@ function ensureUser32(): User32Fns | null {
   if (user32Fns) return user32Fns
   try {
     user32Fns = {
-      loadCursorW: bind('user32.dll', 'LoadCursorW', 'ptr ptr -> ptr'),
-      setCursorFn: bind('user32.dll', 'SetCursor', 'ptr -> ptr'),
-      screenToClient: bind('user32.dll', 'ScreenToClient', 'ptr <VOID>ptr -> i32'),
+      loadCursorW: bind('user32.dll', 'LoadCursorW', '<>ptr <>ptr -> <>ptr'),
+      setCursorFn: bind('user32.dll', 'SetCursor', '<>ptr -> <>ptr'),
+      screenToClient: bind('user32.dll', 'ScreenToClient', '<>ptr <VOID>ptr -> i32'),
     }
   } catch {
     return null

@@ -7,19 +7,19 @@ import type { WStyle } from '../jsx.d.ts'
 
 const TVITEM = struct([
     { name: 'mask', type: 'u32' },
-    { name: 'hItem', type: 'ptr' },
+    { name: 'hItem', type: '<>ptr' },
     { name: 'state', type: 'u32' },
     { name: 'stateMask', type: 'u32' },
-    { name: 'pszText', type: 'ptr' },
+    { name: 'pszText', type: '<>ptr' },
     { name: 'cchTextMax', type: 'i32' },
     { name: 'iImage', type: 'i32' },
     { name: 'iSelectedImage', type: 'i32' },
     { name: 'cChildren', type: 'i32' },
-    { name: 'lParam', type: 'ptr' },
+    { name: 'lParam', type: '<>ptr' },
 ])
 const TVINSERTSTRUCT = struct([
-    { name: 'hParent', type: 'ptr' },
-    { name: 'hInsertAfter', type: 'ptr' },
+    { name: 'hParent', type: '<>ptr' },
+    { name: 'hInsertAfter', type: '<>ptr' },
     { name: 'item', type: TVITEM.__struct },
 ])
 

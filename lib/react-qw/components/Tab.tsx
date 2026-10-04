@@ -9,10 +9,10 @@ const TCITEMW = struct([
   { name: 'mask', type: 'u32' },
   { name: 'dwState', type: 'u32' },
   { name: 'dwStateMask', type: 'u32' },
-  { name: 'pszText', type: 'ptr' },
+  { name: 'pszText', type: '<>ptr' },
   { name: 'cchTextMax', type: 'i32' },
   { name: 'iImage', type: 'i32' },
-  { name: 'lParam', type: 'ptr' },
+  { name: 'lParam', type: '<>ptr' },
 ])
 
 function textToUtf16(s: string): ArrayBuffer {

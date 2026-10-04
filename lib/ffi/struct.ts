@@ -1,7 +1,8 @@
 import '../text-codec.js'
 import * as ffi from 'ffi'
 import {
-    PTR_SIZE, type StructPtr, type FieldKind,
+    PTR_SIZE, type StructPtr, type Ptr, type CPointer,
+    type CInteger, type CFloat,
     type CType, type CString, type CArray,
     type CStruct, type CUnion, type Member, type Encoding,
 } from './ctype.js'
@@ -9,11 +10,11 @@ import {
 // ============================================================
 // 聚合定义（唯一 API：CType IR，member 数组即定义）：
 //   struct([...member])                  — 匿名结构体
-//   struct('RECT', [...member])          — 命名结构体（alloc().ptr 带 StructPtr<'RECT'> 品牌）
+//   struct('RECT', [...member])          — 命名结构体（alloc().ptr 带 Ptr<'RECT'> 品牌）
 //   union([...member])                   — 匿名联合体
 //   union('U', [...member])              — 命名联合体（同样可用于 <U>ptr 布局）
 // 可选 { pack } 压对齐上限。layout 采用 MSVC 对齐语义：
-//   i8/u8→1  i16/u16→2  i32/u32/f32→4  i64/u64/f64→8  ptr→arch 宽(4/8)
+//   i8/u8→1  i16/u16→2  i32/u32/f32→4  i64/u64/f64→8  '<>ptr'/'<T>ptr'→arch 宽(4/8)
 //   struct 对齐 = 最大字段对齐，总尺寸末尾补齐；pack 压上限、alignas 抬下限
 // ============================================================
 
@@ -21,7 +22,11 @@ import {
 // 类型推导 — CType IR
 // ============================================================
 
-type ValOf<C extends CType> = C extends FieldKind ? number
+// 指针成员：'<>ptr' → number（T='' 品牌退化）；'<NAME>ptr' → Ptr<NAME>（品牌 number）。
+// 该品牌 number 可直接喂 bind 的 <NAME>ptr 形参（裸地址透传）。
+type ValOf<C extends CType> =
+    C extends CPointer<infer T> ? Ptr<T>
+    : C extends CInteger | CFloat ? number
     : C extends CString ? string
     : C extends CArray ? Tuple<ValOf<C['ctype']>, C['length']>
     : C extends CStruct | CUnion ? ShapeOfC<C['member']>
@@ -49,21 +54,23 @@ type FieldShape<M extends Member> =
 // 运行时类型
 // ============================================================
 
-// kind → size/align
-const SizeAlign: Record<FieldKind, number> = {
+// lower 后指针统一归一为内部 kind 'ptr'（用户面写 '<>ptr' 裸地址或 '<NAME>ptr' 带名指针）。
+type RuntimeKind = CInteger | CFloat | 'ptr'
+
+// kind → size/align（不含指针：指针统一 PTR_SIZE，见 lower）。
+const SizeAlign: Record<CInteger | CFloat, number> = {
     u8: 1, i8: 1,
     u16: 2, i16: 2,
     u32: 4, i32: 4,
     u64: 8, i64: 8,
     f32: 4, f64: 8,
-    ptr: PTR_SIZE,
 }
 
 // 运行时 Field：IR 的 lowered 视图（独立于 CType，不保留 Member/alignas）。
 // computeStructLayout 在 lowering 时把子布局内嵌进 FieldType（struct/union→fields，
 // array→elementType+elementSize），运行期 read/write 零查表；offset 相对本层起点。
 type FieldType =
-    { tag: 'basic', kind: FieldKind }
+    { tag: 'basic', kind: RuntimeKind }
     | { tag: 'string', encoding: Encoding }
     | { tag: 'struct' | 'union', fields: Field[] }
     | { tag: 'array', elementType: FieldType, elementSize: number }
@@ -108,12 +115,26 @@ type Layout = {
     fields: Fields,
 }
 
+// 用户面指针 CType：'<>ptr' / '<NAME>ptr'（'ptr' 已被拒绝，见 lower）。
+const PTR_CTYPE_RE = /^<.*>ptr$/
+
+// 用户面已拒绝裸 'ptr'，但运行时仍可能收到（手写 IR / 迁移残留）—— 统一在此报错。
+// 用类型守卫绕开「FieldKind 已不含 'ptr'」的收窄报错。
+function isBarePtr(t: string): t is 'ptr' {
+    return t === 'ptr'
+}
+
 // CType → { size, align, FieldType }：聚合递归进 computeStructLayout。
 // 每个子树每层只 lower 一次（array 元素复用同一结果），不再分别算 size 和 type。
 function lower(t: CType): { size: number, align: number, type: FieldType } {
     if (typeof t === 'string') {
-        const s = SizeAlign[t]
-        return { size: s, align: s, type: { tag: 'basic', kind: t } }
+        if (isBarePtr(t))
+            throw new Error(`ffi-struct: bare "ptr" rejected — use "<>ptr" for a raw address or "<NAME>ptr" for a typed pointer`)
+        if (PTR_CTYPE_RE.test(t))
+            return { size: PTR_SIZE, align: PTR_SIZE, type: { tag: 'basic', kind: 'ptr' } }
+        const s = SizeAlign[t as CInteger | CFloat]
+        if (s === undefined) throw new Error(`ffi-struct: unknown kind "${t}"`)
+        return { size: s, align: s, type: { tag: 'basic', kind: t as CInteger | CFloat } }
     }
     if (t.tag === 'string') {
         if (!Number.isInteger(t.length) || t.length < 1)
@@ -180,7 +201,7 @@ export function computeStructLayout(t: CStruct | CUnion): Layout {
 // 读取 / 写入
 // ============================================================
 
-function readScalar(dv: DataView, off: number, k: FieldKind): number {
+function readScalar(dv: DataView, off: number, k: RuntimeKind): number {
     switch (k) {
         case 'u8': return dv.getUint8(off)
         case 'i8': return dv.getInt8(off)
@@ -201,7 +222,7 @@ function readPtr(dv: DataView, off: number): number {
     return dv.getUint32(off, true)
 }
 
-function writeScalar(dv: DataView, off: number, k: FieldKind, val: number): void {
+function writeScalar(dv: DataView, off: number, k: RuntimeKind, val: number): void {
     switch (k) {
         case 'u8': dv.setUint8(off, val); break
         case 'i8': dv.setInt8(off, val); break
@@ -343,7 +364,7 @@ function createStruct(t: CStruct | CUnion): any {
 /** 聚合对齐上限（pack 压 maxAlign，语义同 MSVC #pragma pack）。 */
 export type AggOpts = { pack?: number }
 
-/** member 数组定义结构体。给 name 则 alloc().ptr 带 StructPtr<name> 品牌。 */
+/** member 数组定义结构体。给 name 则 alloc().ptr 带 Ptr<name> 品牌。 */
 export function struct<const M extends readonly Member[]>(member: M, opts?: AggOpts): StructDef<{ tag: 'struct'; member: M; pack?: number }, never>
 export function struct<const N extends string, const M extends readonly Member[]>(name: N, member: M, opts?: AggOpts): StructDef<{ tag: 'struct'; member: M; pack?: number }, N>
 export function struct(a: string | readonly Member[], b?: readonly Member[] | AggOpts, c?: AggOpts): StructDef<any, any> {
