@@ -32,15 +32,15 @@ type Tuple<T, N extends number, R extends T[] = []> =
     : Tuple<T, N, [...R, T]>
 
 type ShapeOfC<M extends readonly Member[]> = M extends readonly [
-    infer H,
+    infer H extends Member,
     ...infer T extends readonly Member[]
-] ? (H extends Member ? FieldShape<H> & ShapeOfC<T> : {}) : {}
+] ? (FieldShape<H> & ShapeOfC<T>) : {}
 
 type FieldShape<M extends Member> =
     M extends { name?: undefined; type: infer T extends CStruct | CUnion }
     ? ShapeOfC<T['member']>
-    : M extends { name: infer N; type: infer T extends CType }
-    ? (N extends string ? { [K in N]: ValOf<T> } : {})
+    : M extends { name: infer N extends string; type: infer T extends CType }
+    ? { [K in N]: ValOf<T> }
     : {}
 
 // ============================================================
@@ -114,6 +114,8 @@ function lower(t: CType): { size: number, align: number, type: FieldType } {
         return { size: s, align: s, type: { tag: 'basic', kind: t } }
     }
     if (t.tag === 'string') {
+        if (!Number.isInteger(t.length) || t.length < 1)
+            throw new Error(`ffi-struct: string length must be an integer >= 1, got ${t.length}`)
         const s = SizeAlign[t.unit]
         return { size: s * t.length, align: s, type: { tag: 'string', encoding: t.encoding } }
     }
@@ -243,8 +245,13 @@ function readString(dv: DataView, off: number, size: number, enc: Encoding): str
 function writeString(dv: DataView, off: number, size: number, enc: Encoding, v: unknown): void {
     const bytes = new Uint8Array(dv.buffer, dv.byteOffset + off, size)
     bytes.fill(0)
+    // 始终给 NUL 终止符留一个存储单元（宽度由 encoding 决定，见 readString）：
+    // 末尾保持 0，payload 最多 size - unit 字节。这样 C 侧 strlen/wcslen 都不会越界。
+    const unit = enc === 'utf-16le' ? 2 : 1
+    const cap = size - unit
+    if (cap <= 0) return
     const src = stringEncoders[enc].encode(String(v ?? ''))
-    bytes.set(src.subarray(0, Math.min(src.length, size)))
+    bytes.set(src.subarray(0, Math.min(src.length, cap)))
 }
 
 type ArrayFieldType = Extract<FieldType, { tag: 'array' }>

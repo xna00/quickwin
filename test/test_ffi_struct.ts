@@ -127,7 +127,8 @@ export const suite = {
         const wb = W.encode({ name: 'hello' })
         t.check('read back "hello"', 'hello', W.decode(wb).name)
         const lb = W.encode({ name: 'a very long string over' })
-        t.check('truncated to 8 chars', 'a very l', W.decode(lb).name)
+        t.check('utf16[8]: payload 7 + NUL', 'a very ', W.decode(lb).name)
+        t.check('utf16 terminator[14..15] == 0', 0, new DataView(lb).getUint16(14, true))
 
         t.section("utf-8 string[8] roundtrip & truncation")
         const C = struct({
@@ -139,7 +140,8 @@ export const suite = {
         t.check('read back "hi"', 'hi', C.decode(cb).name)
         t.check('NUL at [2]', 0, new DataView(cb).getUint8(2))
         const ctrunc = C.encode({ name: '1234567890' })
-        t.check('truncated to 8 chars', '12345678', C.decode(ctrunc).name)
+        t.check('char[8]: payload 7 + NUL', '1234567', C.decode(ctrunc).name)
+        t.check('char terminator[7] == 0', 0, new DataView(ctrunc).getUint8(7))
 
         t.section('numeric arrays roundtrip (CArray)')
         const A = struct({
