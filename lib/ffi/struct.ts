@@ -91,7 +91,7 @@ export type StructAlloc<S, N extends string = never> = {
 }
 
 // ============================================================
-// Layout IR —— computeStructLayout/lowerType 把 CType AST IR lower 到此。
+// Layout IR —— computeStructLayout/lower 把 CType AST IR lower 到此。
 // 自包含：子布局在 lowering 时内嵌、offset 相对本层起点，运行期 read/write 不回查 AST IR。
 // ============================================================
 
@@ -100,79 +100,63 @@ function alignUp(v: number, a: number): number {
     return (v + a - 1) & ~(a - 1)
 }
 
-/** 单个 CType 的布局 size/align（不含 pack/alignas 修正，由 computeStructLayout 施加）。 */
-function typeSizeAlign(t: CType): { size: number, align: number } {
-    switch (t.tag) {
-        case 'basic': {
-            const s = SizeAlign[t.kind]
-            return { size: s, align: s }
-        }
-        case 'string': {
-            const s = SizeAlign[t.unit]
-            return { size: s * t.length, align: s }
-        }
-        case 'struct':
-        case 'union': {
-            const l = computeStructLayout(t)
-            return { size: l.size, align: l.maxEffectiveAlign }
-        }
-        case 'array':
-            return computeArray(t)
-    }
-}
-
-export function computeArray(t: CArray): { align: number, size: number } {
-    if (!Number.isInteger(t.length) || t.length < 1)
-        throw new Error(`ffi-struct: array length must be an integer >= 1, got ${t.length}`)
-    const el = typeSizeAlign(t.ctype)
-    return { align: el.align, size: el.size * t.length }
-}
-
 type Layout = {
     size: number,
     maxEffectiveAlign: number,
     fields: Fields,
 }
 
-// 按聚合 IR 对象身份缓存布局（IR 为模块级常量；同一子类型可被多个父复用）。
-const layoutCache = new WeakMap<CStruct | CUnion, Layout>()
-
-// CType → FieldType：lowering 时把子布局内嵌（聚合→fields，array→elementType+elementSize），
-// 运行期读写不再回查 IR；string 只留 encoding，字节跨度已由 unit+length 固化进 Field.size。
-function lowerType(t: CType): FieldType {
-    switch (t.tag) {
-        case 'basic': return { tag: 'basic', kind: t.kind }
-        case 'string': return { tag: 'string', encoding: t.encoding }
-        case 'struct': return { tag: 'struct', fields: computeStructLayout(t).fields }
-        case 'union': return { tag: 'union', fields: computeStructLayout(t).fields }
-        case 'array': return { tag: 'array', elementType: lowerType(t.ctype), elementSize: typeSizeAlign(t.ctype).size }
+// CType → { size, align, FieldType }：聚合递归进 computeStructLayout。
+// 每个子树每层只 lower 一次（array 元素复用同一结果），不再分别算 size 和 type。
+function lower(t: CType): { size: number, align: number, type: FieldType } {
+    if (t.tag === 'basic') {
+        const s = SizeAlign[t.kind]
+        return { size: s, align: s, type: { tag: 'basic', kind: t.kind } }
     }
+    if (t.tag === 'string') {
+        const s = SizeAlign[t.unit]
+        return { size: s * t.length, align: s, type: { tag: 'string', encoding: t.encoding } }
+    }
+    if (t.tag === 'array') {
+        if (!Number.isInteger(t.length) || t.length < 1)
+            throw new Error(`ffi-struct: array length must be an integer >= 1, got ${t.length}`)
+        const el = lower(t.ctype)
+        return {
+            size: el.size * t.length,
+            align: el.align,
+            type: { tag: 'array', elementType: el.type, elementSize: el.size },
+        }
+    }
+    // struct | union
+    const l = computeStructLayout(t)
+    return { size: l.size, align: l.maxEffectiveAlign, type: { tag: t.tag, fields: l.fields } }
+}
+
+export function computeArray(t: CArray): { align: number, size: number } {
+    const { size, align } = lower(t)
+    return { align, size }
 }
 
 export function computeStructLayout(t: CStruct | CUnion): Layout {
-    const hit = layoutCache.get(t)
-    if (hit) return hit
-
     const isStruct = t.tag === 'struct'
+    const pack = t.pack ?? 8
     let maxEffectiveAlign = 1
     let maxMemberSize = 0
     const fields: Fields = []
-    const pack = t.pack ?? 8
-
     let cursor = 0
 
     for (const m of t.member) {
-        const { size, align: natural } = typeSizeAlign(m.type)
+        const { size, align: natural, type } = lower(m.type)
         let align = natural
         if (pack > 0) align = Math.min(pack, align)
         if (m.alignas) align = Math.max(align, m.alignas)
         const offset = alignUp(cursor, align)
 
         if (m.name !== undefined) {
-            fields.push({ name: m.name, offset, size, type: lowerType(m.type) })
+            fields.push({ name: m.name, offset, size, type })
         } else {
-            // 匿名聚合：子字段 splice 提升，offset 从子起点平移到本成员起点。
-            for (const cf of computeStructLayout(m.type).fields)
+            // 匿名聚合：m.type 必为 struct/union，内嵌 fields 已 lower 好，offset 平移到本成员起点。
+            for (const cf of (type as { fields: Fields }).fields)
                 fields.push({ ...cf, offset: cf.offset + offset })
         }
 
@@ -181,13 +165,11 @@ export function computeStructLayout(t: CStruct | CUnion): Layout {
         maxMemberSize = Math.max(maxMemberSize, size)
     }
 
-    const ret: Layout = {
+    return {
         size: isStruct ? alignUp(cursor, maxEffectiveAlign) : alignUp(maxMemberSize, maxEffectiveAlign),
         maxEffectiveAlign,
         fields,
     }
-    layoutCache.set(t, ret)
-    return ret
 }
 
 // ============================================================
