@@ -7,10 +7,12 @@ import {
 } from './ctype.js'
 
 // ============================================================
-// 结构体定义（唯一 API：CType IR）：
-//   struct({ tag:'struct', member:[...] })          — 匿名聚合
-//   struct('RECT', { tag:'struct', member:[...] })  — 命名聚合（alloc().ptr 带 StructPtr<'RECT'> 品牌）
-// layout 采用 MSVC 对齐语义：
+// 聚合定义（唯一 API：CType IR，member 数组即定义）：
+//   struct([...member])                  — 匿名结构体
+//   struct('RECT', [...member])          — 命名结构体（alloc().ptr 带 StructPtr<'RECT'> 品牌）
+//   union([...member])                   — 匿名联合体
+//   union('U', [...member])              — 命名联合体（同样可用于 <U>ptr 布局）
+// 可选 { pack } 压对齐上限。layout 采用 MSVC 对齐语义：
 //   i8/u8→1  i16/u16→2  i32/u32/f32→4  i64/u64/f64→8  ptr→arch 宽(4/8)
 //   struct 对齐 = 最大字段对齐，总尺寸末尾补齐；pack 压上限、alignas 抬下限
 // ============================================================
@@ -73,8 +75,8 @@ export type Field = {
 }
 export type Fields = Field[]
 
-// StructDef — struct() 返回
-export type StructDef<T extends CStruct, N extends string = never> = {
+// StructDef — struct()/union() 返回
+export type StructDef<T extends CStruct | CUnion, N extends string = never> = {
     readonly __struct: T
     readonly size: number
     readonly structAlign: number
@@ -307,7 +309,7 @@ function doEncode(dv: DataView, base: number, fields: Fields, v: Record<string, 
 // 内部构造器
 // ============================================================
 
-function createStruct(t: CStruct): any {
+function createStruct(t: CStruct | CUnion): any {
     const { fields, size, maxEffectiveAlign } = computeStructLayout(t)
     return {
         __struct: t,
@@ -338,12 +340,25 @@ function createStruct(t: CStruct): any {
 // 公共 API
 // ============================================================
 
-/** CType IR 结构体。给 name 则 alloc().ptr 带 StructPtr<name> 品牌。 */
-export function struct<const T extends CStruct>(t: T): StructDef<T, never>
-export function struct<const N extends string, const T extends CStruct>(name: N, t: T): StructDef<T, N>
-export function struct(a: string | CStruct, b?: CStruct): StructDef<any, any> {
-    const t = (typeof a === 'string' ? b : a) as CStruct
-    return createStruct(t)
+/** 聚合对齐上限（pack 压 maxAlign，语义同 MSVC #pragma pack）。 */
+export type AggOpts = { pack?: number }
+
+/** member 数组定义结构体。给 name 则 alloc().ptr 带 StructPtr<name> 品牌。 */
+export function struct<const M extends readonly Member[]>(member: M, opts?: AggOpts): StructDef<{ tag: 'struct'; member: M; pack?: number }, never>
+export function struct<const N extends string, const M extends readonly Member[]>(name: N, member: M, opts?: AggOpts): StructDef<{ tag: 'struct'; member: M; pack?: number }, N>
+export function struct(a: string | readonly Member[], b?: readonly Member[] | AggOpts, c?: AggOpts): StructDef<any, any> {
+    const member = (typeof a === 'string' ? b : a) as readonly Member[]
+    const opts = (typeof a === 'string' ? c : b) as AggOpts | undefined
+    return createStruct({ tag: 'struct', member, ...(opts?.pack !== undefined ? { pack: opts.pack } : {}) })
+}
+
+/** member 数组定义联合体；布局/读写与 struct 相同，仅成员偏移重叠。 */
+export function union<const M extends readonly Member[]>(member: M, opts?: AggOpts): StructDef<{ tag: 'union'; member: M; pack?: number }, never>
+export function union<const N extends string, const M extends readonly Member[]>(name: N, member: M, opts?: AggOpts): StructDef<{ tag: 'union'; member: M; pack?: number }, N>
+export function union(a: string | readonly Member[], b?: readonly Member[] | AggOpts, c?: AggOpts): StructDef<any, any> {
+    const member = (typeof a === 'string' ? b : a) as readonly Member[]
+    const opts = (typeof a === 'string' ? c : b) as AggOpts | undefined
+    return createStruct({ tag: 'union', member, ...(opts?.pack !== undefined ? { pack: opts.pack } : {}) })
 }
 
 /** 从 native 拥有的 `<STRUCT>ptr` 解码（ptr === null → null）。 */
