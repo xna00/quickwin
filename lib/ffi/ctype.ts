@@ -16,6 +16,7 @@ import * as os from 'os'
 // §1 kind 词汇表 —— KINDS 是唯一手写源，下列集合全从 Kind 派生
 //   Kind         内部 kind 全集（14）：bind 签名 token / lower 后 IR 共用
 //   C_Number     结构体字段的数字档（10）
+//   C_Integer    C_Number 去掉浮点档（8）：位域存储单元只能是整数档
 //   Token        规范 token 全集（13 + 指针）：C_ALIAS / Norm / JsTypeOfToken 的操作面
 //   RuntimeKind  lower 后的字段 kind（11）= C_Number | 'ptr'
 //   CType        成员类型 IR 节点（见 §4）
@@ -35,6 +36,9 @@ export type Kind = (typeof KINDS)[number]
 // C 的数字类型档：可作结构体字段 / bind 签名 token。
 // 排除 'void'（无大小）、u64n/i64n（传输档，非 C 类型）、裸 'ptr'（内部指针档）。
 export type C_Number = Exclude<Kind, 'void' | 'u64n' | 'i64n' | 'ptr'>
+
+// 整数档：位域存储单元的合法类型（C 位域只能用整型）。
+export type C_Integer = Exclude<C_Number, 'f32' | 'f64'>
 
 // 运行时 kind 集合，供 normKind 校验。
 const KIND_SET: ReadonlySet<Kind> = new Set(KINDS)
@@ -59,6 +63,13 @@ const PTR_TOKEN_RE = /^<([^<>\s]*)>ptr$/
 
 // 用户面指针 CType：'<>ptr'（裸地址）或 '<NAME>ptr'（带名）。
 export function isCPtrToken(t: string): t is `<${string}>ptr` { return PTR_TOKEN_RE.test(t) }
+
+// 整数档运行时判定：位域单元只能是整型（C 位域不支持浮点）。
+// 排除项与 C_Integer 的类型层 Exclude 一一对应；新增整数 kind 自动通过。
+export function isCInteger(t: string): t is C_Integer {
+    return KIND_SET.has(t as Kind)
+        && t !== 'f32' && t !== 'f64' && t !== 'void' && t !== 'u64n' && t !== 'i64n' && t !== 'ptr'
+}
 
 // ============================================================
 // §3 C 别名与 token 归一
@@ -153,15 +164,32 @@ export type CArray = {
     ctype: CType,
     length: number
 }
+// 位域：unit 决定存储单元的宽、对齐与签别（必须整数档），width 是位宽。
+// 布局与读写在 struct.ts 的位域状态机里处理；同一结构内连续同宽位域共单元（LSB→MSB），
+// 放不下开新单元、剩余位废弃，非位域成员打断位域组并把游标跳到完整单元边界。
+export type CBitfield = {
+    tag: 'bitfield',
+    unit: C_Integer,
+    width: number
+}
 // 成员分两支，用 name 判别：
-//   命名成员：标量 kind / string / array（没有可提升的子布局，必须命名）
+//   命名成员：标量 kind / string / array / bitfield（没有可提升的子布局，必须命名）
 //   匿名聚合：struct / union（C11 匿名字段，其字段被 splice 提升进父结构）
-// alignas 抬对齐下限（pack 压上限）；bitfield 暂不支持。
+// alignas 抬对齐下限（pack 压上限）。
+// CBitfield 刻意不进 CType —— 数组元素只能是 CType（位域不能直接做数组元素），
+// Member 用 CMemberType = CType | CBitfield 显式把位域加回来。
+export type CMemberType = CType | CBitfield
+
 export type Member =
-    | { name: string; type: CType; alignas?: number }
+    | { name: string; type: CMemberType; alignas?: number }
     | { name?: undefined; type: CStruct | CUnion; alignas?: number }
 
 export type CStruct = { tag: 'struct'; member: readonly Member[], pack?: number }
 export type CUnion = { tag: 'union'; member: readonly Member[], pack?: number }
 
 export type CType = C_Number | `<${string}>ptr` | CString | CArray | CStruct | CUnion
+
+/** 构造位域成员类型：unit 决定单元宽与签别（整数档），width 是位宽（1..单元位宽）。 */
+export function bit(unit: C_Integer, width: number): CBitfield {
+    return { tag: 'bitfield', unit, width }
+}
