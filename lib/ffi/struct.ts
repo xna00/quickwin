@@ -10,16 +10,11 @@ import {
 } from './ctype.js'
 
 // ============================================================
-// 聚合定义（唯一 API：CType IR，member 数组即定义）：
-//   struct([...member])                  — 匿名结构体
-//   struct('RECT', [...member])          — 命名结构体（alloc().ptr 带 Ptr<'RECT'> 品牌）
-//   union([...member])                   — 匿名联合体
-//   union('U', [...member])              — 命名联合体（同样可用于 <U>ptr 布局）
-// 可选 { pack } 压对齐上限。layout 采用 MSVC 对齐语义：
+// 聚合定义：唯一 API 是 CType IR（member 数组即定义），签名与 pack 见末尾 struct()/union()。
+// layout 采用 MSVC 对齐语义：
 //   i8/u8→1  i16/u16→2  i32/u32/f32→4  i64/u64/f64→8  '<>ptr'/'<T>ptr'→arch 宽(4/8)
 //   struct 对齐 = 最大字段对齐，总尺寸末尾补齐；pack 压上限、alignas 抬下限
-//   位域：连续同宽位域共单元（LSB→MSB），放不下开新单元、剩余位废弃，
-//   非位域成员打断位域组并把游标跳到完整单元边界（mingw 交叉实测 DCB/COMSTAT 验证）。
+//   位域布局规则见下方 computeStructLayout 的状态机注释（mingw 实测 DCB/COMSTAT）。
 // ============================================================
 
 // ============================================================
@@ -59,8 +54,7 @@ type FieldShape<M extends Member> =
 // 运行时类型
 // ============================================================
 
-// lower 后指针统一归一为内部 kind 'ptr'（用户面写 '<>ptr' 裸地址或 '<NAME>ptr' 带名指针）。
-// = Kind 去掉 'void'（无大小）与 u64n/i64n（传输档，非 C 类型）—— 只剩能占内存的档。
+// lower 后指针统一归一为内部 kind 'ptr'（用户面写 '<>ptr' 或 '<NAME>ptr'）。
 type RuntimeKind = Exclude<Kind, 'void' | 'u64n' | 'i64n'>
 
 // kind → size/align（不含指针：指针统一 PTR_SIZE，见 lower）。
@@ -90,7 +84,6 @@ export type Field = {
 }
 export type Fields = Field[]
 
-// StructDef — struct()/union() 返回
 export type StructDef<T extends CStruct | CUnion, N extends string = never> = {
     readonly __struct: T
     readonly size: number
@@ -123,14 +116,12 @@ type Layout = {
     fields: Fields,
 }
 
-// 用户面已拒绝裸 'ptr'，但运行时仍可能收到（手写 IR / 迁移残留）—— 统一在此报错。
-// 用类型守卫绕开「CType 已不含 'ptr'」的收窄报错。
+// 用户面已拒绝裸 'ptr'，运行时仍可能收到（手写 IR）—— 用类型守卫绕开收窄报错，统一在此抛。
 function isBarePtr(t: string): t is 'ptr' {
     return t === 'ptr'
 }
 
-// CType → { size, align, FieldType }：聚合递归进 computeStructLayout。
-// 每个子树每层只 lower 一次（array 元素复用同一结果），不再分别算 size 和 type。
+// CType → { size, align, FieldType }：聚合递归进 computeStructLayout；array 元素复用同一结果。
 function lower(t: CMemberType): { size: number, align: number, type: FieldType } {
     if (typeof t === 'string') {
         if (isBarePtr(t))
@@ -148,7 +139,7 @@ function lower(t: CMemberType): { size: number, align: number, type: FieldType }
         return { size: s * t.length, align: s, type: { tag: 'string', encoding: t.encoding } }
     }
     if (t.tag === 'bitfield') {
-        // 手写 IR 可能绕过 C_Integer 约束，运行时把关（与 isBarePtr 同一防御思路）。
+        // 手写 IR 可能绕过 C_Integer 约束，运行时把关。
         if (!isCInteger(t.unit))
             throw new Error(`ffi-struct: bitfield unit "${t.unit}" must be an integer kind`)
         const s = SizeAlign[t.unit]
@@ -351,15 +342,13 @@ function writeBitfield(dv: DataView, off: number, t: BitfieldType, val: number):
     const w = BigInt(t.width)
     const bit = BigInt(t.bit)
     const widthMask = (1n << w) - 1n
-    const posMask = widthMask << bit          // 本位域在单元内的掩码
+    const posMask = widthMask << bit
     const raw = readUnitRaw(dv, off, t.unit)
     const bits = BigInt(Math.trunc(val)) & widthMask
-    // 读-改-写：清掉本位域的旧位，其余位原样保留。
     writeUnitRaw(dv, off, t.unit, (raw & ~posMask) | (bits << bit))
 }
 
 // 字符串读写统一走 TextEncoder/TextDecoder（polyfill 见 lib/text-codec.js）。
-// 定长字段：写入把编码结果截断到 size，读取扫到 NUL 终止符为止。
 const stringEncoders: Record<Encoding, TextEncoder> = {
     'utf-8': new TextEncoder('utf-8'),
     'utf-16le': new TextEncoder('utf-16le'),
