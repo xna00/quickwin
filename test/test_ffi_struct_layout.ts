@@ -343,7 +343,7 @@ export const suite = {
 
         t.section('Bitfield: 精确填充算放得下')
         {
-            // 15+17=32 恰好塞满一个 32 位单元 → 不开新单元
+            // 15+17=32 恰好塞满一个 32 位单元 → 不开新单元（mingw 实测 sizeof=8, w@4）
             const s: CStruct = {
                 tag: 'struct',
                 member: [
@@ -353,10 +353,10 @@ export const suite = {
                 ]
             }
             const r = computeStructLayout(s)
-            t.check('sizeof == 12', 12, r.size)
+            t.check('sizeof == 8 (单元 0-3 + w@4, pad 到 8)', 8, r.size)
             t.check('b.offset == 0 (共单元)', 0, bitOf(r.fields, 'b').offset)
             t.check('b.bit == 15', 15, bitOf(r.fields, 'b').bit)
-            t.check('w.offset == 12 (单元边界)', 12, offOf(r.fields, 'w'))
+            t.check('w.offset == 4 (紧跟单元)', 4, offOf(r.fields, 'w'))
         }
 
         t.section('Bitfield: 非位域成员打断组 → 游标跳完整单元边界')
