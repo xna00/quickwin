@@ -2,7 +2,7 @@ import * as os from 'os'
 import { Tester } from './test_helper.js'
 import { struct, union } from '../lib/ffi/struct.js'
 import { bind, } from '../lib/ffi/bind.js'
-import { Ptr, bit } from '../lib/ffi/ctype.js'
+import { Ptr } from '../lib/ffi/ctype.js'
 import type { C_Union } from '../lib/ffi/ctype.js'
 
 // 编译期断言工具（仅类型层，运行时无开销）
@@ -111,7 +111,7 @@ export const suite = {
         t.section('alias in sugar（数组糖/位域糖收别名）')
         const AS = struct({
             v: 'DWORD[4]',   // 别名元素糖 → u32[4]
-            f: 'DWORD:3',    // 别名位域糖 → u32:3（等价 bit('u32', 3)）
+            f: 'DWORD:3',    // 别名位域糖 → u32:3
         })
         t.check('size == 20 (16 + 位域单元)', 20, AS.size)
         t.check('f offset == 16', 16, AS.offsetOf('f'))
@@ -131,7 +131,7 @@ export const suite = {
 
         t.section('union 位域完全别名 roundtrip（mingw 实测语义）')
         {
-            const UB = union({ a: bit('u32', 1), b: bit('u32', 1) })
+            const UB = union({ a: 'u32:1', b: 'u32:1' })
             t.check('union bitfield size == 4', 4, UB.size)
             const ud1 = UB.decode(UB.encode({ a: 1, b: 1 }))
             t.check('a=1,b=1 roundtrip a', 1, ud1.a)
@@ -142,7 +142,7 @@ export const suite = {
             t.check('别名覆盖：b == 0', 0, ud2.b)
 
             // 溢出形状（30+4>32）：union 每成员回 offset 0，曾开新单元越出 size
-            const OF = union({ a: bit('u32', 30), b: bit('u32', 4) })
+            const OF = union({ a: 'u32:30', b: 'u32:4' })
             t.check('overflow union size == 4', 4, OF.size)
             const od1 = OF.decode(OF.encode({ a: 0x3FFFFFFF, b: 0xF }))
             t.check('overflow roundtrip a', 0x3FFFFFFF, od1.a)
@@ -151,7 +151,7 @@ export const suite = {
             t.check('overflow 别名覆盖 → a 低 4 位被清', 0x3FFFFFF0, od2.a)
 
             // 位域 + 普通成员混合：b 曾被 flushUnit 推到 offset 4（越出 size 4）
-            const MX = union({ a: bit('u32', 1), b: 'u8' })
+            const MX = union({ a: 'u32:1', b: 'u8' })
             t.check('mixed union size == 4', 4, MX.size)
             t.check('mixed offsetOf b == 0（曾为 4）', 0, MX.offsetOf('b'))
             const md = MX.decode(MX.encode({ a: 1, b: 0x54 }))
@@ -161,7 +161,7 @@ export const suite = {
             // 嵌套回归：struct 内嵌该 union（raw '#' 形式；union() 装饰对象不能嵌套，
             // 嵌套 union 的解码类型推导会 TS2589，沿用旧行例 as any——本条是运行时断言），
             // tail 不被 union 内错位写污染
-            const nestedU: C_Union = { '#': 'union', a: bit('u32', 1), b: 'u8' }
+            const nestedU: C_Union = { '#': 'union', a: 'u32:1', b: 'u8' }
             const NS = (struct as any)({ tag: 'u32', u: nestedU, tail: 'u16' })
             t.check('nested size == 12', 12, NS.size)
             const nd = NS.decode(NS.encode({ tag: 0xAABBCCDD, u: { a: 1, b: 0x54 }, tail: 0x1234 }))
@@ -524,10 +524,10 @@ export const suite = {
             // 字段按序写入同一 buffer：写 d 时单元里已有 a/b/c 的位，
             // 若 writeBitfield 不做读改写（直接 val<<bit）会把 a/b/c 清零。
             const BF = struct({
-                a: bit('u32', 3),
-                b: bit('u32', 5),
-                c: bit('u32', 4),
-                d: bit('u32', 10),   // 3+5+4+10=22 <= 32
+                a: 'u32:3',
+                b: 'u32:5',
+                c: 'u32:4',
+                d: 'u32:10',   // 3+5+4+10=22 <= 32
                 tail: 'u32',
             })
             t.check('BF.size == 8', 8, BF.size)
@@ -544,8 +544,8 @@ export const suite = {
         t.section('bitfield roundtrip: signed sign extension')
         {
             const SB = struct({
-                s: bit('i32', 8),
-                u: bit('u32', 4),
+                s: 'i32:8',
+                u: 'u32:4',
             })
             t.check('SB.size == 4 (同宽不分签别，共单元)', 4, SB.size)
             const sbd = SB.decode(SB.encode({ s: -5, u: 9 }))
@@ -559,8 +559,8 @@ export const suite = {
         t.section('bitfield roundtrip: overflow starts a new unit')
         {
             const OV = struct({
-                a: bit('u32', 30),
-                b: bit('u32', 4),   // 30+4=34 > 32 → 新单元，剩余 2 位废弃
+                a: 'u32:30',
+                b: 'u32:4',   // 30+4=34 > 32 → 新单元，剩余 2 位废弃
                 c: 'u32',
             })
             t.check('OV.size == 12', 12, OV.size)
@@ -577,20 +577,20 @@ export const suite = {
             const DCB = struct('DCB', {
                 DCBlength: 'u32',
                 BaudRate: 'u32',
-                fBinary: bit('u32', 1),
-                fParity: bit('u32', 1),
-                fOutxCtsFlow: bit('u32', 1),
-                fOutxDsrFlow: bit('u32', 1),
-                fDtrControl: bit('u32', 2),
-                fDsrSensitivity: bit('u32', 1),
-                fTXContinueOnXoff: bit('u32', 1),
-                fOutX: bit('u32', 1),
-                fInX: bit('u32', 1),
-                fErrorChar: bit('u32', 1),
-                fNull: bit('u32', 1),
-                fRtsControl: bit('u32', 2),
-                fAbortOnError: bit('u32', 1),
-                fDummy2: bit('u32', 17),
+                fBinary: 'u32:1',
+                fParity: 'u32:1',
+                fOutxCtsFlow: 'u32:1',
+                fOutxDsrFlow: 'u32:1',
+                fDtrControl: 'u32:2',
+                fDsrSensitivity: 'u32:1',
+                fTXContinueOnXoff: 'u32:1',
+                fOutX: 'u32:1',
+                fInX: 'u32:1',
+                fErrorChar: 'u32:1',
+                fNull: 'u32:1',
+                fRtsControl: 'u32:2',
+                fAbortOnError: 'u32:1',
+                fDummy2: 'u32:17',
                 wReserved: 'u16',
                 XonLim: 'u16',
                 XoffLim: 'u16',
@@ -643,8 +643,8 @@ export const suite = {
         // 类型层：位域成员值类型是 number
         {
             const BF = struct({
-                a: bit('u32', 3),
-                s: bit('i32', 8),
+                a: 'u32:3',
+                s: 'i32:8',
             })
             expectType<Equal<ReturnType<typeof BF.decode>['a'], number>>()
             expectType<Equal<ReturnType<typeof BF.decode>['s'], number>>()
@@ -655,8 +655,8 @@ export const suite = {
         {
             // u64:60 + u64:4 同单元混合形态：>53 的字段 bigint、≤53 的字段 number
             const W64 = struct({
-                u: bit('u64', 60),
-                v: bit('u64', 4),
+                u: 'u64:60',
+                v: 'u64:4',
             })
             t.check('u64:60+u64:4 size == 8（同单元）', 8, W64.size)
             t.check('v 与 u 同单元 offset == 0', 0, W64.offsetOf('v'))
@@ -668,7 +668,7 @@ export const suite = {
             expectType<Equal<ReturnType<typeof W64.decode>['v'], number>>()
 
             // i64:60 负值符号扩展 → 精确 bigint（回归：曾被有符号分支的 Number() 截断）
-            const I64 = struct({ s: bit('i64', 60) })
+            const I64 = struct({ s: 'i64:60' })
             const neg = -12345678901234567n
             t.check('i64:60 负值精确往返', neg, I64.decode(I64.encode({ s: neg })).s)
             // 符号位为 0 的正值：width>53 → 依然 bigint
@@ -680,11 +680,11 @@ export const suite = {
             }
 
             // 分界：53 → number（2^53-1 精确），54 → bigint（2^54-1 精确）
-            const B53 = struct({ a: bit('u64', 53) })
+            const B53 = struct({ a: 'u64:53' })
             expectType<Equal<ReturnType<typeof B53.decode>['a'], number>>()
             t.check('u64:53 边界 number 精确', 9007199254740991,
                 B53.decode(B53.encode({ a: 9007199254740991 })).a)
-            const B54 = struct({ a: bit('u64', 54) })
+            const B54 = struct({ a: 'u64:54' })
             expectType<Equal<ReturnType<typeof B54.decode>['a'], bigint>>()
             t.check('u64:54 边界 bigint 精确', 18014398509481983n,
                 B54.decode(B54.encode({ a: 18014398509481983n })).a)
