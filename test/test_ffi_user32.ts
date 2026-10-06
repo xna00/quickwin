@@ -56,6 +56,13 @@ export const suite = {
         t.checkTrue('GetDC(null) 非 null', hdc !== null)
         t.checkTrue('ReleaseDC(null, hdc) 成功', ReleaseDC(null, hdc) !== 0)
 
+        // 仅类型层反例（不执行）：<>ptr（普通 number，如 HWND）不能传给 <HDC>ptr 归还位
+        const _typeOnly = () => {
+            // @ts-expect-error Ptr<>（number）不是 Ptr<'HDC'>，误传桌面句柄应编译不过
+            ReleaseDC(null, GetDesktopWindow())
+        }
+        void _typeOnly
+
         t.section('user32: EnumWindows（<>ptr 回调端到端）')
         let count = 0
         const enumClos = closure('<>ptr <>ptr -> i32', () => { count++; return 1 })

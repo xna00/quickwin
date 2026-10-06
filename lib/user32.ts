@@ -5,6 +5,8 @@
 //   - 入参字符串用 <WCHAR>ptr（string 编码为 UTF-16 + NUL，null → NULL 指针）；出参缓冲与
 //     结构指针用 <BYTE>ptr（传 ArrayBuffer，native 写回可原地读回）；回调参数用 <>ptr 接 closure() 的 ptr
 //   - 签名里的 LPCWSTR 若语义是 MAKEINTRESOURCE 整数（如 LoadCursorW 光标名），该位用 <>ptr
+//   - HDC 借出/归还用 <HDC>ptr（品牌指针 Ptr<'HDC'>）：ReleaseDC 等归还位由 tsc 校验配对、
+//     拦住误传 HWND；DrawText/FillRect 等消费位仍收 <>ptr（brand 是 number 子类型可直传）
 import * as os from 'os'
 import { bind } from './ffi/bind.js'
 
@@ -102,14 +104,14 @@ export const RegisterWindowMessage = /*@__PURE__*/ bind('user32.dll', 'RegisterW
 
 // ============ 绘制 / DC ============
 
-/** 取窗口 DC（hWnd 传 null → 桌面窗口）；失败 → null；用完必须 ReleaseDC 配对 */
-export const GetDC = /*@__PURE__*/ bind('user32.dll', 'GetDC', '<>ptr -> <>ptr')
-/** 归还 GetDC/GetWindowDC 取的 DC；成功 → 非 0 */
-export const ReleaseDC = /*@__PURE__*/ bind('user32.dll', 'ReleaseDC', '<>ptr <>ptr -> i32')
-/** 取整个窗口（含边框标题）DC；失败 → null，配对 ReleaseDC */
-export const GetWindowDC = /*@__PURE__*/ bind('user32.dll', 'GetWindowDC', '<>ptr -> <>ptr')
-/** 开始重绘（PAINTSTRUCT buffer 接收绘制信息）；返回 DC，配对 EndPaint */
-export const BeginPaint = /*@__PURE__*/ bind('user32.dll', 'BeginPaint', '<>ptr <BYTE>ptr -> <>ptr')
+/** 取窗口 DC（hWnd 传 null → 桌面窗口）；返回品牌 HDC，失败 → null；用完必须 ReleaseDC 配对 */
+export const GetDC = /*@__PURE__*/ bind('user32.dll', 'GetDC', '<>ptr -> <HDC>ptr')
+/** 归还 GetDC/GetWindowDC 取的 DC（第二参收品牌 HDC，误传 HWND 编译不过）；成功 → 非 0 */
+export const ReleaseDC = /*@__PURE__*/ bind('user32.dll', 'ReleaseDC', '<>ptr <HDC>ptr -> i32')
+/** 取整个窗口（含边框标题）DC；返回品牌 HDC，失败 → null，配对 ReleaseDC */
+export const GetWindowDC = /*@__PURE__*/ bind('user32.dll', 'GetWindowDC', '<>ptr -> <HDC>ptr')
+/** 开始重绘（PAINTSTRUCT buffer 接收绘制信息）；返回品牌 HDC，配对 EndPaint */
+export const BeginPaint = /*@__PURE__*/ bind('user32.dll', 'BeginPaint', '<>ptr <BYTE>ptr -> <HDC>ptr')
 /** 结束重绘（传 BeginPaint 同一 buffer）；成功 → 非 0 */
 export const EndPaint = /*@__PURE__*/ bind('user32.dll', 'EndPaint', '<>ptr <BYTE>ptr -> i32')
 /** 文本排版绘制（RECT buffer 就地读写；format = gui.DrawTextFlag）；返回文本行高 */
