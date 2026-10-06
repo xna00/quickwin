@@ -607,5 +607,45 @@ export const suite = {
             expectType<Equal<ReturnType<typeof BF.decode>['a'], number>>()
             expectType<Equal<ReturnType<typeof BF.decode>['s'], number>>()
         }
+
+        // 位域 width>53：值域装不进安全整数 → bigint（与类型层 BitShape 同界）
+        t.section('bitfield width>53: bigint roundtrip (u64/i64)')
+        {
+            // u64:60 + u64:4 同单元混合形态：>53 的字段 bigint、≤53 的字段 number
+            const W64 = struct({
+                u: bit('u64', 60),
+                v: bit('u64', 4),
+            })
+            t.check('u64:60+u64:4 size == 8（同单元）', 8, W64.size)
+            t.check('v 与 u 同单元 offset == 0', 0, W64.offsetOf('v'))
+            const big = 0x0FFFFFFFFFFFFFFFn    // 60 位内大值 > 2^53
+            const d1 = W64.decode(W64.encode({ u: big, v: 15 }))
+            t.check('u64:60 大值精确往返', big, d1.u)
+            t.check('u64:4 同单元往返', 15, d1.v)
+            expectType<Equal<ReturnType<typeof W64.decode>['u'], bigint>>()
+            expectType<Equal<ReturnType<typeof W64.decode>['v'], number>>()
+
+            // i64:60 负值符号扩展 → 精确 bigint（回归：曾被有符号分支的 Number() 截断）
+            const I64 = struct({ s: bit('i64', 60) })
+            const neg = -12345678901234567n
+            t.check('i64:60 负值精确往返', neg, I64.decode(I64.encode({ s: neg })).s)
+            // 符号位为 0 的正值：width>53 → 依然 bigint
+            t.check('i64:60 正值 bigint', 100n, I64.decode(I64.encode({ s: 100n })).s)
+            expectType<Equal<ReturnType<typeof I64.decode>['s'], bigint>>()
+            if (false) {
+                // @ts-expect-error width>53 位域收 bigint，number 被类型层拒绝
+                I64.encode({ s: 42 })
+            }
+
+            // 分界：53 → number（2^53-1 精确），54 → bigint（2^54-1 精确）
+            const B53 = struct({ a: bit('u64', 53) })
+            expectType<Equal<ReturnType<typeof B53.decode>['a'], number>>()
+            t.check('u64:53 边界 number 精确', 9007199254740991,
+                B53.decode(B53.encode({ a: 9007199254740991 })).a)
+            const B54 = struct({ a: bit('u64', 54) })
+            expectType<Equal<ReturnType<typeof B54.decode>['a'], bigint>>()
+            t.check('u64:54 边界 bigint 精确', 18014398509481983n,
+                B54.decode(B54.encode({ a: 18014398509481983n })).a)
+        }
     },
 }

@@ -372,19 +372,15 @@ function writeUnitRaw(dv: DataView, off: number, unit: C_Integer, v: bigint): vo
 }
 
 function readBitfield(dv: DataView, off: number, t: BitfieldType): number | bigint {
-    // TODO： width > 53 时返回 bigint
     const w = BigInt(t.width)
-    const v = (readUnitRaw(dv, off, t.unit) >> BigInt(t.bit)) & ((1n << w) - 1n)
-    if (t.unit[0] === 'i') {   // 有符号单元 → 符号扩展
-        const sign = 1n << (w - 1n)
-        if (v & sign) return Number(v - (1n << w))
-    }
-    if (t.width > 53) return v
+    let v = (readUnitRaw(dv, off, t.unit) >> BigInt(t.bit)) & ((1n << w) - 1n)
+    if (t.unit[0] === 'i' && (v & (1n << (w - 1n))))   // 有符号单元且符号位为 1 → 先符号扩展
+        v -= 1n << w
+    if (t.width > 53) return v      // 值域装不进安全整数 → bigint（与类型层 BitShape 同界）
     return Number(v)
 }
 
 function writeBitfield(dv: DataView, off: number, t: BitfieldType, val: number | bigint): void {
-    // TODO: width > 53 时可写入 bigint | number
     const w = BigInt(t.width)
     const bit = BigInt(t.bit)
     const widthMask = (1n << w) - 1n
