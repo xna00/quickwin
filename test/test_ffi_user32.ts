@@ -6,6 +6,7 @@ import {
     GetKeyState, LoadCursor, SetCursor, GetMenu, DestroyMenu, GetForegroundWindow,
     GetDC, ReleaseDC, EnumWindows,
 } from '../lib/windows/user32.js'
+import { RECT } from '../lib/windows/structs.js'
 
 export const suite = {
     run(t: Tester) {
@@ -18,12 +19,12 @@ export const suite = {
         t.checkTrue('GetForegroundWindow 形态 number|null',
             GetForegroundWindow() === null || typeof GetForegroundWindow() === 'number')
 
-        t.section('user32: RECT 出参（<BYTE>ptr 原地读回）')
-        const rect = new ArrayBuffer(16)
-        t.check('GetClientRect(desktop)', 1, GetClientRect(desk, rect))
-        const rdv = new DataView(rect)
-        t.check('客户区宽 = SM_CXSCREEN', GetSystemMetrics(0), rdv.getInt32(8, true) - rdv.getInt32(0, true))
-        t.check('客户区高 = SM_CYSCREEN', GetSystemMetrics(1), rdv.getInt32(12, true) - rdv.getInt32(4, true))
+        t.section('user32: RECT 出参（alloc → call → decode 字段直读）')
+        const rectOut = RECT.alloc()
+        t.check('GetClientRect(desktop)', 1, GetClientRect(desk, rectOut.ptr))
+        const rect = RECT.decode(rectOut.buf)
+        t.check('客户区宽 = SM_CXSCREEN', GetSystemMetrics(0), rect.right - rect.left)
+        t.check('客户区高 = SM_CYSCREEN', GetSystemMetrics(1), rect.bottom - rect.top)
 
         t.section('user32: 字符串出参（宽字符 buffer 读回）')
         t.checkTrue('GetWindowTextLength ≥ 0', GetWindowTextLength(desk) >= 0)
@@ -75,6 +76,10 @@ export const suite = {
             DestroyMenu(GetDesktopWindow())
             // @ts-expect-error Ptr<'HMENU'> 不是 Ptr<'HWND'>，菜单句柄喂 IsWindow 应编译不过
             IsWindow(GetMenu(desk))
+            // @ts-expect-error 出参位未注册 encoder：<RECT>ptr 只收 Ptr<'RECT'>|null，裸 ArrayBuffer 编译不过
+            GetClientRect(desk, new ArrayBuffer(16))
+            // @ts-expect-error 裸 number 缺 Ptr<'RECT'> 品牌
+            GetClientRect(desk, 123)
             // 正例：同种品牌流动（GetMenu → DestroyMenu）通过——上面反例的成立依赖这层区分
             const m = GetMenu(desk)
             if (m !== null) DestroyMenu(m)

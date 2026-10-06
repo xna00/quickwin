@@ -6,6 +6,7 @@ import { bind } from '../../ffi/bind.js'
 import { struct } from '../../ffi/struct.js'
 import { NMHDR, PTR_SIZE, nmCode } from '../nmhdr.js'
 import { LoadCursor, SetCursor, ScreenToClient } from '../../windows/user32.js'
+import { POINT } from '../../windows/structs.js'
 import type { WStyle } from '../jsx.d.ts'
 
 export function makeColorBlock(size: number, bgra: number): ArrayBuffer {
@@ -420,16 +421,16 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
 
           const sp = gui.GetCursorPos()
           if (!sp) return
-          const sbuf = new ArrayBuffer(8)
-          const sdv = new DataView(sbuf)
-          sdv.setInt32(0, sp[0], true)
-          sdv.setInt32(4, sp[1], true)
-          ScreenToClient(h, sbuf)
+          // POINT 就地更新位不注册 encoder：alloc → encode 初值 → 传 .ptr → decode 读回
+          const pt = POINT.alloc()
+          POINT.encode({ x: sp[0], y: sp[1] }, pt.buf)
+          ScreenToClient(h, pt.ptr)
+          const { x: sx, y: sy } = POINT.decode(pt.buf)
 
           const lvhi = new ArrayBuffer(24)
           const lvd = new DataView(lvhi)
-          lvd.setInt32(0, sdv.getInt32(0, true), true)
-          lvd.setInt32(4, sdv.getInt32(4, true), true)
+          lvd.setInt32(0, sx, true)
+          lvd.setInt32(4, sy, true)
           lvd.setInt32(12, -1, true)
           lvd.setInt32(16, -1, true)
           const lvhiPtr = bufPtr(lvhi)

@@ -101,6 +101,15 @@ type _ShapeOfC<M> = {
 }
 type ShapeOfC<M> = Lift<_ShapeOfC<M>>
 
+// encode 入参的深度可选形态：缺省字段运行时跳过（doEncode 的 undefined-continue——
+// 不动 buffer 该字段，新建 buffer 上等价写 0），decode 返回仍是全字段 ShapeOfC。
+// 数组元组排除在外：writeArray 是整体写入语义，"省略第 N 个元素"没有意义——
+// 数组字段维持"要么给全、要么整个缺省"（整个缺省由外层 continue 拦下）。
+export type DeepPartial<T> =
+    T extends readonly unknown[] ? T
+    : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> }
+    : T
+
 
 // ============================================================
 // 运行时类型
@@ -138,7 +147,7 @@ export type StructDef<T extends { '#': 'struct' | 'union' }, N extends string = 
     readonly size: number
     readonly structAlign: number
     decode(buf: ArrayBuffer | Ptr<N>): ShapeOfC<T>
-    encode(v: ShapeOfC<T>, buf?: ArrayBuffer, offset?: number): ArrayBuffer
+    encode(v: DeepPartial<ShapeOfC<T>>, buf?: ArrayBuffer, offset?: number): ArrayBuffer
     offsetOf(name: string): number
     alloc(): StructAlloc<N>
 }
@@ -488,8 +497,12 @@ function doDecode(dv: DataView, base: number, fields: Fields): Record<string, un
 }
 
 function doEncode(dv: DataView, base: number, fields: Fields, v: Record<string, unknown>): void {
-    for (const f of fields)
+    for (const f of fields) {
+        // DeepPartial 缺省：不动该字段（新建 buffer 上保持 0、复用 buffer 上保留旧值）；
+        // 嵌套/数组字段整个缺失也在这里拦下（writeElement 的 struct 分支回到本函数）。
+        if (v[f.name] === undefined) continue
         writeElement(dv, base + f.offset, f.type, f.size, v[f.name])
+    }
 }
 
 // ============================================================
