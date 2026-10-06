@@ -177,6 +177,21 @@ export function bindLib<const M extends Record<string, string>, const L extends 
 
 /* ---- 闭包（回调）：JS 函数 → 可传给 Win32 API 的函数指针 ---- */
 
+// 泄漏警告：target = dispose 本体 —— 警告条件字面对齐「释放通道死亡」：
+// `const {dispose} = closure(...)` 解构出的就是 target 本身，持有期间绝不触发；
+// dispose 体内 unregister(dispose)（自引用 token），释放即撤销，之后丢弃不误报。
+// 回调只打印、绝不自动 free：ptr 会被复制进任意 native API，JS 对象的可达性
+// 推不出 native 是否还在用它，自动释放会把「泄漏」升级成「野指针崩溃」
+// （wrapper 被 C 侧强引用，不 dispose 的代价只是滞留到进程结束）。
+// heldValue 纯数据、不引用 target —— 若反向强持，target 永不可达，警告永不触发。
+// 注意：触发时机依赖 QuickJS 的 GC→job 队列链路，未做强时序断言（best-effort
+// 诊断 —— 即使不触发也只是退回静默泄漏，无任何负面后果）。
+const leakRegistry: FinalizationRegistry<{ sig: string, ptr: number }> =
+    new FinalizationRegistry((held) => {
+        std.printf('[ffi] closure leaked (GCed without dispose): sig="%s" ptr=0x%x\n',
+            held.sig, held.ptr)
+    })
+
 // 共享解码/编码助手：由每个闭包的 wrapper 调用（wrapper 闭包捕获 args/ret/fn）。
 function dispatchClosure(args: C_BasicType_No_Void[], ret: C_BasicType, fn: (...a: unknown[]) => unknown,
     frameBuf: ArrayBuffer, retBuf: ArrayBuffer): void {
@@ -217,7 +232,9 @@ function dispatchClosure(args: C_BasicType_No_Void[], ret: C_BasicType, fn: (...
  *  cdecl 库回调传 { stdcall: false }。x64 恒由调用方清栈，无需指定。
  *  返回 { ptr, dispose }：ptr 即函数指针（传给 API 的 ptr 参数）；dispose 注销
  *  并释放回调函数，幂等；闭包期间回调被强引用，不会被 GC 回收。
- *  注意：dispose 后 ptr 不得再被任何 native 方引用。 */
+ *  注意：dispose 后 ptr 不得再被任何 native 方引用。
+ *  从未 dispose 就丢弃通道（整个返回对象或解构出来的 dispose 均算）
+ *  → 打印泄漏警告（只警告、不自动释放，见 leakRegistry）。 */
 export function closure<S extends string>(sig: S, fn: BindFn<S, {}>,
     opts?: { stdcall?: boolean }): { ptr: number; dispose(): void } {
     const { argTokens, retToken } = parseSig(sig)
@@ -236,12 +253,13 @@ export function closure<S extends string>(sig: S, fn: BindFn<S, {}>,
     }
     const ptr = ffi.closureNew(argBytes, retKind, wrapper)
     let done = false
-    return {
-        ptr,
-        dispose(): void {
-            if (done) return
-            done = true
-            ffi.closureFree(ptr)
-        },
+    const dispose = (): void => {
+        if (done) return
+        done = true
+        leakRegistry.unregister(dispose)    // 释放即撤销：之后通道死亡不再警告
+        ffi.closureFree(ptr)
     }
+    const ret = { ptr, dispose }
+    leakRegistry.register(dispose, { sig, ptr })   // target = 通道本体（非 ret）
+    return ret
 }
