@@ -44,20 +44,19 @@ export const suite = {
         t.check('LoadImage(LOADFROMFILE, 不存在文件) → null', null,
             LoadImage(0, 'qw_no_such_icon_xyz.ico', 2, 0, 0, 0x10))
 
-        t.section('user32: 滚动条（入参对象直传 / 出参 alloc → encode → call → decode）')
+        t.section('user32: 滚动条（入参对象直传 / 出参 encode → call → decode）')
         const desk = GetDesktopWindow()
         // 入参位（注册 encoder）：DeepPartial 对象直传；cbSize 必须显式 = 结构自描述要求。
         // 桌面窗口无 WS_VSCROLL 样式 → Set/GetScrollInfo 返回 0 是 Win32 合法行为（.NET 的
         // WindowsScroll 包装同样先查样式再调用），故断言形态而非成功。
         t.checkTrue('SetScrollInfo 对象直传 形态 number',
             typeof SetScrollInfo(desk, 1, { cbSize: SCROLLINFO.size, fMask: 0x0001, nMin: 0, nMax: 100 }, 0) === 'number')
-        // 出参位（不注册 encoder）：alloc → encode 初值 → 传 .ptr → decode 字段直读。
+        // 出参位（不注册 encoder）：encode() 新建 + 初值一步 → 传 .ptr → decode 字段直读。
         // GetScrollInfo 失败（无滚动条）不写 buffer → decode 回读 = encode 初值；成功时 Win32
         // 覆写 cbSize/fMask 为同值 —— 两条路径下回环断言都稳定。
-        const si = SCROLLINFO.alloc()
-        SCROLLINFO.encode({ cbSize: SCROLLINFO.size, fMask: 0x0001 }, si.buf)
+        const si = SCROLLINFO.encode({ cbSize: SCROLLINFO.size, fMask: 0x0001 })
         t.checkTrue('GetScrollInfo 调用形态 number', typeof GetScrollInfo(desk, 1, si.ptr) === 'number')
-        const info = SCROLLINFO.decode(si.buf)
+        const info = SCROLLINFO.decode(si)
         t.check('decode 回读 cbSize = encode 初值', SCROLLINFO.size, info.cbSize)
         t.check('decode 回读 fMask = encode 初值', 0x0001, info.fMask)
         t.checkTrue('读回字段为 number 形态', typeof info.nMin === 'number' && typeof info.nMax === 'number')

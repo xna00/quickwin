@@ -1,3 +1,4 @@
+import { bufferPtr } from 'ffi'
 import * as os from 'os'
 
 // ============================================================
@@ -243,4 +244,17 @@ export function writeSlot(dv: DataView, off: number, e: Entry): void {
         return
     }
     writeScalar(dv, off, e)
+}
+
+/** buffer + 品牌指针合一：一个引用既是 ArrayBuffer（喂 decode / encode(v, buf) 复用）
+ *  又带 `.ptr` 直接喂 <N>ptr 形参 —— 替代旧 { buf, ptr } 结构包装。
+ *  `ptr` 是构造时快照（与旧 StructAlloc 同性质：底层数据不可 detach/transfer）。
+ *  品牌 N 由创建方声明：struct def 的 encode() 返回值在类型层带 def 的 N（不可伪造）；
+ *  直接 new 属自报品牌，仅限内部/原型场景 —— 生产路径一律走 def.encode()。 */
+export class PtrArrayBuffer<N extends string> extends ArrayBuffer {
+    readonly ptr: Ptr<N>
+    constructor(byteLength: number) {
+        super(byteLength)
+        this.ptr = bufferPtr(this) as Ptr<N>
+    }
 }

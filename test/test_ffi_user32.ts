@@ -19,10 +19,10 @@ export const suite = {
         t.checkTrue('GetForegroundWindow 形态 number|null',
             GetForegroundWindow() === null || typeof GetForegroundWindow() === 'number')
 
-        t.section('user32: RECT 出参（alloc → call → decode 字段直读）')
-        const rectOut = RECT.alloc()
+        t.section('user32: RECT 出参（encode → call → decode 字段直读）')
+        const rectOut = RECT.encode()
         t.check('GetClientRect(desktop)', 1, GetClientRect(desk, rectOut.ptr))
-        const rect = RECT.decode(rectOut.buf)
+        const rect = RECT.decode(rectOut)
         t.check('客户区宽 = SM_CXSCREEN', GetSystemMetrics(0), rect.right - rect.left)
         t.check('客户区高 = SM_CYSCREEN', GetSystemMetrics(1), rect.bottom - rect.top)
 

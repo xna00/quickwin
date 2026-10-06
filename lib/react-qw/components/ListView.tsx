@@ -421,11 +421,10 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
 
           const sp = gui.GetCursorPos()
           if (!sp) return
-          // POINT 就地更新位不注册 encoder：alloc → encode 初值 → 传 .ptr → decode 读回
-          const pt = POINT.alloc()
-          POINT.encode({ x: sp[0], y: sp[1] }, pt.buf)
+          // POINT 就地更新位不注册 encoder：encode() 新建 + 初值一步 → 传 .ptr → decode 读回
+          const pt = POINT.encode({ x: sp[0], y: sp[1] })
           ScreenToClient(h, pt.ptr)
-          const { x: sx, y: sy } = POINT.decode(pt.buf)
+          const { x: sx, y: sy } = POINT.decode(pt)
 
           const lvhi = new ArrayBuffer(24)
           const lvd = new DataView(lvhi)

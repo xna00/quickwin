@@ -6,13 +6,16 @@ import '../text-codec.js'
 import { type C_BasicType, C_BasicType_No_Void, C_BasicType_Token, C_BasicType_Token_No_Void, cTokenToType, isCPtrToken, JsTypeOfToken, normToken, type Norm, NullablePtr, PTR_SIZE, ptrName, type Ptr, readScalar, TokenArgJsTypeMap, TokenReturnJsTypeMap, writeSlot } from './ctype.js'
 
 // 形状刻意是「方法」而非裸函数：ffi-struct 的 struct()/union() 结果（StructDef）
-// 结构上即满足 encode(v, buf?, offset?) -> ArrayBuffer，用户布局可直接透传。
+// 结构上即满足 encode 重载（无 buf 新建带品牌 .ptr 的 PtrArrayBuffer / 带 buf 写入既有
+// buffer 返回其本身），用户布局可直接透传。
 // Codec 三件全可选（可只入参 / 只出参）：encode JS→native 序列化、decode 读回 JS 值、
-// alloc 出参预分配（分配描述符 T 由各 codec 自定——内建收元素数/字节数）。
+// alloc 出参预分配（分配描述符 T 由各 codec 自定——内建收元素数/字节数；StructDef 不提供
+// alloc —— 其 encode() 无 buf 形态已覆盖零 buffer 分配，返回值自带 .ptr）。
 // decode 双态单参：native 品牌指针（返回位分派 / bufferPtr）逐字节读、调用方持有的
 // ArrayBuffer 直读。刻意没有 offset——out 参数恒从 buffer 起点读，嵌套偏移由布局
 // 字段（doDecode 的 base）承担，顶层再收 offset 只会掩盖"读错位置"这类错误。
-// alloc 统一返回 { buf, ptr }：buf 喂 decode 直读，ptr 带品牌直接喂 <N>ptr 形参。
+// 内建 WCHAR/BYTE 的 alloc 统一返回 { buf, ptr }：buf 喂 decode 直读，ptr 带品牌直接喂
+// <N>ptr 形参。
 type Codec<N extends string = string, V = unknown, T = unknown> = {
     encode?(v: V, buf?: ArrayBuffer, offset?: number): ArrayBuffer
     decode?(p: Ptr<N>| ArrayBuffer): V

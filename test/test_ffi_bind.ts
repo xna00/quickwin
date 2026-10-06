@@ -259,7 +259,7 @@ export const suite = {
         }
         t.checkTrue('unknown layout <NOPE>ptr rejected on struct-shape call', errLayout.includes('unknown layout') && errLayout.includes('BYTE'))
 
-        // out 参数：命名 struct 的 alloc() 返回 { buf, ptr }，.ptr 即 Ptr<'RECT'> 直接喂
+        // out 参数：命名 struct 的 encode() 新建零 buffer 返回 PtrArrayBuffer，.ptr 即 Ptr<'RECT'> 直接喂
         // <RECT>ptr；读回走 RECT.decode(buf)（双态入参的 ArrayBuffer 分支）。
         const RECT = struct('RECT', {
             left: 'i32',
@@ -270,16 +270,16 @@ export const suite = {
         const getWindowRect = bind('user32.dll', 'GetWindowRect', '<>ptr <RECT>ptr -> i32', { RECT })
         const getDesktopWindow = bind('user32.dll', 'GetDesktopWindow', ' -> <>ptr')
         const desktop = getDesktopWindow()
-        const rectOut = RECT.alloc()
-        t.checkTrue('GetWindowRect(hwnd, RECT.alloc().ptr) succeeds', getWindowRect(desktop, rectOut.ptr) !== 0)
-        const rectV = RECT.decode(rectOut.buf)
-        t.checkTrue('RECT.decode(alloc().buf) decodes out-param', rectV.right > rectV.left && rectV.bottom > rectV.top)
+        const rectOut = RECT.encode()
+        t.checkTrue('GetWindowRect(hwnd, RECT.encode().ptr) succeeds', getWindowRect(desktop, rectOut.ptr) !== 0)
+        const rectV = RECT.decode(rectOut)
+        t.checkTrue('RECT.decode(encode()) decodes out-param', rectV.right > rectV.left && rectV.bottom > rectV.top)
 
         // 成员 '<RECT>ptr'：decode 得到 Ptr<'RECT'>，可直接喂 <RECT>ptr 形参（品牌在类型层流动）。
         const RECTPTR = struct({r: '<RECT>ptr'})
         const box = RECTPTR.decode(RECTPTR.encode({ r: rectOut.ptr }))
         t.checkTrue('GetWindowRect(hwnd, member RECT*) succeeds', getWindowRect(desktop, box.r) !== 0)
-        const rectThroughMember = RECT.decode(rectOut.buf)
+        const rectThroughMember = RECT.decode(rectOut)
         t.checkTrue('writes through the member pointer', rectThroughMember.right > rectThroughMember.left && rectThroughMember.bottom > rectThroughMember.top)
 
         t.section('struct ptr return + branded passthrough')

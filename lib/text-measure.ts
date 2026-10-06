@@ -9,12 +9,11 @@ const gdi32 = bindLib('gdi32.dll', {
 })
 
 export function measureText(hdc: number, text: string, maxWidth: number): { width: number; height: number } {
-    // rect 双向位不注册 encoder（CALCRECT 就地写回）：alloc → encode 初值（DeepPartial 缺省字段
-    // 跳过，left/top/bottom 保持 0）→ 传 .ptr → decode 读回
-    const r = RECT.alloc()
-    RECT.encode({ right: maxWidth }, r.buf)
+    // rect 双向位不注册 encoder（CALCRECT 就地写回）：encode() 新建 + DeepPartial 初值一步到位
+    //（left/top/bottom 缺省跳过保持 0）→ 传 .ptr → decode 读回
+    const r = RECT.encode({ right: maxWidth })
     DrawText(hdc, text, -1, r.ptr, gui.DrawTextFlag.CALCRECT)
-    const { right, bottom } = RECT.decode(r.buf)
+    const { right, bottom } = RECT.decode(r)
     return { width: right, height: bottom }
 }
 

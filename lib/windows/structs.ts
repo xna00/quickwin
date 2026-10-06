@@ -3,7 +3,7 @@ import { struct } from '../ffi/struct.js'
 // lib/windows 消费的 Win32 结构（CType IR，按本机架构 MSVC 对齐；这批全为定长标量/字符串，
 // ia32/x64 同布局）。形参位方向约定见 lib/windows/user32.ts 头注释：
 //   纯入参位注册 encoder（DeepPartial 对象直传，缺省字段跳过），出参/双向位不注册
-//   （位只收 alloc().ptr，读回走 decode —— 对象 encode 进调用方拿不到的临时 buffer 会丢结果）。
+//   （位只收 def 分配的 .ptr，读回走 decode —— 对象 encode 进调用方拿不到的临时 buffer 会丢结果）。
 
 /** 矩形（16B）：GetClientRect/GetWindowRect 出参、InvalidateRect/FillRect 入参 */
 export const RECT = struct('RECT', {

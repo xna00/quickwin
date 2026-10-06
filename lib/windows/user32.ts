@@ -7,10 +7,10 @@
 //     回调参数用 <>ptr 接 closure() 的 ptr
 //   - 结构位按方向分流（结构定义见 ./structs.ts）：
 //       纯入参位 <N>ptr + 注册 encoder → DeepPartial 对象直传（缺省字段 doEncode 跳过）、
-//         alloc().ptr、null 三形态；
-//       出参/就地位 <N>ptr 不注册 encoder → 位只收 alloc().ptr（对象 encode 进调用方拿不到
+//         encode().ptr、null 三形态；
+//       出参/就地位 <N>ptr 不注册 encoder → 位只收 def 分配的 .ptr（对象 encode 进调用方拿不到
 //         的临时 buffer 会丢结果；ArrayBuffer 由 unknown layout fail-fast 拦下），
-//         读回走 N.decode(buf|ptr)。统一流程：alloc → call → decode
+//         读回走 N.decode(buf|ptr)。统一流程：encode → call → decode
 //   - 签名里的 LPCWSTR 若语义是 MAKEINTRESOURCE 整数（如 LoadCursorW 光标名），该位用 <>ptr
 //   - HDC 借出/归还用 <HDC>ptr（品牌指针 Ptr<'HDC'>）：ReleaseDC 等归还位由 tsc 校验配对、
 //     拦住误传 HWND；DrawText/FillRect 等消费位仍收 <>ptr（brand 是 number 子类型可直传）
@@ -53,9 +53,9 @@ export const ShowWindow = /*@__PURE__*/ b('ShowWindow', '<HWND>ptr i32 -> i32')
 export const MoveWindow = /*@__PURE__*/ b('MoveWindow', '<HWND>ptr i32 i32 i32 i32 i32 -> i32')
 /** 设窗口位置/层级（hWndInsertAfter 为 HWND 或 HWND_TOP 等常量——混合位保持 <>ptr） */
 export const SetWindowPos = /*@__PURE__*/ b('SetWindowPos', '<HWND>ptr <>ptr i32 i32 i32 i32 u32 -> i32')
-/** 取窗口外框矩形（屏幕坐标）；出参 alloc → call → decode：RECT.alloc() 传 .ptr、RECT.decode(.buf) 读回 */
+/** 取窗口外框矩形（屏幕坐标）；出参 encode → call → decode：RECT.encode() 传 .ptr、RECT.decode(实例) 读回 */
 export const GetWindowRect = /*@__PURE__*/ b('GetWindowRect', '<HWND>ptr <RECT>ptr -> i32')
-/** 取窗口客户区矩形；出参同上（alloc → call → decode） */
+/** 取窗口客户区矩形；出参同上（encode → call → decode） */
 export const GetClientRect = /*@__PURE__*/ b('GetClientRect', '<HWND>ptr <RECT>ptr -> i32')
 /** 是否有效窗口句柄；是 → 非 0 */
 export const IsWindow = /*@__PURE__*/ b('IsWindow', '<HWND>ptr -> i32')
@@ -146,11 +146,11 @@ export const BeginPaint = /*@__PURE__*/ b('BeginPaint', '<HWND>ptr <BYTE>ptr -> 
 /** 结束重绘（传 BeginPaint 同一 buffer）；成功 → 非 0 */
 export const EndPaint = /*@__PURE__*/ b('EndPaint', '<HWND>ptr <BYTE>ptr -> i32')
 /** 文本排版绘制（首参品牌 HDC 的 number 子类型直传；format = gui.DrawTextFlag；rect 双向不注册
- *  encoder——CALCRECT 就地写回须持 buffer：RECT.alloc() 传 .ptr、完成后 RECT.decode(.buf) 读回）；返回文本行高 */
+ *  encoder——CALCRECT 就地写回须持 buffer：RECT.encode(初值) 传 .ptr、完成后 RECT.decode(实例) 读回）；返回文本行高 */
 export const DrawText = /*@__PURE__*/ b('DrawTextW', '<>ptr <WCHAR>ptr i32 <RECT>ptr i32 -> i32')
-/** 用画刷填充矩形（首参 HDC 同上；rect 收 DeepPartial RECT 对象 / alloc().ptr；第三参 HBRUSH 无品牌 <>ptr）；返回填充高度 */
+/** 用画刷填充矩形（首参 HDC 同上；rect 收 DeepPartial RECT 对象 / encode().ptr；第三参 HBRUSH 无品牌 <>ptr）；返回填充高度 */
 export const FillRect = /*@__PURE__*/ b('FillRect', '<>ptr <RECT>ptr <>ptr -> i32', { RECT })
-/** 标记窗口区域失效（触发重绘；rect 收 DeepPartial RECT 对象 / RECT.alloc().ptr，null 全窗）；成功 → 非 0 */
+/** 标记窗口区域失效（触发重绘；rect 收 DeepPartial RECT 对象 / RECT.encode().ptr，null 全窗）；成功 → 非 0 */
 export const InvalidateRect = /*@__PURE__*/ b('InvalidateRect', '<HWND>ptr <RECT>ptr i32 -> i32', { RECT })
 /** 立即重绘失效区域；成功 → 非 0 */
 export const UpdateWindow = /*@__PURE__*/ b('UpdateWindow', '<HWND>ptr -> i32')
@@ -161,13 +161,13 @@ export const UpdateWindow = /*@__PURE__*/ b('UpdateWindow', '<HWND>ptr -> i32')
 export const SetCursor = /*@__PURE__*/ b('SetCursor', '<HCURSOR>ptr -> <HCURSOR>ptr')
 /** 加载光标资源（hInstance 传 0 = 系统光标；名传 MAKEINTRESOURCE 整数，如 32512 = IDC_ARROW）；失败 → null */
 export const LoadCursor = /*@__PURE__*/ b('LoadCursorW', '<>ptr <>ptr -> <HCURSOR>ptr')
-/** 取光标屏幕坐标；出参 alloc → call → decode（POINT.alloc() 传 .ptr、POINT.decode(.buf) 读回）；成功 → 非 0 */
+/** 取光标屏幕坐标；出参 encode → call → decode（POINT.encode() 传 .ptr、POINT.decode(实例) 读回）；成功 → 非 0 */
 export const GetCursorPos = /*@__PURE__*/ b('GetCursorPos', '<POINT>ptr -> i32')
 /** 设光标屏幕坐标；成功 → 非 0 */
 export const SetCursorPos = /*@__PURE__*/ b('SetCursorPos', 'i32 i32 -> i32')
 /** 显示/隐藏光标（计数式：>0 显示）；返回新计数 */
 export const ShowCursor = /*@__PURE__*/ b('ShowCursor', 'i32 -> i32')
-/** 屏幕坐标 → 客户区坐标（就地更新不注册 encoder：POINT.alloc() 初值 encode、传 .ptr、decode 读回）；成功 → 非 0 */
+/** 屏幕坐标 → 客户区坐标（就地更新不注册 encoder：POINT.encode(初值) 一步、传 .ptr、decode 读回）；成功 → 非 0 */
 export const ScreenToClient = /*@__PURE__*/ b('ScreenToClient', '<HWND>ptr <POINT>ptr -> i32')
 /** 客户区坐标 → 屏幕坐标（就地更新，同上）；成功 → 非 0 */
 export const ClientToScreen = /*@__PURE__*/ b('ClientToScreen', '<HWND>ptr <POINT>ptr -> i32')
@@ -244,7 +244,7 @@ export const CreatePopupMenu = /*@__PURE__*/ b('CreatePopupMenu', ' -> <HMENU>pt
 /** 设滚动参数（入参位对象直传：DeepPartial SCROLLINFO——cbSize 必须显式给 SCROLLINFO.size（Win32
  *  结构自描述要求，缺省跳过帮不了），fMask = SIF_* 决定写哪些项；redraw 非 0 立即重画）；返回滑块位置 */
 export const SetScrollInfo = /*@__PURE__*/ b('SetScrollInfo', '<HWND>ptr u32 <SCROLLINFO>ptr i32 -> i32', { SCROLLINFO })
-/** 取滚动参数（双向不注册 encoder：SCROLLINFO.alloc → encode 初值 {cbSize, fMask} → 传 .ptr → decode 读回）；成功 → 非 0 */
+/** 取滚动参数（双向不注册 encoder：SCROLLINFO.encode({cbSize, fMask}) 一步 → 传 .ptr → decode 读回）；成功 → 非 0 */
 export const GetScrollInfo = /*@__PURE__*/ b('GetScrollInfo', '<HWND>ptr u32 <SCROLLINFO>ptr -> i32')
 /** 显示/隐藏滚动条（bar = SB_*，0=HORZ 1=VERT 3=BOTH；show 非 0 显示）；成功 → 非 0 */
 export const ShowScrollBar = /*@__PURE__*/ b('ShowScrollBar', '<HWND>ptr u32 i32 -> i32')
