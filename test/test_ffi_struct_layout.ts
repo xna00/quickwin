@@ -463,7 +463,7 @@ export const suite = {
             t.check('cbOutQue.offset == 8', 8, offOf(r.fields, 'cbOutQue'))
         }
 
-        t.section('Bitfield: union 位域按 struct 打包（不别名）')
+        t.section('Bitfield: union 位域完全别名（mingw 实测：每位域成员独立 offset 0/bit 0）')
         {
             const u: C_Union = {
                 '#': 'union',
@@ -473,8 +473,27 @@ export const suite = {
             const r = computeStructLayout(u)
             t.check('sizeof == 4', 4, r.size)
             t.check('a.offset == 0', 0, bitOf(r.fields, 'a').offset)
-            t.check('b.offset == 0 (同单元)', 0, bitOf(r.fields, 'b').offset)
-            t.check('b.bit == 1 (不同位)', 1, bitOf(r.fields, 'b').bit)
+            t.check('a.bit == 0', 0, bitOf(r.fields, 'a').bit)
+            t.check('b.offset == 0 (同址别名)', 0, bitOf(r.fields, 'b').offset)
+            t.check('b.bit == 0 (同位别名，实测 a=1→b=1)', 0, bitOf(r.fields, 'b').bit)
+        }
+
+        t.section('Bitfield: union 溢出/混合形状不越界（regression：曾推进游标致 offset 越出 size）')
+        {
+            // 溢出：struct 里 30+4>32 开新单元；union 每成员独立回 offset 0
+            const u2: C_Union = { '#': 'union', a: bit('u32', 30), b: bit('u32', 4) }
+            const r2 = computeStructLayout(u2)
+            t.check('overflow sizeof == 4', 4, r2.size)
+            t.check('overflow a.offset == 0', 0, bitOf(r2.fields, 'a').offset)
+            t.check('overflow b.offset == 0（回 offset 0 重叠，曾为 4）', 0, bitOf(r2.fields, 'b').offset)
+            t.check('overflow b.bit == 0', 0, bitOf(r2.fields, 'b').bit)
+
+            // 位域后跟普通成员：flushUnit 不得推进 union 游标
+            const u3: C_Union = { '#': 'union', a: bit('u32', 1), b: 'u8' }
+            const r3 = computeStructLayout(u3)
+            t.check('mixed sizeof == 4', 4, r3.size)
+            t.check('mixed a.offset == 0', 0, bitOf(r3.fields, 'a').offset)
+            t.check('mixed b.offset == 0（曾错位到 4 → 越出 size 4）', 0, offOf(r3.fields, 'b'))
         }
 
         t.section('Bitfield validation')

@@ -3,6 +3,7 @@ import { Tester } from './test_helper.js'
 import { struct, union } from '../lib/ffi/struct.js'
 import { bind, } from '../lib/ffi/bind.js'
 import { Ptr, bit } from '../lib/ffi/ctype.js'
+import type { C_Union } from '../lib/ffi/ctype.js'
 
 // 编译期断言工具（仅类型层，运行时无开销）
 type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends (<G>() => G extends B ? 1 : 2) ? true : false
@@ -127,6 +128,47 @@ export const suite = {
         const ud = U.decode(U.encode({ a: 0, b: 0x01020304 }))
         t.check('union a 与 b 同偏移（低字节别名）', 0x04, ud.a)
         t.check('union b', 0x01020304, ud.b)
+
+        t.section('union 位域完全别名 roundtrip（mingw 实测语义）')
+        {
+            const UB = union({ a: bit('u32', 1), b: bit('u32', 1) })
+            t.check('union bitfield size == 4', 4, UB.size)
+            const ud1 = UB.decode(UB.encode({ a: 1, b: 1 }))
+            t.check('a=1,b=1 roundtrip a', 1, ud1.a)
+            t.check('a=1,b=1 roundtrip b', 1, ud1.b)
+            // 同位别名：字段按声明序写入，后写字段覆盖先写字段
+            const ud2 = UB.decode(UB.encode({ a: 1, b: 0 }))
+            t.check('别名覆盖：b=0 后写 → a 读 0', 0, ud2.a)
+            t.check('别名覆盖：b == 0', 0, ud2.b)
+
+            // 溢出形状（30+4>32）：union 每成员回 offset 0，曾开新单元越出 size
+            const OF = union({ a: bit('u32', 30), b: bit('u32', 4) })
+            t.check('overflow union size == 4', 4, OF.size)
+            const od1 = OF.decode(OF.encode({ a: 0x3FFFFFFF, b: 0xF }))
+            t.check('overflow roundtrip a', 0x3FFFFFFF, od1.a)
+            t.check('overflow roundtrip b', 0xF, od1.b)
+            const od2 = OF.decode(OF.encode({ a: 0x3FFFFFFF, b: 0 }))
+            t.check('overflow 别名覆盖 → a 低 4 位被清', 0x3FFFFFF0, od2.a)
+
+            // 位域 + 普通成员混合：b 曾被 flushUnit 推到 offset 4（越出 size 4）
+            const MX = union({ a: bit('u32', 1), b: 'u8' })
+            t.check('mixed union size == 4', 4, MX.size)
+            t.check('mixed offsetOf b == 0（曾为 4）', 0, MX.offsetOf('b'))
+            const md = MX.decode(MX.encode({ a: 1, b: 0x54 }))
+            t.check('mixed: b 覆盖 a 所在字节 → a 读 0', 0, md.a)
+            t.check('mixed: b == 0x54', 0x54, md.b)
+
+            // 嵌套回归：struct 内嵌该 union（raw '#' 形式；union() 装饰对象不能嵌套，
+            // 嵌套 union 的解码类型推导会 TS2589，沿用旧行例 as any——本条是运行时断言），
+            // tail 不被 union 内错位写污染
+            const nestedU: C_Union = { '#': 'union', a: bit('u32', 1), b: 'u8' }
+            const NS = (struct as any)({ tag: 'u32', u: nestedU, tail: 'u16' })
+            t.check('nested size == 12', 12, NS.size)
+            const nd = NS.decode(NS.encode({ tag: 0xAABBCCDD, u: { a: 1, b: 0x54 }, tail: 0x1234 }))
+            t.check('nested tag', 0xAABBCCDD, nd.tag)
+            t.check('nested u.b == 0x54', 0x54, nd.u.b)
+            t.check('nested tail 不被污染', 0x1234, nd.tail)
+        }
 
         t.section('struct() entry: pack 选项 + 键尾 @N（alignas）')
         const P = struct({ a: 'u8', b: 'u32', c: 'u8' }, { pack: 1 })
