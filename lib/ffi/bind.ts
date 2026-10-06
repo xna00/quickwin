@@ -162,7 +162,7 @@ export function bind<const S extends string, const L extends EncoderMap = {}>(
 }
 
 export function bindLib<const M extends Record<string, string>, const L extends EncoderMap = {}>(
-    dll: string, map: M, encoders?: EncoderMap) {
+    dll: string, map: M, encoders?: L) {
     const out: Record<string, (...a: unknown[]) => unknown> = {}
     const h = loadDll(dll)
     for (const [name, sig] of Object.entries(map)) {
@@ -230,6 +230,7 @@ function dispatchClosure(args: C_BasicType_No_Void[], ret: C_BasicType, fn: (...
  *  返回只许 void|u8..u64|i8..i64|f32|f64|ptr（u64/i64 走 EDX:EAX，x64 走 RAX）。
  *  opts.stdcall 仅 ia32 有效（默认 true，Win32 回调标准 CALLBACK）；msvcrt 等
  *  cdecl 库回调传 { stdcall: false }。x64 恒由调用方清栈，无需指定。
+ *  参数上限：x64 至多 16 个、ia32 栈区至多 64 字节（C 桩定长捕获窗），超限抛错。
  *  返回 { ptr, dispose }：ptr 即函数指针（传给 API 的 ptr 参数）；dispose 注销
  *  并释放回调函数，幂等；闭包期间回调被强引用，不会被 GC 回收。
  *  注意：dispose 后 ptr 不得再被任何 native 方引用。
@@ -241,7 +242,15 @@ export function closure<S extends string>(sig: S, fn: BindFn<S, {}>,
     const argTypes = argTokens.map(cTokenToType)
     const retType = cTokenToType(retToken)
     const is64 = os.arch === 'x64'
-    const argBytes = (opts?.stdcall === false || is64) ? 0 : argTypes.reduce((s, k) => s + IA32_ARG_SIZE[k], 0)
+    const stackCapture = argTypes.reduce((s, k) => s + IA32_ARG_SIZE[k], 0)
+    // C 桩捕获窗定长（quickjs-ffi-closure.c：x64 栈区 96B=12 槽，第 5 参起在栈上，
+    // 即至多 16 参；ia32 16×4B）——超限 dispatch 会读到捕获缓冲之外的垃圾，或
+    // RangeError 被吞成返回 0，故创建期 fail-fast。扩容改 C 侧 buf 尺寸并同步放宽。
+    if (is64 ? argTypes.length > 16 : stackCapture > 64) {
+        throw new Error(`ffi-bind: closure signature exceeds capture window ` +
+            `(${is64 ? 'max 16 params' : 'max 64 stack bytes'}): ${sig}`)
+    }
+    const argBytes = (opts?.stdcall === false || is64) ? 0 : stackCapture
     const retKind = retToken === 'f32' ? 1
         : retToken === 'f64' ? 2
             : (retToken === 'u64' || retToken === 'i64') ? 3
