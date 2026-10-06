@@ -4,6 +4,8 @@ import {
     C_BasicType_No_Void,
     C_TypeJsTypeMap,
     isCPtrToken,
+    Member,
+    NormalizeMember,
     NullablePtr,
     PTR_SIZE,
     readScalar,
@@ -15,9 +17,11 @@ import {
     type C_Number,
     type C_String,
     type C_Struct, type C_Union,
+    type C_Type,
     type Encoding,
-    type Member,
-    type Ptr
+    type MemberField,
+    type Ptr,
+    type SimpleMember,
 } from './ctype.js';
 
 // ============================================================
@@ -57,18 +61,30 @@ type Tuple<T, N extends number, R extends T[] = []> =
     : R['length'] extends N ? R
     : R['length'] extends 64 ? T[]
     : Tuple<T, N, [...R, T]>
+type DollarKeys<T> = { [K in keyof T]: K extends `$${string}` ? K : never }[keyof T];
+type UnionToIntersection<U> =
+    (U extends any ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never;
+type Lift<T> =
+    {
+        [K in keyof T as K extends `$${string}` ? never : K]:
+        T[K] extends readonly unknown[] ? T[K] :
+        T[K] extends {} ? Lift<T[K]> : T[K];
+    } & UnionToIntersection<
+        { [K in DollarKeys<T>]: Lift<T[K]> }[DollarKeys<T>]
+    >;
+// 形状层刻意不设约束：M 常是 NormalizeMember<M>（泛型映射，无法在声明处证明
+// 满足 Record<string, MemberField>），约束检查会在这里炸掉（TS2344/TS2589）。
+// 非法 M 落到 FieldShape 的 never 分支，由具体实例化点暴露。
+type _ShapeOfC<M> =
+    {
+        [K in keyof M]: FieldShape<M[K]>
+    }
+type ShapeOfC<M> = Lift<_ShapeOfC<M>>
+type FieldShape<M> =
+    M extends { type: infer T extends C_MemberType }
+    ? ValOf<T>
+    : never
 
-type ShapeOfC<M extends readonly Member[]> = M extends readonly [
-    infer H extends Member,
-    ...infer T extends readonly Member[]
-] ? (FieldShape<H> & ShapeOfC<T>) : {}
-
-type FieldShape<M extends Member> =
-    M extends { name?: undefined; type: infer T extends C_Struct | C_Union }
-    ? ShapeOfC<T['member']>
-    : M extends { name: infer N extends string; type: infer T extends C_MemberType }
-    ? { [K in N]: ValOf<T> }
-    : {}
 
 // ============================================================
 // 运行时类型
@@ -97,7 +113,12 @@ export type Field = {
 }
 export type Fields = Field[]
 
-export type StructDef<T extends C_Struct | C_Union, N extends string = never> = {
+// T 约束刻意比 C_Struct 宽：member 是泛型实例化中的 NormalizeMember<M>（映射类型），
+// 在 struct()/union() 声明处无法证明满足 Member 的模板索引签名 —— 收紧到 C_Struct
+// 会 TS2344；写成 `NormalizeMember<M> & Member` 又让嵌套 ValOf→ShapeOfC 吃到模板
+// 索引键，递归展开触发 TS2589。具体使用点（嵌套引用、encode/decode 实参）拿到的都
+// 是具体字面，能被 C_Struct/Member 正常证明。
+export type StructDef<T extends { tag: 'struct' | 'union'; member: object; pack?: number }, N extends string = never> = {
     readonly __struct: T
     readonly size: number
     readonly structAlign: number
@@ -202,15 +223,14 @@ export function computeStructLayout(t: C_Struct | C_Union): Layout {
         unitBase = -1
     }
 
-    for (const m of t.member) {
+    for (const [name, m] of Object.entries(t.member)) {
         const { size, align: natural, type } = lower(m.type)
         let align = natural
         if (pack > 0) align = Math.min(pack, align)
         if (m.alignas) align = Math.max(align, m.alignas)
 
         if (type.tag === 'bitfield') {
-            if (m.name === undefined)
-                throw new Error('ffi-struct: bitfield members must be named')
+            if (name.startsWith('$')) throw new Error('ffi-struct: bitfield members must be named')
             const width = type.width
 
             // 新单元：无活动单元 / 单元宽不同 / 放不下。
@@ -224,7 +244,7 @@ export function computeStructLayout(t: C_Struct | C_Union): Layout {
             }
 
             fields.push({
-                name: m.name,
+                name: name,
                 offset: unitBase,   // 单元基址（不是位域自己的地址）
                 size,
                 type: { ...type, bit: unitBits },
@@ -239,8 +259,8 @@ export function computeStructLayout(t: C_Struct | C_Union): Layout {
         flushUnit()
         const offset = alignUp(cursor, align)
 
-        if (m.name !== undefined) {
-            fields.push({ name: m.name, offset, size, type })
+        if (!name.startsWith('$')) {
+            fields.push({ name: name, offset, size, type })
         } else {
             // 匿名聚合：m.type 必为 struct/union，内嵌 fields 已 lower 好，offset 平移到本成员起点。
             for (const cf of (type as { fields: Fields }).fields)
@@ -433,21 +453,59 @@ function createStruct(t: C_Struct | C_Union): any {
 /** 聚合对齐上限（pack 压 maxAlign，语义同 MSVC #pragma pack）。 */
 export type AggOpts = { pack?: number }
 
-/** member 数组定义结构体。给 name 则 alloc().ptr 带 Ptr<name> 品牌。 */
-export function struct<const M extends readonly Member[]>(member: M, opts?: AggOpts): StructDef<{ tag: 'struct'; member: M; pack?: number }, never>
-export function struct<const N extends string, const M extends readonly Member[]>(name: N, member: M, opts?: AggOpts): StructDef<{ tag: 'struct'; member: M; pack?: number }, N>
-export function struct(a: string | readonly Member[], b?: readonly Member[] | AggOpts, c?: AggOpts): StructDef<any, any> {
-    const member = (typeof a === 'string' ? b : a) as readonly Member[]
-    const opts = (typeof a === 'string' ? c : b) as AggOpts | undefined
+/** SimpleMember（语法层）→ Member（IR 层）：与类型层 NormalizeMember 逐分支同源。 */
+function isCMemberType(v: unknown): boolean {
+    if (typeof v === 'string') return isCPtrToken(v) || SizeAlign[v as C_Number] !== undefined
+    return !!v && typeof v === 'object' && 'tag' in v
+}
+
+function normalizeMember(simple: Record<string, unknown>): Member {
+    const out: Record<string, MemberField> = {}
+    for (const [k, v] of Object.entries(simple)) {
+        if (k === '#') continue  // 对应 NormalizeMember 的 Omit<..., '#'>（'#' 只出现在嵌套值里，见 normalizeField）
+        out[k] = normalizeField(v)
+    }
+    return out as unknown as Member
+}
+
+function normalizeField(v: unknown): MemberField {
+    if (typeof v === 'string') {
+        const a = /^([^\[\]]+)\[(\d+)\]$/.exec(v)          // 'i32[4]' → C_Array
+        if (a) return { type: { tag: 'array', ctype: a[1] as C_Type, length: Number(a[2]) } }
+        const b = /^([A-Za-z_]\w*):(\d+)$/.exec(v)          // 'i32:538' → C_Bitfield（非法 unit 由 lower 报错）
+        if (b) return { type: { tag: 'bitfield', unit: b[1] as C_Integer, width: Number(b[2]) } }
+        return { type: v as C_Type }                          // token 简写（void/裸 ptr 由 lower 报错）
+    }
+    if (v && typeof v === 'object') {
+        const o = v as Record<string, unknown>
+        if ('type' in o && isCMemberType(o.type)) return o as MemberField  // 显式 { type, alignas? }
+        const { '#': tag, ...rest } = o                     // { "#": 'union', ... } → 带 tag 的嵌套
+        return { type: { tag: (tag as 'struct' | 'union') ?? 'struct', member: normalizeMember(rest) } }
+    }
+    throw new Error(`ffi-struct: invalid member value: ${String(v)}`)
+}
+
+/** SimpleMember 定义结构体（token/`X[n]`/`unit:width`/嵌套对象简写均可）。给 name 则 alloc().ptr 带 Ptr<name> 品牌。 */
+type StructOf<M, N extends string = never> = StructDef<{ tag: 'struct'; member: NormalizeMember<M>; pack?: number }, N>
+type UnionOf<M, N extends string = never> = StructDef<{ tag: 'union'; member: NormalizeMember<M>; pack?: number }, N>
+export function struct<const M extends SimpleMember>(member: M, opts?: AggOpts): StructOf<M>
+export function struct<const N extends string, const M extends SimpleMember>(name: N, member: M, opts?: AggOpts): StructOf<M, N>
+export function struct(a: string | SimpleMember, b?: SimpleMember | AggOpts, c?: AggOpts): any {
+    const isNamed = typeof a === 'string'
+    const raw = (isNamed ? b : a) as Record<string, unknown>
+    const opts = (isNamed ? c : b) as AggOpts | undefined
+    const member = normalizeMember(raw)
     return createStruct({ tag: 'struct', member, ...(opts?.pack !== undefined ? { pack: opts.pack } : {}) })
 }
 
-/** member 数组定义联合体；布局/读写与 struct 相同，仅成员偏移重叠。 */
-export function union<const M extends readonly Member[]>(member: M, opts?: AggOpts): StructDef<{ tag: 'union'; member: M; pack?: number }, never>
-export function union<const N extends string, const M extends readonly Member[]>(name: N, member: M, opts?: AggOpts): StructDef<{ tag: 'union'; member: M; pack?: number }, N>
-export function union(a: string | readonly Member[], b?: readonly Member[] | AggOpts, c?: AggOpts): StructDef<any, any> {
-    const member = (typeof a === 'string' ? b : a) as readonly Member[]
-    const opts = (typeof a === 'string' ? c : b) as AggOpts | undefined
+/** SimpleMember 定义联合体；布局/读写与 struct 相同，仅成员偏移重叠。 */
+export function union<const M extends SimpleMember>(member: M, opts?: AggOpts): UnionOf<M>
+export function union<const N extends string, const M extends SimpleMember>(name: N, member: M, opts?: AggOpts): UnionOf<M, N>
+export function union(a: string | SimpleMember, b?: SimpleMember | AggOpts, c?: AggOpts): any {
+    const isNamed = typeof a === 'string'
+    const raw = (isNamed ? b : a) as Record<string, unknown>
+    const opts = (isNamed ? c : b) as AggOpts | undefined
+    const member = normalizeMember(raw)
     return createStruct({ tag: 'union', member, ...(opts?.pack !== undefined ? { pack: opts.pack } : {}) })
 }
 

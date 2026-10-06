@@ -73,14 +73,46 @@ export type C_Bitfield = {
 
 export type C_MemberType = C_Type | C_Bitfield
 
-export type Member =
-    | { name: string; type: C_MemberType; alignas?: number }
-    | { name?: undefined; type: C_Struct | C_Union; alignas?: number }
+export type MemberField = { type: C_MemberType; alignas?: number }
 
-export type C_Struct = { tag: 'struct'; member: readonly Member[], pack?: number }
-export type C_Union = { tag: 'union'; member: readonly Member[], pack?: number }
+type First =
+    | '_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm'
+    | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
+    | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M'
+    | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z';
 
-export type C_Type = C_Number | `<${string}>ptr` | C_String | C_Array | C_Struct | C_Union
+export type Member = {
+    [K: `${First}${string}`]: { type: C_MemberType; alignas?: number }
+    [K: `$${string}`]: { type: C_Struct | C_Union, alignas?: number }
+}
+
+export type SimpleMember = {
+    // "#"?: 'struct' | 'union',
+    [K: `${First}${string}`]: C_BasicType_Token_No_Void
+    | `${C_BasicType_Token_No_Void}[${number}]` | `${C_Integer}:${number}`
+    | SimpleMember | { type: C_MemberType; alignas?: number }
+    [K: `$${string}`]: SimpleMember | { type: C_Struct | C_Union, alignas?: number }
+}
+
+
+
+export type NormalizeMember<M> =
+    Omit<{
+        [K in keyof M]:
+        M[K] extends C_BasicType_Token_No_Void ? { type: M[K] } :
+        M[K] extends `${infer T extends C_BasicType_Token_No_Void}[${infer L extends number}]` ? { type: { tag: 'array', ctype: T, length: L } } :
+        M[K] extends `${infer T extends C_Integer}:${infer W extends number}` ? { type: { tag: 'bitfield', unit: T, width: W } } :
+        M[K] extends { type: C_MemberType } ? { type: M[K]["type"]; alignas?: (M[K] & { alignas?: number })["alignas"] } :
+        M[K] extends { "#": infer T extends 'struct' | 'union' } ? { type: { tag: T, member: NormalizeMember<M[K]> } } :
+        { type: { tag: 'struct', member: NormalizeMember<M[K]> } }
+    }, "#">
+
+
+
+export type C_Struct = { tag: 'struct'; member: Member, pack?: number }
+export type C_Union = { tag: 'union'; member: Member, pack?: number }
+
+export type C_Type = C_BasicType_Token_No_Void | C_String | C_Array | C_Struct | C_Union
 
 
 export const PTR_SIZE = os.arch === 'x64' ? 8 : 4
