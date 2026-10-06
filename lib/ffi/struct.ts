@@ -137,16 +137,16 @@ export type StructDef<T extends { '#': 'struct' | 'union' }, N extends string = 
     readonly __struct: T
     readonly size: number
     readonly structAlign: number
-    decode(buf: ArrayBuffer | Ptr<N>, offset?: number): ShapeOfC<T>
+    decode(buf: ArrayBuffer | Ptr<N>): ShapeOfC<T>
     encode(v: ShapeOfC<T>, buf?: ArrayBuffer, offset?: number): ArrayBuffer
     offsetOf(name: string): number
-    alloc(): StructAlloc<ShapeOfC<T>, N>
+    alloc(): StructAlloc<N>
 }
 
-export type StructAlloc<S, N extends string = ''> = {
-    readonly buffer: ArrayBuffer
+// out 预分配句柄：buf 给 def.decode(buf) 直读、ptr 带布局品牌直接喂 <N>ptr 形参。
+export type StructAlloc<N extends string = ''> = {
+    readonly buf: ArrayBuffer
     readonly ptr: Ptr<N>
-    decode(offset?: number): S
 }
 
 // ============================================================
@@ -502,16 +502,17 @@ function createStruct(t: C_Struct | C_Union): any {
         __struct: t,
         size,
         structAlign: maxEffectiveAlign,
-        decode: (p: ArrayBuffer | number, offset = 0) => {
+        decode: (p: ArrayBuffer | number) => {
             // number = native 拥有的品牌指针（Codec 的 decode(p) 形态）：按布局 size
             // 逐字节拷进临时 buffer 再解码；ArrayBuffer = 调用方持有的 out buffer 直读。
+            // 顶层不收 offset——out 参数恒从起点读，嵌套偏移由字段布局（doDecode 的 base）承担。
             if (typeof p === 'number') {
                 const buf = new ArrayBuffer(size)
                 const u8 = new Uint8Array(buf)
                 for (let i = 0; i < size; i++) u8[i] = ffi.readByte(p + i)
-                return doDecode(new DataView(buf), offset, fields)
+                return doDecode(new DataView(buf), 0, fields)
             }
-            return doDecode(new DataView(p), offset, fields)
+            return doDecode(new DataView(p), 0, fields)
         },
         encode: (v: any, buf?: ArrayBuffer, offset = 0) => {
             const out = buf ?? new ArrayBuffer(size)
@@ -523,12 +524,8 @@ function createStruct(t: C_Struct | C_Union): any {
             throw new Error(`ffi-struct: no field "${name}"`)
         },
         alloc: () => {
-            const buffer = new ArrayBuffer(size)
-            return {
-                buffer,
-                ptr: ffi.bufferPtr(buffer),
-                decode: (offset = 0) => doDecode(new DataView(buffer), offset, fields),
-            }
+            const buf = new ArrayBuffer(size)
+            return { buf, ptr: ffi.bufferPtr(buf) }
         },
     }
 }

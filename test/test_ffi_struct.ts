@@ -75,13 +75,14 @@ export const suite = {
         const wr = RECT.decode(wrect)
         t.checkTrue('screen RECT non-empty', wr.right > 0 && wr.bottom > 0)
 
-        // out 参数：命名 struct 的 alloc() 句柄 → .ptr 为 Ptr<'RECT'>，直接喂 <RECT>ptr
-        t.section('RECT.alloc() out-param handle')
+        // out 参数：alloc() 返回 { buf, ptr } → .ptr 为 Ptr<'RECT'> 直接喂 <RECT>ptr，
+        // 读回走 def.decode(buf)（双态入参的 ArrayBuffer 分支）
+        t.section('RECT.alloc() out-param { buf, ptr }')
         const out = RECT.alloc()
-        t.checkTrue('alloc() exposes buffer + ptr', out.buffer instanceof ArrayBuffer && typeof out.ptr === 'number')
+        t.checkTrue('alloc() exposes buf + ptr', out.buf instanceof ArrayBuffer && typeof out.ptr === 'number')
         t.checkTrue('GetWindowRect(hwnd, out.ptr) succeeds', getWindowRectLayout(hwnd, out.ptr) !== 0)
-        const or = out.decode()
-        t.checkTrue('alloc().decode() decodes out-param', or.right > 0 && or.bottom > 0)
+        const or = RECT.decode(out.buf)
+        t.checkTrue('RECT.decode(alloc().buf) decodes out-param', or.right > 0 && or.bottom > 0)
 
         t.section('ptr layout matches arch')
         t.check(`TVITEM.size (${os.arch})`, is64 ? 56 : 40, TVITEM.size)

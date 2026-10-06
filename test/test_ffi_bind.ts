@@ -259,7 +259,8 @@ export const suite = {
         }
         t.checkTrue('unknown layout <NOPE>ptr rejected on struct-shape call', errLayout.includes('unknown layout') && errLayout.includes('BYTE'))
 
-        // out 参数：命名 struct 的 alloc() 句柄，.ptr 即 Ptr<'RECT'>，直接喂 <RECT>ptr。
+        // out 参数：命名 struct 的 alloc() 返回 { buf, ptr }，.ptr 即 Ptr<'RECT'> 直接喂
+        // <RECT>ptr；读回走 RECT.decode(buf)（双态入参的 ArrayBuffer 分支）。
         const RECT = struct('RECT', {
             left: 'i32',
             top: 'i32',
@@ -271,14 +272,14 @@ export const suite = {
         const desktop = getDesktopWindow()
         const rectOut = RECT.alloc()
         t.checkTrue('GetWindowRect(hwnd, RECT.alloc().ptr) succeeds', getWindowRect(desktop, rectOut.ptr) !== 0)
-        const rectV = rectOut.decode()
-        t.checkTrue('alloc() handle read() decodes out-param', rectV.right > rectV.left && rectV.bottom > rectV.top)
+        const rectV = RECT.decode(rectOut.buf)
+        t.checkTrue('RECT.decode(alloc().buf) decodes out-param', rectV.right > rectV.left && rectV.bottom > rectV.top)
 
         // 成员 '<RECT>ptr'：decode 得到 Ptr<'RECT'>，可直接喂 <RECT>ptr 形参（品牌在类型层流动）。
         const RECTPTR = struct({r: '<RECT>ptr'})
         const box = RECTPTR.decode(RECTPTR.encode({ r: rectOut.ptr }))
         t.checkTrue('GetWindowRect(hwnd, member RECT*) succeeds', getWindowRect(desktop, box.r) !== 0)
-        const rectThroughMember = rectOut.decode()
+        const rectThroughMember = RECT.decode(rectOut.buf)
         t.checkTrue('writes through the member pointer', rectThroughMember.right > rectThroughMember.left && rectThroughMember.bottom > rectThroughMember.top)
 
         t.section('struct ptr return + branded passthrough')
@@ -342,16 +343,16 @@ export const suite = {
         t.checkTrue('GetCommandLineW auto-decodes builtin <WCHAR>ptr to string',
             typeof cl === 'string' && cl.length > 0)
 
-        // WCHAR alloc/decode 往返：出参预分配 + 手填 UTF-16LE + 按地址读回
-        const wbuf = WCHAR.alloc(8)
-        const wdv = new DataView(wbuf)
+        // WCHAR alloc/decode 往返：{ buf, ptr } 预分配 + 手填 UTF-16LE + 双态读回
+        const walloc = WCHAR.alloc(8)
+        const wdv = new DataView(walloc.buf)
         wdv.setUint16(0, 'h'.charCodeAt(0), true)
         wdv.setUint16(2, 'i'.charCodeAt(0), true)
         wdv.setUint16(4, 0, true)
-        t.check('WCHAR.alloc(8) = 16 bytes', 16, wbuf.byteLength)
-        t.check('WCHAR.decode(bufferPtr) roundtrip', 'hi',
-            WCHAR.decode(ffi.bufferPtr(wbuf) as Ptr<'WCHAR'>))
-        t.check('BYTE.alloc(12) = 12 bytes', 12, BYTE.alloc(12).byteLength)
+        t.check('WCHAR.alloc(8).buf = 16 bytes', 16, walloc.buf.byteLength)
+        t.check('WCHAR.decode(ptr) roundtrip', 'hi', WCHAR.decode(walloc.ptr))
+        t.check('WCHAR.decode(ArrayBuffer) roundtrip', 'hi', WCHAR.decode(walloc.buf))
+        t.check('BYTE.alloc(12).buf = 12 bytes', 12, BYTE.alloc(12).buf.byteLength)
 
         // out-only codec（只声明 decode）走入参位 → 编码期 fail-fast（不触 native 调用）
         const asctimeOutOnly = bind('msvcrt.dll', 'asctime', '<TM>ptr -> <>ptr',

@@ -7,18 +7,22 @@ import { type C_BasicType, C_BasicType_No_Void, C_BasicType_Token, C_BasicType_T
 
 // 形状刻意是「方法」而非裸函数：ffi-struct 的 struct()/union() 结果（StructDef）
 // 结构上即满足 encode(v, buf?, offset?) -> ArrayBuffer，用户布局可直接透传。
-// Codec 三件全可选（可只入参 / 只出参）：encode JS→native 序列化、decode 按品牌
-// 指针读回 JS 值、alloc 出参预分配（分配描述符 T 由各 codec 自定——内建收元素数/字节数）。
+// Codec 三件全可选（可只入参 / 只出参）：encode JS→native 序列化、decode 读回 JS 值、
+// alloc 出参预分配（分配描述符 T 由各 codec 自定——内建收元素数/字节数）。
+// decode 双态单参：native 品牌指针（返回位分派 / bufferPtr）逐字节读、调用方持有的
+// ArrayBuffer 直读。刻意没有 offset——out 参数恒从 buffer 起点读，嵌套偏移由布局
+// 字段（doDecode 的 base）承担，顶层再收 offset 只会掩盖"读错位置"这类错误。
+// alloc 统一返回 { buf, ptr }：buf 喂 decode 直读，ptr 带品牌直接喂 <N>ptr 形参。
 type Codec<N extends string = string, V = unknown, T = unknown> = {
     encode?(v: V, buf?: ArrayBuffer, offset?: number): ArrayBuffer
-    decode?(p: Ptr<N>): V
-    alloc?(a: T): ArrayBuffer
+    decode?(p: Ptr<N>| ArrayBuffer): V
+    alloc?(a: T): { buf: ArrayBuffer; ptr: Ptr<N> }
 }
-// 约束层刻意不含 alloc：StructDef 的 alloc() 返回持有句柄（{buffer,ptr,decode}），
-// 与出参预分配语义不同，含进约束会使 def 无法整体透传。提取层按键存在性走（见下）。
+// 约束层三件与 StructDef 形状一致，def 可整体透传；提取层按键存在性走（见下）。
 export type CodecMap = Record<string, {
     encode?(v: any, buf?: ArrayBuffer, offset?: number): ArrayBuffer
     decode?(p: any): any
+    alloc?(a: any): { buf: ArrayBuffer; ptr: Ptr<any> }
 }>
 
 const _dllCache: Map<string, win.HMODULE> = new Map()
@@ -184,38 +188,58 @@ type BindFn<S extends string, E, D> =
 
 // 内建 codec：类型校验放在这里，与「用户布局 codec」同一分派点。
 // BYTE/WCHAR 拒绝裸 number（无句柄可 pin），提示改用 <>ptr。
-/** 内建 UTF-16 编解码：encode 入参序列化（UTF-16LE + NUL）；decode 按品牌指针读回
- *  string（逐字读到 NUL，野指针无终止时 4MiB 上限 fail-fast）；alloc 出参预分配
- *  （a = 字符数，缺省 256）。类型取必需形态——内建三件齐备，调用无需空断言。 */
+/** 内建 UTF-16 编解码：encode 入参序列化（UTF-16LE + NUL）；decode 双态单参——
+ *  品牌指针逐字节读到 NUL（野指针无终止 4MiB 上限 fail-fast）、ArrayBuffer 直读到
+ *  NUL 或末尾（out 参数未写 NUL 时按读满处理）；alloc 出参预分配返回 { buf, ptr }
+ *  （a = 字符数，缺省 256；ptr 带 <WCHAR> 品牌直接喂形参）。类型取必需形态——
+ *  内建三件齐备，调用无需空断言。 */
 export const WCHAR: Required<Codec<'WCHAR', string, number>> = {
     encode: (v: string) => {
         return new TextEncoder('utf-16le').encode(v + '\0').buffer
     },
     decode: (p) => {
-        let s = ''
-        let addr: number = p
-        const start = addr
-        for (;;) {
-            const lo = ffi.readByte(addr)
-            const hi = ffi.readByte(addr + 1)
-            if (lo === 0 && hi === 0) return s
-            s += String.fromCharCode(lo | (hi << 8))
-            addr += 2
-            if (addr - start > 1 << 21) {
-                throw new Error('ffi-bind: WCHAR decode exceeded 4MiB without NUL')
+        // 两分支同构（UTF-16LE code unit、拼接到 NUL 止），唯一差异是读法。
+        if (typeof p === 'number') {
+            let s = ''
+            let addr: number = p
+            const start = addr
+            for (;;) {
+                const lo = ffi.readByte(addr)
+                const hi = ffi.readByte(addr + 1)
+                if (lo === 0 && hi === 0) return s
+                s += String.fromCharCode(lo | (hi << 8))
+                addr += 2
+                if (addr - start > 1 << 21) {
+                    throw new Error('ffi-bind: WCHAR decode exceeded 4MiB without NUL')
+                }
             }
         }
+        const u8 = new Uint8Array(p)
+        const limit = u8.length & ~1   // 奇数末尾的残半字节丢弃
+        let s = ''
+        for (let i = 0; i < limit; i += 2) {
+            const c = u8[i]! | (u8[i + 1]! << 8)
+            if (c === 0) return s
+            s += String.fromCharCode(c)
+        }
+        return s
     },
-    alloc: (size = 256) => new ArrayBuffer(size * 2),
+    alloc: (size = 256) => {
+        const buf = new ArrayBuffer(size * 2)
+        return { buf, ptr: ffi.bufferPtr(buf) as Ptr<'WCHAR'> }
+    },
 }
 /** 内建字节缓冲：encode identity 直通（调用方持有 buffer 原地存活）；alloc 出参预
- *  分配（a = 字节数）。无 decode——地址不携带长度（无终止符），读回用调用方持有的
- *  ArrayBuffer 原地读（native 写回后 DataView 直接取）。 */
+ *  分配返回 { buf, ptr }（a = 字节数；ptr 带 <BYTE> 品牌直接喂形参）。无 decode——
+ *  地址不携带长度（无终止符），读回用 buf 原地读（native 写回后 DataView 直接取）。 */
 export const BYTE: Required<Pick<Codec<'BYTE', ArrayBuffer, number>, 'encode' | 'alloc'>> = {
     encode: (v) => {
         return v
     },
-    alloc: (byteLen) => new ArrayBuffer(byteLen),
+    alloc: (byteLen) => {
+        const buf = new ArrayBuffer(byteLen)
+        return { buf, ptr: ffi.bufferPtr(buf) as Ptr<'BYTE'> }
+    },
 }
 // 运行时两张表是同一对象：参数位只调 .encode、返回位只调 .decode，互不干扰。
 const builtinCodecs: CodecMap = { WCHAR, BYTE }
