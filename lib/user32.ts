@@ -8,11 +8,13 @@
 //   - 签名里的 LPCWSTR 若语义是 MAKEINTRESOURCE 整数（如 LoadCursorW 光标名），该位用 <>ptr
 //   - HDC 借出/归还用 <HDC>ptr（品牌指针 Ptr<'HDC'>）：ReleaseDC 等归还位由 tsc 校验配对、
 //     拦住误传 HWND；DrawText/FillRect 等消费位仍收 <>ptr（brand 是 number 子类型可直传）
-//   - 返回位句柄品牌化：HWND（GetDesktopWindow 等窗口句柄）、HMENU（GetMenu/GetSubMenu）、
-//     HCURSOR（LoadCursor/SetCursor）返回 <N>ptr → Ptr<'N'> | null，brand 是 number 子类型
-//     可直传残余 <>ptr 位（零 break）；消费位仅收窄菜单组 hMenu 与 SetCursor 第 1 参——
-//     异种句柄互传（如 GetDesktopWindow() → DestroyMenu）由 tsc 拦下；全部第一参 hwnd 与
-//     混合位（AppendMenu.uIDNewItem = 命令 ID 或子菜单句柄）保持 <>ptr
+//   - 返回/入参句柄位品牌化：HWND（窗口句柄形参与返回）、HMENU（菜单组出入参）、
+//     HCURSOR（LoadCursor/SetCursor）一律 <N>ptr → Ptr<'N'> | null；gui.HWND 与
+//     Ptr<"HWND"> 结构同型（quickwin.d.ts 字符串键 brand），react-qw 直传零桥接。
+//     异种句柄互传（如 GetDesktopWindow() → DestroyMenu）由 tsc 拦下。混合值位保持
+//     <>ptr：SetWindowPos 的 hWndInsertAfter（HWND_TOP 等常量）、AppendMenu.uIDNewItem
+//     （命令 ID 或子菜单句柄）、MAKEINTRESOURCE 光标名，以及 HINSTANCE / HGLOBAL /
+//     HBRUSH / 回调等非清单句柄
 import * as os from 'os'
 import { bind } from './ffi/bind.js'
 
@@ -22,114 +24,114 @@ const LONG_PTR_SYM = os.arch === 'x64' ? 'PtrW' : 'W'
 
 // ============ 窗口 / 基本 ============
 
-/** 创建窗口（class/窗口名可传 string 或 null）；失败 → null */
+/** 创建窗口（class/窗口名可传 string 或 null；hWndParent 收品牌 HWND、hMenu 收品牌 HMENU，均可 null）；失败 → null */
 export const CreateWindowEx = /*@__PURE__*/ bind('user32.dll', 'CreateWindowExW',
-    'u32 <WCHAR>ptr <WCHAR>ptr u32 i32 i32 i32 i32 <>ptr <>ptr <>ptr <>ptr -> <HWND>ptr')
+    'u32 <WCHAR>ptr <WCHAR>ptr u32 i32 i32 i32 i32 <HWND>ptr <HMENU>ptr <>ptr <>ptr -> <HWND>ptr')
 /** 销毁窗口；成功 → 非 0 */
-export const DestroyWindow = /*@__PURE__*/ bind('user32.dll', 'DestroyWindow', '<>ptr -> i32')
+export const DestroyWindow = /*@__PURE__*/ bind('user32.dll', 'DestroyWindow', '<HWND>ptr -> i32')
 /** 显示/隐藏窗口（nCmdShow = gui.WindowStyle 类常量）；返回先前可见性 */
-export const ShowWindow = /*@__PURE__*/ bind('user32.dll', 'ShowWindow', '<>ptr i32 -> i32')
+export const ShowWindow = /*@__PURE__*/ bind('user32.dll', 'ShowWindow', '<HWND>ptr i32 -> i32')
 /** 移动/缩放窗口；bRepaint 非 0 重绘 */
-export const MoveWindow = /*@__PURE__*/ bind('user32.dll', 'MoveWindow', '<>ptr i32 i32 i32 i32 i32 -> i32')
-/** 设窗口位置/层级（hWndInsertAfter 为 HWND 或 HWND_TOP 等常量位） */
-export const SetWindowPos = /*@__PURE__*/ bind('user32.dll', 'SetWindowPos', '<>ptr <>ptr i32 i32 i32 i32 u32 -> i32')
+export const MoveWindow = /*@__PURE__*/ bind('user32.dll', 'MoveWindow', '<HWND>ptr i32 i32 i32 i32 i32 -> i32')
+/** 设窗口位置/层级（hWndInsertAfter 为 HWND 或 HWND_TOP 等常量——混合位保持 <>ptr） */
+export const SetWindowPos = /*@__PURE__*/ bind('user32.dll', 'SetWindowPos', '<HWND>ptr <>ptr i32 i32 i32 i32 u32 -> i32')
 /** 取窗口外框矩形（屏幕坐标）到 RECT buffer */
-export const GetWindowRect = /*@__PURE__*/ bind('user32.dll', 'GetWindowRect', '<>ptr <BYTE>ptr -> i32')
+export const GetWindowRect = /*@__PURE__*/ bind('user32.dll', 'GetWindowRect', '<HWND>ptr <BYTE>ptr -> i32')
 /** 取窗口客户区矩形到 RECT buffer */
-export const GetClientRect = /*@__PURE__*/ bind('user32.dll', 'GetClientRect', '<>ptr <BYTE>ptr -> i32')
+export const GetClientRect = /*@__PURE__*/ bind('user32.dll', 'GetClientRect', '<HWND>ptr <BYTE>ptr -> i32')
 /** 是否有效窗口句柄；是 → 非 0 */
-export const IsWindow = /*@__PURE__*/ bind('user32.dll', 'IsWindow', '<>ptr -> i32')
+export const IsWindow = /*@__PURE__*/ bind('user32.dll', 'IsWindow', '<HWND>ptr -> i32')
 /** 窗口是否可见；是 → 非 0 */
-export const IsWindowVisible = /*@__PURE__*/ bind('user32.dll', 'IsWindowVisible', '<>ptr -> i32')
+export const IsWindowVisible = /*@__PURE__*/ bind('user32.dll', 'IsWindowVisible', '<HWND>ptr -> i32')
 /** 窗口是否最小化；是 → 非 0 */
-export const IsIconic = /*@__PURE__*/ bind('user32.dll', 'IsIconic', '<>ptr -> i32')
+export const IsIconic = /*@__PURE__*/ bind('user32.dll', 'IsIconic', '<HWND>ptr -> i32')
 /** 取前台窗口句柄；无 → null */
 export const GetForegroundWindow = /*@__PURE__*/ bind('user32.dll', 'GetForegroundWindow', ' -> <HWND>ptr')
 /** 请求设前台窗口；成功 → 非 0 */
-export const SetForegroundWindow = /*@__PURE__*/ bind('user32.dll', 'SetForegroundWindow', '<>ptr -> i32')
+export const SetForegroundWindow = /*@__PURE__*/ bind('user32.dll', 'SetForegroundWindow', '<HWND>ptr -> i32')
 /** 取桌面窗口句柄（恒非 null） */
 export const GetDesktopWindow = /*@__PURE__*/ bind('user32.dll', 'GetDesktopWindow', ' -> <HWND>ptr')
 /** 按类名+标题查找顶层窗口；无 → null（两个参数都可传 null） */
 export const FindWindow = /*@__PURE__*/ bind('user32.dll', 'FindWindowW', '<WCHAR>ptr <WCHAR>ptr -> <HWND>ptr')
 /** 取窗口标题（宽字符写入 out buffer，返回写入字符数，不含 NUL）；
  *  out 传 WCHAR.alloc(n).buf（n = 字符数），读回 WCHAR.decode(buf) */
-export const GetWindowText = /*@__PURE__*/ bind('user32.dll', 'GetWindowTextW', '<>ptr <BYTE>ptr i32 -> i32')
+export const GetWindowText = /*@__PURE__*/ bind('user32.dll', 'GetWindowTextW', '<HWND>ptr <BYTE>ptr i32 -> i32')
 /** 设窗口标题（传 string 或 null 清空）；成功 → 非 0 */
-export const SetWindowText = /*@__PURE__*/ bind('user32.dll', 'SetWindowTextW', '<>ptr <WCHAR>ptr -> i32')
+export const SetWindowText = /*@__PURE__*/ bind('user32.dll', 'SetWindowTextW', '<HWND>ptr <WCHAR>ptr -> i32')
 /** 取窗口标题长度（字符数，不含 NUL） */
-export const GetWindowTextLength = /*@__PURE__*/ bind('user32.dll', 'GetWindowTextLengthW', '<>ptr -> i32')
+export const GetWindowTextLength = /*@__PURE__*/ bind('user32.dll', 'GetWindowTextLengthW', '<HWND>ptr -> i32')
 /** 取窗口类名（宽字符写入 out buffer，返回字符数）；
  *  out 传 WCHAR.alloc(n).buf（n = 字符数），读回 WCHAR.decode(buf) */
-export const GetClassName = /*@__PURE__*/ bind('user32.dll', 'GetClassNameW', '<>ptr <BYTE>ptr i32 -> i32')
+export const GetClassName = /*@__PURE__*/ bind('user32.dll', 'GetClassNameW', '<HWND>ptr <BYTE>ptr i32 -> i32')
 /** 取窗口附加数据（GWLP_* / GWL_* 索引）；0 → null（值按无符号读；ia32 走 GetWindowLongW） */
-export const GetWindowLongPtr = /*@__PURE__*/ bind('user32.dll', 'GetWindowLong' + LONG_PTR_SYM, '<>ptr i32 -> <>ptr')
+export const GetWindowLongPtr = /*@__PURE__*/ bind('user32.dll', 'GetWindowLong' + LONG_PTR_SYM, '<HWND>ptr i32 -> <>ptr')
 /** 设窗口附加数据；返回先前值（0 → null，值按无符号读） */
-export const SetWindowLongPtr = /*@__PURE__*/ bind('user32.dll', 'SetWindowLong' + LONG_PTR_SYM, '<>ptr i32 <>ptr -> <>ptr')
+export const SetWindowLongPtr = /*@__PURE__*/ bind('user32.dll', 'SetWindowLong' + LONG_PTR_SYM, '<HWND>ptr i32 <>ptr -> <>ptr')
 /** 取窗口所属进程 ID 到 buffer（可传 null）；返回线程 ID */
-export const GetWindowThreadProcessId = /*@__PURE__*/ bind('user32.dll', 'GetWindowThreadProcessId', '<>ptr <BYTE>ptr -> u32')
+export const GetWindowThreadProcessId = /*@__PURE__*/ bind('user32.dll', 'GetWindowThreadProcessId', '<HWND>ptr <BYTE>ptr -> u32')
 /** 启用/禁用窗口输入；返回先前状态 */
-export const EnableWindow = /*@__PURE__*/ bind('user32.dll', 'EnableWindow', '<>ptr i32 -> i32')
+export const EnableWindow = /*@__PURE__*/ bind('user32.dll', 'EnableWindow', '<HWND>ptr i32 -> i32')
 /** 取父窗口；无 → null */
-export const GetParent = /*@__PURE__*/ bind('user32.dll', 'GetParent', '<>ptr -> <HWND>ptr')
+export const GetParent = /*@__PURE__*/ bind('user32.dll', 'GetParent', '<HWND>ptr -> <HWND>ptr')
 /** 设父窗口；返回先前父窗口 */
-export const SetParent = /*@__PURE__*/ bind('user32.dll', 'SetParent', '<>ptr <>ptr -> <HWND>ptr')
+export const SetParent = /*@__PURE__*/ bind('user32.dll', 'SetParent', '<HWND>ptr <HWND>ptr -> <HWND>ptr')
 /** 按关系（GW_* / GW_OWNER）取相邻窗口；无 → null */
-export const GetWindow = /*@__PURE__*/ bind('user32.dll', 'GetWindow', '<>ptr u32 -> <HWND>ptr')
+export const GetWindow = /*@__PURE__*/ bind('user32.dll', 'GetWindow', '<HWND>ptr u32 -> <HWND>ptr')
 /** 注册窗口类（WNDCLASSEXW 结构 buffer）；失败 → 0（ATOM） */
 export const RegisterClassEx = /*@__PURE__*/ bind('user32.dll', 'RegisterClassExW', '<BYTE>ptr -> u16')
 
 // ============ 焦点 / 激活 ============
 
 /** 设输入焦点；返回先前焦点窗口 */
-export const SetFocus = /*@__PURE__*/ bind('user32.dll', 'SetFocus', '<>ptr -> <HWND>ptr')
+export const SetFocus = /*@__PURE__*/ bind('user32.dll', 'SetFocus', '<HWND>ptr -> <HWND>ptr')
 /** 取调用线程输入焦点；无 → null */
 export const GetFocus = /*@__PURE__*/ bind('user32.dll', 'GetFocus', ' -> <HWND>ptr')
 /** 取调用线程激活窗口；无 → null */
 export const GetActiveWindow = /*@__PURE__*/ bind('user32.dll', 'GetActiveWindow', ' -> <HWND>ptr')
 /** 设调用线程激活窗口；返回先前窗口 */
-export const SetActiveWindow = /*@__PURE__*/ bind('user32.dll', 'SetActiveWindow', '<>ptr -> <HWND>ptr')
+export const SetActiveWindow = /*@__PURE__*/ bind('user32.dll', 'SetActiveWindow', '<HWND>ptr -> <HWND>ptr')
 
 // ============ 消息循环 ============
 
-/** 取消息（MSG buffer；阻塞式，-1 = 出错、0 = WM_QUIT、>0 = 有消息）；分发前先 TranslateMessage */
-export const GetMessage = /*@__PURE__*/ bind('user32.dll', 'GetMessageW', '<BYTE>ptr <>ptr u32 u32 -> i32')
-/** 非阻塞查消息（wRemoveMsg = PM_NOREMOVE/PM_REMOVE）；有消息 → 非 0 */
-export const PeekMessage = /*@__PURE__*/ bind('user32.dll', 'PeekMessageW', '<BYTE>ptr <>ptr u32 u32 u32 -> i32')
+/** 取消息（MSG buffer，第二参 hwndFilter 收品牌 HWND 可 null；阻塞式，-1 = 出错、0 = WM_QUIT、>0 = 有消息）；分发前先 TranslateMessage */
+export const GetMessage = /*@__PURE__*/ bind('user32.dll', 'GetMessageW', '<BYTE>ptr <HWND>ptr u32 u32 -> i32')
+/** 非阻塞查消息（第二参同上；wRemoveMsg = PM_NOREMOVE/PM_REMOVE）；有消息 → 非 0 */
+export const PeekMessage = /*@__PURE__*/ bind('user32.dll', 'PeekMessageW', '<BYTE>ptr <HWND>ptr u32 u32 u32 -> i32')
 /** 把 WM_KEYDOWN/UP 转成字符消息（翻译结果留在队列）；可翻译 → 非 0 */
 export const TranslateMessage = /*@__PURE__*/ bind('user32.dll', 'TranslateMessage', '<BYTE>ptr -> i32')
 /** 分发 MSG 给窗口过程；返回处理结果（0 → null，按无符号读） */
 export const DispatchMessage = /*@__PURE__*/ bind('user32.dll', 'DispatchMessageW', '<BYTE>ptr -> <>ptr')
 /** 异步投递消息到窗口线程队列；成功 → 非 0 */
-export const PostMessage = /*@__PURE__*/ bind('user32.dll', 'PostMessageW', '<>ptr u32 <>ptr <>ptr -> i32')
+export const PostMessage = /*@__PURE__*/ bind('user32.dll', 'PostMessageW', '<HWND>ptr u32 <>ptr <>ptr -> i32')
 /** 同步发送消息并等窗口过程处理；返回处理结果（0 → null，按无符号读） */
-export const SendMessage = /*@__PURE__*/ bind('user32.dll', 'SendMessageW', '<>ptr u32 <>ptr <>ptr -> <>ptr')
+export const SendMessage = /*@__PURE__*/ bind('user32.dll', 'SendMessageW', '<HWND>ptr u32 <>ptr <>ptr -> <>ptr')
 /** 退出消息循环（投递 WM_QUIT，wParam = 退出码） */
 export const PostQuitMessage = /*@__PURE__*/ bind('user32.dll', 'PostQuitMessage', 'i32 -> void')
 /** 默认窗口过程（未处理消息的兜底）；返回处理结果（0 → null，按无符号读） */
-export const DefWindowProc = /*@__PURE__*/ bind('user32.dll', 'DefWindowProcW', '<>ptr u32 <>ptr <>ptr -> <>ptr')
+export const DefWindowProc = /*@__PURE__*/ bind('user32.dll', 'DefWindowProcW', '<HWND>ptr u32 <>ptr <>ptr -> <>ptr')
 /** 注册系统级唯一消息 ID（按字符串比较）；失败 → 0 */
 export const RegisterWindowMessage = /*@__PURE__*/ bind('user32.dll', 'RegisterWindowMessageW', '<WCHAR>ptr -> u32')
 
 // ============ 绘制 / DC ============
 
 /** 取窗口 DC（hWnd 传 null → 桌面窗口）；返回品牌 HDC，失败 → null；用完必须 ReleaseDC 配对 */
-export const GetDC = /*@__PURE__*/ bind('user32.dll', 'GetDC', '<>ptr -> <HDC>ptr')
-/** 归还 GetDC/GetWindowDC 取的 DC（第二参收品牌 HDC，误传 HWND 编译不过）；成功 → 非 0 */
-export const ReleaseDC = /*@__PURE__*/ bind('user32.dll', 'ReleaseDC', '<>ptr <HDC>ptr -> i32')
+export const GetDC = /*@__PURE__*/ bind('user32.dll', 'GetDC', '<HWND>ptr -> <HDC>ptr')
+/** 归还 GetDC/GetWindowDC 取的 DC（首参收品牌 HWND、第二参收品牌 HDC，误传编译不过）；成功 → 非 0 */
+export const ReleaseDC = /*@__PURE__*/ bind('user32.dll', 'ReleaseDC', '<HWND>ptr <HDC>ptr -> i32')
 /** 取整个窗口（含边框标题）DC；返回品牌 HDC，失败 → null，配对 ReleaseDC */
-export const GetWindowDC = /*@__PURE__*/ bind('user32.dll', 'GetWindowDC', '<>ptr -> <HDC>ptr')
+export const GetWindowDC = /*@__PURE__*/ bind('user32.dll', 'GetWindowDC', '<HWND>ptr -> <HDC>ptr')
 /** 开始重绘（PAINTSTRUCT buffer 接收绘制信息）；返回品牌 HDC，配对 EndPaint */
-export const BeginPaint = /*@__PURE__*/ bind('user32.dll', 'BeginPaint', '<>ptr <BYTE>ptr -> <HDC>ptr')
+export const BeginPaint = /*@__PURE__*/ bind('user32.dll', 'BeginPaint', '<HWND>ptr <BYTE>ptr -> <HDC>ptr')
 /** 结束重绘（传 BeginPaint 同一 buffer）；成功 → 非 0 */
-export const EndPaint = /*@__PURE__*/ bind('user32.dll', 'EndPaint', '<>ptr <BYTE>ptr -> i32')
-/** 文本排版绘制（RECT buffer 就地读写；format = gui.DrawTextFlag）；返回文本行高 */
+export const EndPaint = /*@__PURE__*/ bind('user32.dll', 'EndPaint', '<HWND>ptr <BYTE>ptr -> i32')
+/** 文本排版绘制（首参为品牌 HDC 的 number 子类型，可直传；RECT buffer 就地读写；format = gui.DrawTextFlag）；返回文本行高 */
 export const DrawText = /*@__PURE__*/ bind('user32.dll', 'DrawTextW', '<>ptr <WCHAR>ptr i32 <BYTE>ptr i32 -> i32')
-/** 用画刷填充矩形（RECT buffer）；返回填充高度 */
+/** 用画刷填充矩形（首参 HDC 同上；RECT buffer；第三参 HBRUSH 无品牌保持 <>ptr）；返回填充高度 */
 export const FillRect = /*@__PURE__*/ bind('user32.dll', 'FillRect', '<>ptr <BYTE>ptr <>ptr -> i32')
 /** 标记窗口区域失效（触发重绘；lpRect 可传 null 全窗）；成功 → 非 0 */
-export const InvalidateRect = /*@__PURE__*/ bind('user32.dll', 'InvalidateRect', '<>ptr <BYTE>ptr i32 -> i32')
+export const InvalidateRect = /*@__PURE__*/ bind('user32.dll', 'InvalidateRect', '<HWND>ptr <BYTE>ptr i32 -> i32')
 /** 立即重绘失效区域；成功 → 非 0 */
-export const UpdateWindow = /*@__PURE__*/ bind('user32.dll', 'UpdateWindow', '<>ptr -> i32')
+export const UpdateWindow = /*@__PURE__*/ bind('user32.dll', 'UpdateWindow', '<HWND>ptr -> i32')
 
 // ============ 光标 / 坐标 / 捕获 ============
 
@@ -144,15 +146,15 @@ export const SetCursorPos = /*@__PURE__*/ bind('user32.dll', 'SetCursorPos', 'i3
 /** 显示/隐藏光标（计数式：>0 显示）；返回新计数 */
 export const ShowCursor = /*@__PURE__*/ bind('user32.dll', 'ShowCursor', 'i32 -> i32')
 /** 屏幕坐标 → 客户区坐标（POINT buffer 就地更新）；成功 → 非 0 */
-export const ScreenToClient = /*@__PURE__*/ bind('user32.dll', 'ScreenToClient', '<>ptr <BYTE>ptr -> i32')
+export const ScreenToClient = /*@__PURE__*/ bind('user32.dll', 'ScreenToClient', '<HWND>ptr <BYTE>ptr -> i32')
 /** 客户区坐标 → 屏幕坐标（POINT buffer 就地更新）；成功 → 非 0 */
-export const ClientToScreen = /*@__PURE__*/ bind('user32.dll', 'ClientToScreen', '<>ptr <BYTE>ptr -> i32')
+export const ClientToScreen = /*@__PURE__*/ bind('user32.dll', 'ClientToScreen', '<HWND>ptr <BYTE>ptr -> i32')
 /** 批量坐标系转换（POINT buffer，cPoints 个点）；返回偏移差的低/高 16 位打包值 */
-export const MapWindowPoints = /*@__PURE__*/ bind('user32.dll', 'MapWindowPoints', '<>ptr <>ptr <BYTE>ptr u32 -> i32')
+export const MapWindowPoints = /*@__PURE__*/ bind('user32.dll', 'MapWindowPoints', '<HWND>ptr <HWND>ptr <BYTE>ptr u32 -> i32')
 /** 取当前捕获鼠标的窗口；无 → null */
 export const GetCapture = /*@__PURE__*/ bind('user32.dll', 'GetCapture', ' -> <HWND>ptr')
 /** 捕获鼠标输入到窗口；返回先前捕获窗口 */
-export const SetCapture = /*@__PURE__*/ bind('user32.dll', 'SetCapture', '<>ptr -> <HWND>ptr')
+export const SetCapture = /*@__PURE__*/ bind('user32.dll', 'SetCapture', '<HWND>ptr -> <HWND>ptr')
 /** 释放鼠标捕获；成功 → 非 0 */
 export const ReleaseCapture = /*@__PURE__*/ bind('user32.dll', 'ReleaseCapture', ' -> i32')
 
@@ -170,14 +172,14 @@ export const VkKeyScan = /*@__PURE__*/ bind('user32.dll', 'VkKeyScanW', 'u32 -> 
 // ============ 计时器 ============
 
 /** 设定时器（hWnd/id 传 null/0 = 自动分配 id；lpTimerFunc 传 null 用 WM_TIMER）；失败 → null */
-export const SetTimer = /*@__PURE__*/ bind('user32.dll', 'SetTimer', '<>ptr <>ptr u32 <>ptr -> <>ptr')
+export const SetTimer = /*@__PURE__*/ bind('user32.dll', 'SetTimer', '<HWND>ptr <>ptr u32 <>ptr -> <>ptr')
 /** 杀定时器（id 用 SetTimer 返回值）；成功 → 非 0 */
-export const KillTimer = /*@__PURE__*/ bind('user32.dll', 'KillTimer', '<>ptr <>ptr -> i32')
+export const KillTimer = /*@__PURE__*/ bind('user32.dll', 'KillTimer', '<HWND>ptr <>ptr -> i32')
 
 // ============ 剪贴板 ============
 
 /** 打开剪贴板（hWnd 可传 null）；成功 → 非 0，配对 CloseClipboard */
-export const OpenClipboard = /*@__PURE__*/ bind('user32.dll', 'OpenClipboard', '<>ptr -> i32')
+export const OpenClipboard = /*@__PURE__*/ bind('user32.dll', 'OpenClipboard', '<HWND>ptr -> i32')
 /** 关闭剪贴板；成功 → 非 0 */
 export const CloseClipboard = /*@__PURE__*/ bind('user32.dll', 'CloseClipboard', ' -> i32')
 /** 清空剪贴板（须先 OpenClipboard）；成功 → 非 0 */
@@ -194,11 +196,11 @@ export const IsClipboardFormatAvailable = /*@__PURE__*/ bind('user32.dll', 'IsCl
 // ============ 菜单 ============
 
 /** 取窗口菜单；无菜单 → null（返回品牌 HMENU） */
-export const GetMenu = /*@__PURE__*/ bind('user32.dll', 'GetMenu', '<>ptr -> <HMENU>ptr')
-/** 设/清窗口菜单（hMenu 传 null 清除；第二参收品牌 HMENU，误传 HWND 编译不过）；成功 → 非 0，改后需 DrawMenuBar */
-export const SetMenu = /*@__PURE__*/ bind('user32.dll', 'SetMenu', '<>ptr <HMENU>ptr -> i32')
-/** 重画菜单栏（首参为窗口句柄，保持 <>ptr）；成功 → 非 0 */
-export const DrawMenuBar = /*@__PURE__*/ bind('user32.dll', 'DrawMenuBar', '<>ptr -> i32')
+export const GetMenu = /*@__PURE__*/ bind('user32.dll', 'GetMenu', '<HWND>ptr -> <HMENU>ptr')
+/** 设/清窗口菜单（hMenu 传 null 清除；首参收品牌 HWND、第二参收品牌 HMENU，误传编译不过）；成功 → 非 0，改后需 DrawMenuBar */
+export const SetMenu = /*@__PURE__*/ bind('user32.dll', 'SetMenu', '<HWND>ptr <HMENU>ptr -> i32')
+/** 重画菜单栏（首参收品牌 HWND）；成功 → 非 0 */
+export const DrawMenuBar = /*@__PURE__*/ bind('user32.dll', 'DrawMenuBar', '<HWND>ptr -> i32')
 /** 追加菜单项（首参收品牌 HMENU；uFlags = gui.MF 类常量；uIDNewItem 命令 ID 或子菜单句柄——
  *  混合位保持 <>ptr；lpNewItem 可 string/null）；成功 → 非 0 */
 export const AppendMenu = /*@__PURE__*/ bind('user32.dll', 'AppendMenuW', '<HMENU>ptr u32 <>ptr <WCHAR>ptr -> i32')
@@ -215,8 +217,8 @@ export const TrackPopupMenu = /*@__PURE__*/ bind('user32.dll', 'TrackPopupMenu',
 
 // ============ 对话框 ============
 
-/** 消息框（仅在确实要弹窗时调用；MB_* 常量见 MSDN）；返回按钮 ID */
-export const MessageBox = /*@__PURE__*/ bind('user32.dll', 'MessageBoxW', '<>ptr <WCHAR>ptr <WCHAR>ptr u32 -> i32')
+/** 消息框（首参收品牌 HWND 可 null；仅在确实要弹窗时调用；MB_* 常量见 MSDN）；返回按钮 ID */
+export const MessageBox = /*@__PURE__*/ bind('user32.dll', 'MessageBoxW', '<HWND>ptr <WCHAR>ptr <WCHAR>ptr u32 -> i32')
 
 // ============ 杂项高频 ============
 

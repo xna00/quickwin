@@ -73,6 +73,8 @@ export const suite = {
             SetCursor(GetDesktopWindow())
             // @ts-expect-error Ptr<'HWND'> 不是 Ptr<'HMENU'>，窗口句柄喂 DestroyMenu 应编译不过
             DestroyMenu(GetDesktopWindow())
+            // @ts-expect-error Ptr<'HMENU'> 不是 Ptr<'HWND'>，菜单句柄喂 IsWindow 应编译不过
+            IsWindow(GetMenu(desk))
             // 正例：同种品牌流动（GetMenu → DestroyMenu）通过——上面反例的成立依赖这层区分
             const m = GetMenu(desk)
             if (m !== null) DestroyMenu(m)
