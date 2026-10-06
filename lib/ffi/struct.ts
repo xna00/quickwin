@@ -58,11 +58,16 @@ type BitShape<T extends string, W extends number> =
     Norm<T> extends C_Integer ? (W extends N ? number : bigint) : never
 
 // 值 → 形状。对象值一律按 '#' 分派（无「裸嵌套 map 默认 struct」—— 漏写 '#' 是错误）。
+// 字符串糖（值尾带 @encoding）在数组糖之前判别 —— 两形态本不相交（数组糖以 ] 收尾），
+// 特判在前更可读。注意 infer 出的 L 是字符串字面（'8'），不能写 `L extends number`
+// （string 永不 extends number → 塌 never），要用 `L extends `${number}`` 检查；
+// U/L/E 都在条件里被引用，避免未使用的 infer 触发 TS6196。
 type ShapeOfValue<V> =
     V extends infer T extends SimpleToken ? ValOf<Norm<T>>
+    : V extends `${infer U}[${infer L}]@${infer E}`
+      ? (U extends 'u8' | 'u16' ? (L extends `${number}` ? (E extends Encoding ? string : never) : never) : never)
     : V extends `${infer T extends SimpleToken}[${infer L extends number}]` ? Tuple<ShapeOfValue<T>, L>
     : V extends `${infer T extends SimpleToken}:${infer W extends number}` ? BitShape<T, W>
-    : V extends { '#': 'string' } ? string
     : V extends { '#': 'array', element: infer E, length: infer L extends number } ? Tuple<ShapeOfValue<E>, L>
     : V extends { '#': 'struct' | 'union' } ? ShapeOfC<V>
     : never
@@ -162,10 +167,21 @@ type Layout = {
 const isCNumberToken = (t: C_BasicType_Token): t is C_Number =>
     SizeAlign[t as C_Number] !== undefined
 
-// 值 → { size, align, FieldType }：字符串先试数组糖/位域糖，再按 token（含别名）归一；
+// 值 → { size, align, FieldType }：字符串先试字符串糖/数组糖/位域糖，再按 token（含别名）归一；
 // 对象值一律按 '#' 分派 —— 无「裸嵌套 map 默认 struct」，漏写 '#' 直接报错。
+// 字符串无 '#' 声明形式（词汇只有糖，见 ctype.ts §4）：旧写法落到末尾 unknown '#' 报错。
 function lower(v: unknown): { size: number, align: number, type: FieldType } {
     if (typeof v === 'string') {
+        const st = /^(u8|u16)\[(\d+)\]@(utf-8|utf-16le)$/.exec(v)   // 'u16[128]@utf-16le' → 字符串糖
+        if (st) {
+            const length = Number(st[2])
+            if (!Number.isInteger(length) || length < 1)
+                throw new Error(`ffi-struct: string length must be an integer >= 1, got ${length}`)
+            // 布局 = unit × length（与 encoding 无关），encoding 只是读写时的解释 ——
+            // 'u8[128]@utf-16le'（128 字节按 utf-16le 解出 64 字符）之类的错配语义自洽。
+            const s = st[1] === 'u8' ? 1 : 2
+            return { size: s * length, align: s, type: { tag: 'string', encoding: st[3] as Encoding } }
+        }
         const a = /^([^\[\]]+)\[(\d+)\]$/.exec(v)          // 'u32[4]' / 'i3z[4]' → 数组糖（元素递归归一）
         if (a) {
             const length = Number(a[2])
@@ -211,20 +227,9 @@ function lower(v: unknown): { size: number, align: number, type: FieldType } {
         const o = v as Record<string, unknown>
         const tag = o['#']
         if (tag === undefined)
-            throw new Error(`ffi-struct: nested object value requires a '#' key ('struct' | 'union' | 'array' | 'string')`)
-        if ((tag === 'string' || tag === 'array') && '#pack' in o)
+            throw new Error(`ffi-struct: nested object value requires a '#' key ('struct' | 'union' | 'array')`)
+        if (tag === 'array' && '#pack' in o)
             throw new Error(`ffi-struct: '#pack' is only allowed on struct/union, got '${tag}'`)
-        if (tag === 'string') {
-            const unit = o['unit'], length = o['length'], encoding = o['encoding']
-            if (unit !== 'u8' && unit !== 'u16')
-                throw new Error(`ffi-struct: string unit must be 'u8' or 'u16', got ${JSON.stringify(unit)}`)
-            if (!Number.isInteger(length) || (length as number) < 1)
-                throw new Error(`ffi-struct: string length must be an integer >= 1, got ${String(length)}`)
-            if (encoding !== 'utf-8' && encoding !== 'utf-16le')
-                throw new Error(`ffi-struct: unknown string encoding ${JSON.stringify(encoding)}`)
-            const s = SizeAlign[unit]
-            return { size: s * (length as number), align: s, type: { tag: 'string', encoding } }
-        }
         if (tag === 'array') {
             const length = o['length']
             if (!Number.isInteger(length) || (length as number) < 1)

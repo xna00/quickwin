@@ -137,7 +137,7 @@ export const suite = {
         t.check('@N offsetOf b（字段名已剥离 @N）', 8, AL.offsetOf('b'))
 
         t.section('utf-16le string[8] roundtrip & truncation')
-        const W = struct({name: { '#': 'string', unit: 'u16', length: 8, encoding: 'utf-16le' }})
+        const W = struct({name: 'u16[8]@utf-16le' })
         t.check('utf16[8].size == 16', 16, W.size)
         const wb = W.encode({ name: 'hello' })
         t.check('read back "hello"', 'hello', W.decode(wb).name)
@@ -146,7 +146,7 @@ export const suite = {
         t.check('utf16 terminator[14..15] == 0', 0, new DataView(lb).getUint16(14, true))
 
         t.section("utf-8 string[8] roundtrip & truncation")
-        const C = struct({name: { '#': 'string', unit: 'u8', length: 8, encoding: 'utf-8' }})
+        const C = struct({name: 'u8[8]@utf-8' })
         t.check('char[8].size == 8', 8, C.size)
         const cb = C.encode({ name: 'hi' })
         t.check('read back "hi"', 'hi', C.decode(cb).name)
@@ -154,6 +154,26 @@ export const suite = {
         const ctrunc = C.encode({ name: '1234567890' })
         t.check('char[8]: payload 7 + NUL', '1234567', C.decode(ctrunc).name)
         t.check('char terminator[7] == 0', 0, new DataView(ctrunc).getUint8(7))
+
+        t.section('string sugar: 布局与解释正交（错配 roundtrip）')
+        const XS = struct({ buf: 'u8[8]@utf-16le' })
+        t.check('u8[8]@utf-16le size == 8（encoding 不参与布局）', 8, XS.size)
+        const xsd = XS.decode(XS.encode({ buf: 'AB' }))
+        t.check('8 字节按 utf-16le 解出 "AB"', 'AB', xsd.buf)
+
+        t.section('string sugar as array element')
+        const SA = struct({ rows: { '#': 'array', element: 'u16[4]@utf-16le', length: 3 } })
+        t.check('string[4]×3 size == 24', 24, SA.size)
+        const sad = SA.decode(SA.encode({ rows: ['ab', 'cd', 'ef'] }))
+        t.check('rows[0]', 'ab', sad.rows[0])
+        t.check('rows[1]', 'cd', sad.rows[1])
+        expectType<Equal<ReturnType<typeof SA.decode>['rows'], [string, string, string]>>()
+
+        t.section('键侧 alignas @N 与值侧 encoding @ 并存')
+        const KV = struct({ a: 'u8', 's@8': 'u16[4]@utf-8' })
+        t.check('offsetOf a', 0, KV.offsetOf('a'))
+        t.check('offsetOf s（键尾 @8 生效）', 8, KV.offsetOf('s'))
+        t.check('KV size == 16', 16, KV.size)
 
         t.section('numeric arrays roundtrip (CArray)')
         const A = struct({
@@ -444,12 +464,12 @@ export const suite = {
             iLink: 'i32',
             state: 'u32',
             stateMask: 'u32',
-            szID: { '#': 'string', unit: 'u16', length: 48, encoding: 'utf-16le' },
+            szID: 'u16[48]@utf-16le',
         })
         const NMLINK = struct({
             hdr: NMHDR.__struct,
             item: LITEM.__struct,
-            szUrl: { '#': 'string', unit: 'u16', length: 2084, encoding: 'utf-16le' },
+            szUrl: 'u16[2084]@utf-16le',
         })
         t.check('LITEM.offsetOf szID', 16, LITEM.offsetOf('szID'))
         t.check('NMLINK.offsetOf szUrl', is64 ? 136 : 124, NMLINK.offsetOf('szUrl'))

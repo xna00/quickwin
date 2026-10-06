@@ -65,8 +65,13 @@ type First =
 //   token/别名   'u32' | 'DWORD'（别名经 normToken 归一；'void'/裸 'ptr' 运行时拒绝）
 //   数组糖       'u32[4]'（仅 token 元素 —— 更复杂的元素写 '#' array 声明）
 //   位域糖       'u32:3'（bit() 的返回形态；unit 位收别名，归一后须为整数档）
-//   '#' 声明     struct/union（平铺字段 + '#pack'）、array（element+length）、
-//                string（unit+length+encoding）—— 对象值的唯一判别键是 '#'
+//   字符串糖     'u16[128]@utf-16le'（布局 unit[length] × 解释 @encoding 正交：
+//                size = typesize × length 由 unit/length 决定，encoding 只管怎么读写
+//                这些字节 —— 错配如 'u8[128]@utf-16le' 也语义自洽。与键侧 alignas 同
+//                用 '@' 但位置不同（键名尾 vs 值串尾），解析互不干扰。string 是唯一
+//                没有 '#' 声明形式的值 —— 糖与 C_String 三元组双射，一种概念一种写法）
+//   '#' 声明     struct/union（平铺字段 + '#pack'）、array（element+length）——
+//                对象值的唯一判别键是 '#'（多字段/聚合元素无法用糖表达，故保留）
 // '#' 必填（无「裸嵌套 map 默认 struct」）：漏写 '#' 时 union 不会静默翻转成 struct，
 // 类型层直接报错、运行时 throw。顶层 struct()/union() 例外 —— kind 由函数名表明，
 // 参数是平铺字段表（不含 '#'），'#'/`#pack` 由构造器写入 __struct。
@@ -100,13 +105,13 @@ export interface C_Union {
     [K: `$${string}`]: C_Struct | C_Union
 }
 export type C_Array = { '#': 'array', element: SimpleValue, length: number }
-export type C_String = { '#': 'string', unit: 'u8' | 'u16', length: number, encoding: Encoding }
 
 export type SimpleValue =
     | SimpleToken
     | `${SimpleToken}[${number}]`
     | `${SimpleToken}:${number}`
-    | C_Struct | C_Union | C_Array | C_String
+    | `${'u8' | 'u16'}[${number}]@${Encoding}`   // 字符串糖（unit/length 布局 + encoding 解释）
+    | C_Struct | C_Union | C_Array
 
 
 export const PTR_SIZE = os.arch === 'x64' ? 8 : 4

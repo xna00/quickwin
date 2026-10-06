@@ -2,7 +2,7 @@ import { Tester } from './test_helper.js'
 import { computeStructLayout, computeArray } from '../lib/ffi/struct.js'
 import type { Fields } from '../lib/ffi/struct.js'
 import { bit } from '../lib/ffi/ctype.js'
-import type { C_Struct, C_Union, C_String, C_Array } from '../lib/ffi/ctype.js'
+import type { C_Struct, C_Union, C_Array } from '../lib/ffi/ctype.js'
 
 export const suite = {
     name: 'ffi-struct-layout',
@@ -183,13 +183,40 @@ export const suite = {
 
         // === String ===
 
-        t.section('CString')
+        // === String（字符串糖：布局 unit[length] + 解释 @encoding 正交） ===
+
+        t.section('CString sugar（u16[10]@utf-16le）')
         {
-            const s: C_String = { '#': 'string', unit: 'u16', length: 10, encoding: 'utf-16le' }
-            const r = computeStructLayout({ '#': 'struct', name: s })
-            t.check('size', 20, r.size)  // 2 * 10
-            t.check('align', 2, r.maxEffectiveAlign)
+            const r = computeStructLayout({ '#': 'struct', name: 'u16[10]@utf-16le' })
+            t.check('size == 20 (typesize × length)', 20, r.size)
+            t.check('align == 2 (u16 槽)', 2, r.maxEffectiveAlign)
             t.check('offset', 0, r.fields[0]!.offset)
+        }
+
+        t.section('CString sugar: 布局与解释正交（size 只看 unit×length）')
+        {
+            const r = computeStructLayout({ '#': 'struct', a: 'u8', s: 'u8[8]@utf-16le' })
+            t.check('错配 u8[8]@utf-16le size == 9', 9, r.size)   // 1 + 8，encoding 不参与布局
+            t.check('align == 1 (u8 槽)', 1, r.maxEffectiveAlign)
+            t.check('offset s == 1 (无 padding)', 1, r.fields[1]!.offset)
+            const r2 = computeStructLayout({ '#': 'struct', s: 'u16[4]@utf-8' })
+            t.check('错配 u16[4]@utf-8 size == 8', 8, r2.size)    // 2 × 4
+            t.check('align == 2 (u16 槽)', 2, r2.maxEffectiveAlign)
+        }
+
+        t.section('CString sugar validation')
+        {
+            const rejected = (s: C_Struct): boolean => {
+                try { computeStructLayout(s); return false } catch { return true }
+            }
+            t.check('length 0 rejected', true,
+                rejected({ '#': 'struct', x: 'u8[0]@utf-8' }))
+            t.check('unit 非 u8/u16 rejected（落 token 分支抛）', true,
+                rejected({ '#': 'struct', x: 'u32[4]@utf-8' as any }))
+            t.check('unknown encoding rejected', true,
+                rejected({ '#': 'struct', x: 'u16[4]@utf-16be' as any }))
+            t.check('旧写法 {\'#\':\'string\'} rejected（词汇已删）', true,
+                rejected({ '#': 'struct', x: { '#': 'string', unit: 'u16', length: 4, encoding: 'utf-16le' } } as any))
         }
 
         // === Pack ===
