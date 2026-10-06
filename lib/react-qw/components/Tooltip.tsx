@@ -14,7 +14,7 @@ const TTTOOLINFOW = struct({
   uFlags: 'u32',
   hwnd: '<>ptr',
   uId: '<>ptr',
-  rect: { type: { tag: 'array', ctype: 'i32', length: 4 } },
+  rect: 'i32[4]',
   hinst: '<>ptr',
   lpszText: '<>ptr',
   lParam: '<>ptr',

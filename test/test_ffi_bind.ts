@@ -222,7 +222,7 @@ export const suite = {
         })
         const LOGPEN = struct({
             lopnStyle: 'u32',
-            lopnWidth: { type: POINT.__struct },
+            lopnWidth: POINT.__struct,
             lopnColor: 'u32',
         })
         const createPenIndirect = bind('gdi32.dll', 'CreatePenIndirect', '<LOGPEN>ptr -> <>ptr', { LOGPEN })

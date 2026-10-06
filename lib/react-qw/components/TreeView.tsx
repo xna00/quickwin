@@ -20,7 +20,7 @@ const TVITEM = struct({
 const TVINSERTSTRUCT = struct({
     hParent: '<>ptr',
     hInsertAfter: '<>ptr',
-    item: { type: TVITEM.__struct },
+    item: TVITEM.__struct,
 })
 
 export interface TreeNode<D = unknown> {

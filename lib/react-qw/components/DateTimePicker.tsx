@@ -16,9 +16,9 @@ const SYSTEMTIME = struct({
   wMilliseconds: 'u16',
 })
 const NMDATETIMECHANGE = struct({
-  hdr: { type: NMHDR.__struct },
+  hdr: NMHDR.__struct,
   dwFlags: 'u32',
-  st: { type: SYSTEMTIME.__struct },
+  st: SYSTEMTIME.__struct,
 })
 
 export interface DateTimePickerProps {

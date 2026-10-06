@@ -1,6 +1,6 @@
 import * as os from 'os'
 import { Tester } from './test_helper.js'
-import { struct } from '../lib/ffi/struct.js'
+import { struct, union } from '../lib/ffi/struct.js'
 import { bind, } from '../lib/ffi/bind.js'
 import { Ptr, bit } from '../lib/ffi/ctype.js'
 
@@ -30,7 +30,7 @@ const TVITEM = struct({
 const TVINSERTSTRUCT = struct({
     hParent: '<>ptr',
     hInsertAfter: '<>ptr',
-    item: { type: TVITEM.__struct },
+    item: TVITEM.__struct,
 })
 
 export const suite = {
@@ -92,11 +92,11 @@ export const suite = {
 
         t.section('C typedef aliases (int/DWORD/LPARAM/LONG_PTR/short)')
         const M = struct({
-            n: 'i32',             // int
-            d: 'u32',             // DWORD
-            w: '<>ptr',            // LPARAM
-            s: 'i16',             // short
-            q: '<>ptr',            // LONG_PTR
+            n: 'int',        // 别名 → i32（字段值位收别名，normToken 归一）
+            d: 'DWORD',      // 别名 → u32
+            w: 'LPARAM',     // 别名 → <>ptr
+            s: 'short',      // 别名 → i16
+            q: 'LONG_PTR',   // 别名 → <>ptr
         })
         t.check(`aliased size (${os.arch})`, is64 ? 32 : 20, M.size)
         const mb = M.encode({ n: -5, d: 0xFFFFFFFF, w: 0xAABBCCDD, s: -7, q: 0x11223344 })
@@ -107,8 +107,37 @@ export const suite = {
         t.check('short -7', -7, m.s)
         t.check('LONG_PTR', 0x11223344, m.q)
 
+        t.section('alias in sugar（数组糖/位域糖收别名）')
+        const AS = struct({
+            v: 'DWORD[4]',   // 别名元素糖 → u32[4]
+            f: 'DWORD:3',    // 别名位域糖 → u32:3（等价 bit('u32', 3)）
+        })
+        t.check('size == 20 (16 + 位域单元)', 20, AS.size)
+        t.check('f offset == 16', 16, AS.offsetOf('f'))
+        const asd = AS.decode(AS.encode({ v: [1, 2, 3, 4], f: 5 }))
+        t.check('DWORD[4][1]', 2, asd.v[1])
+        t.check('DWORD:3', 5, asd.f)
+        expectType<Equal<ReturnType<typeof AS.decode>['f'], number>>()
+
+        t.section('union() entry roundtrip')
+        const U = union({ a: 'u8', b: 'u32' })
+        t.check('union size == 4', 4, U.size)
+        t.check('union offsetOf a', 0, U.offsetOf('a'))
+        t.check('union offsetOf b', 0, U.offsetOf('b'))
+        const ud = U.decode(U.encode({ a: 0, b: 0x01020304 }))
+        t.check('union a 与 b 同偏移（低字节别名）', 0x04, ud.a)
+        t.check('union b', 0x01020304, ud.b)
+
+        t.section('struct() entry: pack 选项 + 键尾 @N（alignas）')
+        const P = struct({ a: 'u8', b: 'u32', c: 'u8' }, { pack: 1 })
+        t.check('pack(1) size == 6', 6, P.size)
+        t.check('pack(1) offsetOf b', 1, P.offsetOf('b'))
+        const AL = struct({ a: 'u8', 'b@8': 'u32' })
+        t.check('@N offsetOf a', 0, AL.offsetOf('a'))
+        t.check('@N offsetOf b（字段名已剥离 @N）', 8, AL.offsetOf('b'))
+
         t.section('utf-16le string[8] roundtrip & truncation')
-        const W = struct({name: { type: { tag: 'string', unit: 'u16', length: 8, encoding: 'utf-16le' } }})
+        const W = struct({name: { '#': 'string', unit: 'u16', length: 8, encoding: 'utf-16le' }})
         t.check('utf16[8].size == 16', 16, W.size)
         const wb = W.encode({ name: 'hello' })
         t.check('read back "hello"', 'hello', W.decode(wb).name)
@@ -117,7 +146,7 @@ export const suite = {
         t.check('utf16 terminator[14..15] == 0', 0, new DataView(lb).getUint16(14, true))
 
         t.section("utf-8 string[8] roundtrip & truncation")
-        const C = struct({name: { type: { tag: 'string', unit: 'u8', length: 8, encoding: 'utf-8' } }})
+        const C = struct({name: { '#': 'string', unit: 'u8', length: 8, encoding: 'utf-8' }})
         t.check('char[8].size == 8', 8, C.size)
         const cb = C.encode({ name: 'hi' })
         t.check('read back "hi"', 'hi', C.decode(cb).name)
@@ -128,8 +157,8 @@ export const suite = {
 
         t.section('numeric arrays roundtrip (CArray)')
         const A = struct({
-            v: { type: { tag: 'array', ctype: 'u16', length: 4 } },
-            k: { type: { tag: 'array', ctype: 'i32', length: 2 } },
+            v: 'u16[4]',
+            k: 'i32[2]',
         })
         t.check('size == 16', 16, A.size)
         const ab = A.encode({ v: [1, 2, 3, 4], k: [-1, 300000] })
@@ -140,7 +169,7 @@ export const suite = {
         t.check('i32[1]', 300000, ad.k[1])
 
         t.section('T[1] stays an array (no scalar degradation)')
-        const ONE = struct({v: { type: { tag: 'array', ctype: 'u16', length: 1 } }})
+        const ONE = struct({v: 'u16[1]'})
         t.check('size == 2', 2, ONE.size)
         const one = ONE.decode(ONE.encode({ v: [42] }))
         t.check('length 1', 1, one.v.length)
@@ -153,7 +182,7 @@ export const suite = {
         })
         const POLY = struct({
             count: 'u32',
-            pts: { type: { tag: 'array', ctype: PT.__struct, length: 3 } },
+            pts: { '#': 'array', element: PT.__struct, length: 3 },
         })
         t.check('POLY.size == 28', 28, POLY.size)
         t.check('POLY.offsetOf pts', 4, POLY.offsetOf('pts'))
@@ -171,12 +200,21 @@ export const suite = {
         expectType<Equal<ReturnType<typeof POLY.decode>['pts'][0], ReturnType<typeof PT.decode>>>()
 
         let rejected = false
-        try { struct({v: { type: { tag: 'array', ctype: 'i32', length: 0 } }}) } catch { rejected = true }
+        try { struct({v: 'i32[0]'}) } catch { rejected = true }
         t.check('array length 0 rejected', true, rejected)
 
         let rejectedBare = false
-        try { (struct as any)([{ name: 'p', type: 'ptr' }]) } catch { rejectedBare = true }
+        try { (struct as any)({ p: 'ptr' }) } catch { rejectedBare = true }
         t.check('bare "ptr" member rejected', true, rejectedBare)
+
+        // '#' 必填：字段值漏写 '#'（裸嵌套 map）不再默认 struct，直接 throw
+        let rejectedMap = false
+        try { (struct as any)({ outer: { inner: 'u32' } }) } catch { rejectedMap = true }
+        t.check('bare nested map rejected（漏写 #）', true, rejectedMap)
+
+        // 顶层 '#' 由构造器写入：字段表混入的 '#' 指令键被剔除（运行时兜底，类型层已禁）
+        const H = (struct as any)({ '#': 'union', a: 'u8', b: 'u32' })
+        t.check('top-level # stripped（仍按函数名 struct 布局）', 8, H.size)
 
         t.section("pointer member '<>ptr' raw vs '<T>ptr' branded")
         const PTR = struct({
@@ -228,7 +266,7 @@ export const suite = {
             uFlags: 'u32',
             hwnd: '<>ptr',
             uId: '<>ptr',
-            rect: { type: { tag: 'array', ctype: 'i32', length: 4 } },
+            rect: 'i32[4]',
             hinst: '<>ptr',
             lpszText: '<>ptr',
             lParam: '<>ptr',
@@ -292,10 +330,10 @@ export const suite = {
 
         t.section('NMCUSTOMDRAW / NMLVCUSTOMDRAW (ListView custom draw)')
         const NMCUSTOMDRAW = struct({
-            hdr: { type: NMHDR.__struct },
+            hdr: NMHDR.__struct,
             dwDrawStage: 'u32',
             hdc: '<>ptr',
-            rc: { type: { tag: 'array', ctype: 'i32', length: 4 } },
+            rc: 'i32[4]',
             dwItemSpec: '<>ptr',
             uItemState: 'u32',
             lItemlParam: '<>ptr',
@@ -305,10 +343,10 @@ export const suite = {
         t.check('NMCUSTOMDRAW.offsetOf hdc', is64 ? 32 : 16, NMCUSTOMDRAW.offsetOf('hdc'))
         t.check('NMCUSTOMDRAW.offsetOf dwItemSpec', is64 ? 56 : 36, NMCUSTOMDRAW.offsetOf('dwItemSpec'))
         const NMLVCUSTOMDRAW = struct({
-            hdr: { type: NMHDR.__struct },
+            hdr: NMHDR.__struct,
             dwDrawStage: 'u32',
             hdc: '<>ptr',
-            rc: { type: { tag: 'array', ctype: 'i32', length: 4 } },
+            rc: 'i32[4]',
             dwItemSpec: '<>ptr',
             uItemState: 'u32',
             lItemlParam: '<>ptr',
@@ -324,13 +362,13 @@ export const suite = {
 
         t.section('NMLISTVIEW / NMITEMACTIVATE')
         const NMLISTVIEW = struct({
-            hdr: { type: NMHDR.__struct },
+            hdr: NMHDR.__struct,
             iItem: 'i32',
             iSubItem: 'i32',
             uNewState: 'u32',
             uOldState: 'u32',
             uChanged: 'u32',
-            ptAction: { type: { tag: 'array', ctype: 'i32', length: 2 } },
+            ptAction: 'i32[2]',
             lParam: '<>ptr',
         })
         t.check('NMLISTVIEW.size', is64 ? 64 : 44, NMLISTVIEW.size)
@@ -392,9 +430,9 @@ export const suite = {
             wMilliseconds: 'u16',
         })
         const NMDATETIMECHANGE = struct({
-            hdr: { type: NMHDR.__struct },
+            hdr: NMHDR.__struct,
             dwFlags: 'u32',
-            st: { type: SYSTEMTIME.__struct },
+            st: SYSTEMTIME.__struct,
         })
         t.check('NMDATETIMECHANGE.size', is64 ? 48 : 32, NMDATETIMECHANGE.size)
         t.check('NMDATETIMECHANGE.offsetOf dwFlags', is64 ? 24 : 12, NMDATETIMECHANGE.offsetOf('dwFlags'))
@@ -406,12 +444,12 @@ export const suite = {
             iLink: 'i32',
             state: 'u32',
             stateMask: 'u32',
-            szID: { type: { tag: 'string', unit: 'u16', length: 48, encoding: 'utf-16le' } },
+            szID: { '#': 'string', unit: 'u16', length: 48, encoding: 'utf-16le' },
         })
         const NMLINK = struct({
-            hdr: { type: NMHDR.__struct },
-            item: { type: LITEM.__struct },
-            szUrl: { type: { tag: 'string', unit: 'u16', length: 2084, encoding: 'utf-16le' } },
+            hdr: NMHDR.__struct,
+            item: LITEM.__struct,
+            szUrl: { '#': 'string', unit: 'u16', length: 2084, encoding: 'utf-16le' },
         })
         t.check('LITEM.offsetOf szID', 16, LITEM.offsetOf('szID'))
         t.check('NMLINK.offsetOf szUrl', is64 ? 136 : 124, NMLINK.offsetOf('szUrl'))
@@ -424,10 +462,10 @@ export const suite = {
             // 字段按序写入同一 buffer：写 d 时单元里已有 a/b/c 的位，
             // 若 writeBitfield 不做读改写（直接 val<<bit）会把 a/b/c 清零。
             const BF = struct({
-                a: { type: bit('u32', 3) },
-                b: { type: bit('u32', 5) },
-                c: { type: bit('u32', 4) },
-                d: { type: bit('u32', 10) },   // 3+5+4+10=22 <= 32
+                a: bit('u32', 3),
+                b: bit('u32', 5),
+                c: bit('u32', 4),
+                d: bit('u32', 10),   // 3+5+4+10=22 <= 32
                 tail: 'u32',
             })
             t.check('BF.size == 8', 8, BF.size)
@@ -444,8 +482,8 @@ export const suite = {
         t.section('bitfield roundtrip: signed sign extension')
         {
             const SB = struct({
-                s: { type: bit('i32', 8) },
-                u: { type: bit('u32', 4) },
+                s: bit('i32', 8),
+                u: bit('u32', 4),
             })
             t.check('SB.size == 4 (同宽不分签别，共单元)', 4, SB.size)
             const sbd = SB.decode(SB.encode({ s: -5, u: 9 }))
@@ -459,8 +497,8 @@ export const suite = {
         t.section('bitfield roundtrip: overflow starts a new unit')
         {
             const OV = struct({
-                a: { type: bit('u32', 30) },
-                b: { type: bit('u32', 4) },   // 30+4=34 > 32 → 新单元，剩余 2 位废弃
+                a: bit('u32', 30),
+                b: bit('u32', 4),   // 30+4=34 > 32 → 新单元，剩余 2 位废弃
                 c: 'u32',
             })
             t.check('OV.size == 12', 12, OV.size)
@@ -477,20 +515,20 @@ export const suite = {
             const DCB = struct('DCB', {
                 DCBlength: 'u32',
                 BaudRate: 'u32',
-                fBinary: { type: bit('u32', 1) },
-                fParity: { type: bit('u32', 1) },
-                fOutxCtsFlow: { type: bit('u32', 1) },
-                fOutxDsrFlow: { type: bit('u32', 1) },
-                fDtrControl: { type: bit('u32', 2) },
-                fDsrSensitivity: { type: bit('u32', 1) },
-                fTXContinueOnXoff: { type: bit('u32', 1) },
-                fOutX: { type: bit('u32', 1) },
-                fInX: { type: bit('u32', 1) },
-                fErrorChar: { type: bit('u32', 1) },
-                fNull: { type: bit('u32', 1) },
-                fRtsControl: { type: bit('u32', 2) },
-                fAbortOnError: { type: bit('u32', 1) },
-                fDummy2: { type: bit('u32', 17) },
+                fBinary: bit('u32', 1),
+                fParity: bit('u32', 1),
+                fOutxCtsFlow: bit('u32', 1),
+                fOutxDsrFlow: bit('u32', 1),
+                fDtrControl: bit('u32', 2),
+                fDsrSensitivity: bit('u32', 1),
+                fTXContinueOnXoff: bit('u32', 1),
+                fOutX: bit('u32', 1),
+                fInX: bit('u32', 1),
+                fErrorChar: bit('u32', 1),
+                fNull: bit('u32', 1),
+                fRtsControl: bit('u32', 2),
+                fAbortOnError: bit('u32', 1),
+                fDummy2: bit('u32', 17),
                 wReserved: 'u16',
                 XonLim: 'u16',
                 XoffLim: 'u16',
@@ -543,8 +581,8 @@ export const suite = {
         // 类型层：位域成员值类型是 number
         {
             const BF = struct({
-                a: { type: bit('u32', 3) },
-                s: { type: bit('i32', 8) },
+                a: bit('u32', 3),
+                s: bit('i32', 8),
             })
             expectType<Equal<ReturnType<typeof BF.decode>['a'], number>>()
             expectType<Equal<ReturnType<typeof BF.decode>['s'], number>>()

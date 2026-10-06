@@ -1,14 +1,14 @@
 import * as os from 'os'
 
 // ============================================================
-// AST IR —— struct/bind 的类型描述树。标量直接写 kind 字符串（如 'i32'）；
-// 指针写 '<>ptr'（裸地址）或 '<NAME>ptr'（带名），复合类型才是带 tag 的对象。
+// 语法词汇 —— struct/bind 共用的 C 类型描述。标量直接写 token 字符串（'i32'/'DWORD'），
+// 指针写 '<>ptr'（裸地址）或 '<NAME>ptr'（带名）；对象值一律带 '#' 声明键（见 §4）。
 // 只描述「C 声明怎么写」（unit/length/encoding 等意图）；内存布局与读写视图由
 // struct.ts 的 computeStructLayout/lower 单独 lower 成 layout IR。
 //
 // 叶子模块：刻意不依赖 win/std/text-codec，可被 struct 直接引用，
 // 避免「只用 struct」的调用方被动加载整个 bind 运行时。
-// 四段按依赖序：§1 kind 词汇表 → §2 指针布局与品牌 → §3 C 别名与 token 归一 → §4 CType IR。
+// 四段按依赖序：§1 kind 词汇表 → §2 指针布局与品牌 → §3 C 别名与 token 归一 → §4 值词汇。
 // ============================================================
 
 // ============================================================
@@ -54,65 +54,59 @@ export type C_Integer = Exclude<C_Number, 'f32' | 'f64'>
 
 export type Encoding = 'utf-8' | 'utf-16le'
 
-export type C_String = {
-    tag: 'string',
-    unit: 'u8' | 'u16',   // 槽宽与对齐
-    length: number,   // 槽数
-    encoding: Encoding
-}
-export type C_Array = {
-    tag: 'array',
-    ctype: C_Type,
-    length: number
-}
-export type C_Bitfield = {
-    tag: 'bitfield',
-    unit: C_Integer,
-    width: number
-}
-
-export type C_MemberType = C_Type | C_Bitfield
-
-export type MemberField = { type: C_MemberType; alignas?: number }
-
 type First =
     | '_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm'
     | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
     | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M'
     | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z';
 
-export type Member = {
-    [K: `${First}${string}`]: { type: C_MemberType; alignas?: number }
-    [K: `$${string}`]: { type: C_Struct | C_Union, alignas?: number }
-}
+// ============================================================
+// §4 值词汇（SimpleValue）—— 字段值/数组元素的全部合法形态：
+//   token/别名   'u32' | 'DWORD'（别名经 normToken 归一；'void'/裸 'ptr' 运行时拒绝）
+//   数组糖       'u32[4]'（仅 token 元素 —— 更复杂的元素写 '#' array 声明）
+//   位域糖       'u32:3'（bit() 的返回形态；unit 位收别名，归一后须为整数档）
+//   '#' 声明     struct/union（平铺字段 + '#pack'）、array（element+length）、
+//                string（unit+length+encoding）—— 对象值的唯一判别键是 '#'
+// '#' 必填（无「裸嵌套 map 默认 struct」）：漏写 '#' 时 union 不会静默翻转成 struct，
+// 类型层直接报错、运行时 throw。顶层 struct()/union() 例外 —— kind 由函数名表明，
+// 参数是平铺字段表（不含 '#'），'#'/`#pack` 由构造器写入 __struct。
+// ============================================================
 
+// token 值面：规范 token（含 '<T>ptr'）∪ C 别名键。'void' 除外 —— 无大小，不能作字段值。
+export type SimpleToken = Exclude<keyof C_ALIAS_MAP, 'void'> | `<${string}>ptr`
+
+// 平铺字段表：struct()/union() 参数与 '#' 声明的字段部分（声明类型见下方 C_Struct/C_Union）。
+// 键侧词汇：'k@N' = alignas N（键尾 @+数字，字段名不含 '@'）；'$x' = 匿名槽（只收聚合）。
+// '#' 前缀键是指令位，与字段名（First 不含 '#'）天然无撞名。
 export type SimpleMember = {
-    // "#"?: 'struct' | 'union',
-    [K: `${First}${string}`]: C_BasicType_Token_No_Void
-    | `${C_BasicType_Token_No_Void}[${number}]` | `${C_Integer}:${number}`
-    | SimpleMember | { type: C_MemberType; alignas?: number }
-    [K: `$${string}`]: SimpleMember | { type: C_Struct | C_Union, alignas?: number }
+    [K: `${First}${string}`]: SimpleValue
+    [K: `$${string}`]: C_Struct | C_Union
 }
 
+// 用 interface（而非 `{'#': ...} & SimpleMember` 交叉别名）：交叉 + 循环别名（SimpleMember
+// ↔ SimpleValue ↔ 本类型）在展开时有解析顺序陷阱 —— 实测 C_Union 拿到的 SimpleMember
+// 丢失索引签名（`'a' extends keyof C_Union` = false，字段字面量被 excess check 拒绝），
+// 而 interface 成员惰性求值无此问题。索引签名与 SimpleMember 逐字同源，改一处须同步另一处。
+export interface C_Struct {
+    '#': 'struct'
+    '#pack'?: number
+    [K: `${First}${string}`]: SimpleValue
+    [K: `$${string}`]: C_Struct | C_Union
+}
+export interface C_Union {
+    '#': 'union'
+    '#pack'?: number
+    [K: `${First}${string}`]: SimpleValue
+    [K: `$${string}`]: C_Struct | C_Union
+}
+export type C_Array = { '#': 'array', element: SimpleValue, length: number }
+export type C_String = { '#': 'string', unit: 'u8' | 'u16', length: number, encoding: Encoding }
 
-
-export type NormalizeMember<M> =
-    Omit<{
-        [K in keyof M]:
-        M[K] extends C_BasicType_Token_No_Void ? { type: M[K] } :
-        M[K] extends `${infer T extends C_BasicType_Token_No_Void}[${infer L extends number}]` ? { type: { tag: 'array', ctype: T, length: L } } :
-        M[K] extends `${infer T extends C_Integer}:${infer W extends number}` ? { type: { tag: 'bitfield', unit: T, width: W } } :
-        M[K] extends { type: C_MemberType } ? { type: M[K]["type"]; alignas?: (M[K] & { alignas?: number })["alignas"] } :
-        M[K] extends { "#": infer T extends 'struct' | 'union' } ? { type: { tag: T, member: NormalizeMember<M[K]> } } :
-        { type: { tag: 'struct', member: NormalizeMember<M[K]> } }
-    }, "#">
-
-
-
-export type C_Struct = { tag: 'struct'; member: Member, pack?: number }
-export type C_Union = { tag: 'union'; member: Member, pack?: number }
-
-export type C_Type = C_BasicType_Token_No_Void | C_String | C_Array | C_Struct | C_Union
+export type SimpleValue =
+    | SimpleToken
+    | `${SimpleToken}[${number}]`
+    | `${SimpleToken}:${number}`
+    | C_Struct | C_Union | C_Array | C_String
 
 
 export const PTR_SIZE = os.arch === 'x64' ? 8 : 4
@@ -158,7 +152,7 @@ export type TokenReturnJsTypeMap = C_TypeJsTypeMap & { void: void }
 // token 的类型层归一（运行时对应 normToken）。约束刻意保持 string 而非 Token：
 // 非法 token（如 'i3z'）要塌成 never 而不是报 TS2344 —— `& keyof` 把交集约成 never，
 // 索引出 never 让调用点拿到 never。收紧到 Token 会把「拼错 token」从 never 变成硬错误。
-type Norm<K extends string> = K extends `<${string}>ptr` ? K : C_ALIAS_MAP[K & keyof C_ALIAS_MAP]
+export type Norm<K extends string> = K extends `<${string}>ptr` ? K : C_ALIAS_MAP[K & keyof C_ALIAS_MAP]
 
 // token → JS 类型。M = kind→JS 映射（实参表 / 返回表）；L = 布局名→JS 形；
 // D = 落不到任何映射时的默认（实参传 never，使 'void' 等非法档报 never）。
@@ -180,9 +174,10 @@ export function normToken(t: string): C_BasicType_Token {
     throw new Error("Unknown token: " + t)
 }
 
-/** 构造位域成员类型：unit 决定单元宽与签别（整数档），width 是位宽（1..单元位宽）。 */
-export function bit<const W extends number>(unit: C_Integer, width: W) {
-    return { tag: 'bitfield', unit, width } as const
+/** 构造位域成员：返回位域糖字符串（`'u32:3'`，字段值的唯一位域写法）。
+ *  unit 只收规范整数档（类型参数位不收别名），width 校验在布局期完成。 */
+export function bit<const U extends C_Integer, const W extends number>(unit: U, width: W): `${U}:${W}` {
+    return `${unit}:${width}` as `${U}:${W}`
 }
 
 export function readScalar(dv: DataView, off: number, k: C_BasicType_No_Void): number | bigint | null {

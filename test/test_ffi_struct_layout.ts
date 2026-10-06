@@ -12,12 +12,10 @@ export const suite = {
         t.section('Basic struct')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u32' },
-                    b: { type: 'u32' },
-                    c: { type: 'u32' },
-                }
+                '#': 'struct',
+                a: 'u32',
+                b: 'u32',
+                c: 'u32',
             }
             const r = computeStructLayout(s)
             t.check('size', 12, r.size)
@@ -30,12 +28,10 @@ export const suite = {
         t.section('Padding')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32' },
-                    c: { type: 'u8' },
-                }
+                '#': 'struct',
+                a: 'u8',
+                b: 'u32',
+                c: 'u8',
             }
             const r = computeStructLayout(s)
             t.check('size', 12, r.size)  // 1 + 3pad + 4 + 1 + 3pad
@@ -49,18 +45,14 @@ export const suite = {
         t.section('Nested struct')
         {
             const inner: C_Struct = {
-                tag: 'struct',
-                member: {
-                    x: { type: 'u32' },
-                    y: { type: 'u32' },
-                }
+                '#': 'struct',
+                x: 'u32',
+                y: 'u32',
             }
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: inner },
-                }
+                '#': 'struct',
+                a: 'u8',
+                b: inner,
             }
             const r = computeStructLayout(s)
             t.check('size', 12, r.size)  // 1 + 3pad + 8
@@ -79,12 +71,10 @@ export const suite = {
         t.section('Union')
         {
             const u: C_Union = {
-                tag: 'union',
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32' },
-                    c: { type: 'u64' },
-                }
+                '#': 'union',
+                a: 'u8',
+                b: 'u32',
+                c: 'u64',
             }
             const r = computeStructLayout(u)
             t.check('size', 8, r.size)  // max member size
@@ -97,19 +87,15 @@ export const suite = {
         t.section('Union in struct')
         {
             const u: C_Union = {
-                tag: 'union',
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32' },
-                }
+                '#': 'union',
+                a: 'u8',
+                b: 'u32',
             }
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u8' },
-                    u: { type: u },
-                    c: { type: 'u8' },
-                }
+                '#': 'struct',
+                a: 'u8',
+                u: u,
+                c: 'u8',
             }
             const r = computeStructLayout(s)
             t.check('size', 12, r.size)  // 1 + 3pad + 4 + 1 + 3pad
@@ -129,18 +115,14 @@ export const suite = {
         t.section('Anonymous struct promotion')
         {
             const inner: C_Struct = {
-                tag: 'struct',
-                member: {
-                    x: { type: 'u32' },
-                    y: { type: 'u32' },
-                }
+                '#': 'struct',
+                x: 'u32',
+                y: 'u32',
             }
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u8' },
-                    $anon1: { type: inner },   // 匿名：字段被提升
-                }
+                '#': 'struct',
+                a: 'u8',
+                $anon1: inner,   // 匿名：字段被提升
             }
             const r = computeStructLayout(s)
             t.check('size', 12, r.size)  // 1 + 3pad + 8
@@ -154,7 +136,7 @@ export const suite = {
 
         t.section('Array of basic')
         {
-            const arr: C_Array = { tag: 'array', ctype: 'u32', length: 4 }
+            const arr: C_Array = { '#': 'array', element: 'u32', length: 4 }
             const r = computeArray(arr)
             t.check('size', 16, r.size)
             t.check('align', 4, r.align)
@@ -163,26 +145,22 @@ export const suite = {
         t.section('Array of struct')
         {
             const inner: C_Struct = {
-                tag: 'struct',
-                member: {
-                    x: { type: 'u32' },
-                    y: { type: 'u32' },
-                }
+                '#': 'struct',
+                x: 'u32',
+                y: 'u32',
             }
-            const arr: C_Array = { tag: 'array', ctype: inner, length: 3 }
+            const arr: C_Array = { '#': 'array', element: inner, length: 3 }
             const r = computeArray(arr)
             t.check('size', 24, r.size)  // 3 * 8
             t.check('align', 4, r.align)
         }
 
-        t.section('Array in struct')
+        t.section('Array in struct（糖写法）')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u8' },
-                    arr: { type: { tag: 'array', ctype: 'u32', length: 4 } },
-                }
+                '#': 'struct',
+                a: 'u8',
+                arr: 'u32[4]',   // 数组糖（元素是 token 时的简写）
             }
             const r = computeStructLayout(s)
             t.check('size', 20, r.size)  // 1 + 3pad + 16
@@ -190,12 +168,25 @@ export const suite = {
             t.check('offset arr', 4, r.fields[1]!.offset)
         }
 
+        t.section('Array in struct（# 形式 + 聚合元素）')
+        {
+            const inner: C_Struct = { '#': 'struct', x: 'u16', y: 'u16' }
+            const s: C_Struct = {
+                '#': 'struct',
+                a: 'u8',
+                arr: { '#': 'array', element: inner, length: 3 },
+            }
+            const r = computeStructLayout(s)
+            t.check('size == 14 (a@0 + 1pad + 3*4，align 取 inner 的 2)', 14, r.size)
+            t.check('offset arr == 2 (inner align 2)', 2, r.fields[1]!.offset)
+        }
+
         // === String ===
 
         t.section('CString')
         {
-            const s: C_String = { tag: 'string', unit: 'u16', length: 10, encoding: 'utf-16le' }
-            const r = computeStructLayout({ tag: 'struct', member: {name: { type: s }} })
+            const s: C_String = { '#': 'string', unit: 'u16', length: 10, encoding: 'utf-16le' }
+            const r = computeStructLayout({ '#': 'struct', name: s })
             t.check('size', 20, r.size)  // 2 * 10
             t.check('align', 2, r.maxEffectiveAlign)
             t.check('offset', 0, r.fields[0]!.offset)
@@ -206,12 +197,10 @@ export const suite = {
         t.section('Pack(1)')
         {
             const s: C_Struct = {
-                tag: 'struct', pack: 1,
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32' },
-                    c: { type: 'u8' },
-                }
+                '#': 'struct', '#pack': 1,
+                a: 'u8',
+                b: 'u32',
+                c: 'u8',
             }
             const r = computeStructLayout(s)
             t.check('size', 6, r.size)  // 1 + 4 + 1, no padding
@@ -223,41 +212,36 @@ export const suite = {
         t.section('Pack(4)')
         {
             const s: C_Struct = {
-                tag: 'struct', pack: 4,
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u64' },  // natural align 8, capped to 4
-                }
+                '#': 'struct', '#pack': 4,
+                a: 'u8',
+                b: 'u64',  // natural align 8, capped to 4
             }
             const r = computeStructLayout(s)
             t.check('offset a', 0, r.fields[0]!.offset)
             t.check('offset b', 4, r.fields[1]!.offset)  // aligned to 4, not 8
         }
 
-        // === Alignas ===
+        // === Alignas（键尾 @N） ===
 
         t.section('Alignas')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32', alignas: 8 },
-                }
+                '#': 'struct',
+                a: 'u8',
+                'b@8': 'u32',
             }
             const r = computeStructLayout(s)
             t.check('offset a', 0, r.fields[0]!.offset)
             t.check('offset b', 8, r.fields[1]!.offset)  // aligned to 8
+            t.check('字段名剥离 @N', 'b', r.fields[1]!.name)
         }
 
         t.section('Alignas(2) < natural(4)')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32', alignas: 2 },  // natural is 4, alignas is 2
-                }
+                '#': 'struct',
+                a: 'u8',
+                'b@2': 'u32',  // natural is 4, alignas is 2
             }
             const r = computeStructLayout(s)
             t.check('offset a', 0, r.fields[0]!.offset)
@@ -269,11 +253,9 @@ export const suite = {
         t.section('Pack(1) + Alignas(8)')
         {
             const s: C_Struct = {
-                tag: 'struct', pack: 1,
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32', alignas: 8 },  // alignas wins over pack
-                }
+                '#': 'struct', '#pack': 1,
+                a: 'u8',
+                'b@8': 'u32',  // alignas wins over pack
             }
             const r = computeStructLayout(s)
             t.check('offset a', 0, r.fields[0]!.offset)
@@ -283,11 +265,9 @@ export const suite = {
         t.section('Pack(4) + Alignas(2)')
         {
             const s: C_Struct = {
-                tag: 'struct', pack: 4,
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u64', alignas: 2 },  // natural 8, pack 4, alignas 2
-                }
+                '#': 'struct', '#pack': 4,
+                a: 'u8',
+                'b@2': 'u64',  // natural 8, pack 4, alignas 2
             }
             const r = computeStructLayout(s)
             t.check('offset a', 0, r.fields[0]!.offset)
@@ -297,11 +277,9 @@ export const suite = {
         t.section('Pack(4) + Alignas(16)')
         {
             const s: C_Struct = {
-                tag: 'struct', pack: 4,
-                member: {
-                    a: { type: 'u8' },
-                    b: { type: 'u32', alignas: 16 },  // alignas(16) > pack(4)
-                }
+                '#': 'struct', '#pack': 4,
+                a: 'u8',
+                'b@16': 'u32',  // alignas(16) > pack(4)
             }
             const r = computeStructLayout(s)
             t.check('offset a', 0, r.fields[0]!.offset)
@@ -323,13 +301,11 @@ export const suite = {
         {
             // 9+7=16 塞满第一单元，30 放不下开第二，18 开第三。sizeof 应为 12。
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    first: { type: bit('u32', 9) },
-                    second: { type: bit('u32', 7) },
-                    may_straddle: { type: bit('u32', 30) },
-                    last: { type: bit('u32', 18) },
-                }
+                '#': 'struct',
+                first: bit('u32', 9),
+                second: bit('u32', 7),
+                may_straddle: bit('u32', 30),
+                last: bit('u32', 18),
             }
             const r = computeStructLayout(s)
             t.check('sizeof == 12', 12, r.size)
@@ -345,12 +321,10 @@ export const suite = {
         {
             // 15+17=32 恰好塞满一个 32 位单元 → 不开新单元（mingw 实测 sizeof=8, w@4）
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: bit('u32', 15) },
-                    b: { type: bit('u32', 17) },
-                    w: { type: 'u16' },
-                }
+                '#': 'struct',
+                a: bit('u32', 15),
+                b: bit('u32', 17),
+                w: 'u16',
             }
             const r = computeStructLayout(s)
             t.check('sizeof == 8 (单元 0-3 + w@4, pad 到 8)', 8, r.size)
@@ -363,11 +337,9 @@ export const suite = {
         {
             // u32 单元用 12 位 = 2 字节，但 char 落在单元边界 4（不是按字节截断的 2）
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: bit('u32', 12) },
-                    z: { type: 'u8' },
-                }
+                '#': 'struct',
+                a: bit('u32', 12),
+                z: 'u8',
             }
             const r = computeStructLayout(s)
             t.check('sizeof == 8 (char@4, pad 到 8)', 8, r.size)
@@ -375,11 +347,9 @@ export const suite = {
 
             // u16 单元用 12 位 = 2 字节 = 完整单元，char 紧随其后
             const s2: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: bit('u16', 12) },
-                    z: { type: 'u8' },
-                }
+                '#': 'struct',
+                a: bit('u16', 12),
+                z: 'u8',
             }
             const r2 = computeStructLayout(s2)
             t.check('u16 单元 sizeof == 4', 4, r2.size)
@@ -389,11 +359,9 @@ export const suite = {
         t.section('Bitfield: 同宽不分签别，共单元')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    a: { type: bit('u32', 8) },
-                    b: { type: bit('i32', 8) },
-                }
+                '#': 'struct',
+                a: bit('u32', 8),
+                b: bit('i32', 8),
             }
             const r = computeStructLayout(s)
             t.check('sizeof == 4 (有/无符号共单元)', 4, r.size)
@@ -403,37 +371,35 @@ export const suite = {
         t.section('Bitfield: DCB（mingw windows.h sizeof=28）')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    DCBlength: { type: 'u32' },
-                    BaudRate: { type: 'u32' },
-                    fBinary: { type: bit('u32', 1) },
-                    fParity: { type: bit('u32', 1) },
-                    fOutxCtsFlow: { type: bit('u32', 1) },
-                    fOutxDsrFlow: { type: bit('u32', 1) },
-                    fDtrControl: { type: bit('u32', 2) },
-                    fDsrSensitivity: { type: bit('u32', 1) },
-                    fTXContinueOnXoff: { type: bit('u32', 1) },
-                    fOutX: { type: bit('u32', 1) },
-                    fInX: { type: bit('u32', 1) },
-                    fErrorChar: { type: bit('u32', 1) },
-                    fNull: { type: bit('u32', 1) },
-                    fRtsControl: { type: bit('u32', 2) },
-                    fAbortOnError: { type: bit('u32', 1) },
-                    fDummy2: { type: bit('u32', 17) },
-                    wReserved: { type: 'u16' },
-                    XonLim: { type: 'u16' },
-                    XoffLim: { type: 'u16' },
-                    ByteSize: { type: 'u8' },
-                    Parity: { type: 'u8' },
-                    StopBits: { type: 'u8' },
-                    XonChar: { type: 'i8' },
-                    XoffChar: { type: 'i8' },
-                    ErrorChar: { type: 'i8' },
-                    EofChar: { type: 'i8' },
-                    EvtChar: { type: 'i8' },
-                    wReserved1: { type: 'u16' },
-                }
+                '#': 'struct',
+                DCBlength: 'u32',
+                BaudRate: 'u32',
+                fBinary: bit('u32', 1),
+                fParity: bit('u32', 1),
+                fOutxCtsFlow: bit('u32', 1),
+                fOutxDsrFlow: bit('u32', 1),
+                fDtrControl: bit('u32', 2),
+                fDsrSensitivity: bit('u32', 1),
+                fTXContinueOnXoff: bit('u32', 1),
+                fOutX: bit('u32', 1),
+                fInX: bit('u32', 1),
+                fErrorChar: bit('u32', 1),
+                fNull: bit('u32', 1),
+                fRtsControl: bit('u32', 2),
+                fAbortOnError: bit('u32', 1),
+                fDummy2: bit('u32', 17),
+                wReserved: 'u16',
+                XonLim: 'u16',
+                XoffLim: 'u16',
+                ByteSize: 'u8',
+                Parity: 'u8',
+                StopBits: 'u8',
+                XonChar: 'i8',
+                XoffChar: 'i8',
+                ErrorChar: 'i8',
+                EofChar: 'i8',
+                EvtChar: 'i8',
+                wReserved1: 'u16',
             }
             const r = computeStructLayout(s)
             t.check('DCB.size == 28', 28, r.size)
@@ -451,19 +417,17 @@ export const suite = {
         t.section('Bitfield: COMSTAT（mingw windows.h sizeof=12）')
         {
             const s: C_Struct = {
-                tag: 'struct',
-                member: {
-                    fCtsHold: { type: bit('u32', 1) },
-                    fDsrHold: { type: bit('u32', 1) },
-                    fRlsdHold: { type: bit('u32', 1) },
-                    fXoffHold: { type: bit('u32', 1) },
-                    fXoffSent: { type: bit('u32', 1) },
-                    fEof: { type: bit('u32', 1) },
-                    fTxim: { type: bit('u32', 1) },
-                    fReserved: { type: bit('u32', 25) },
-                    cbInQue: { type: 'u32' },
-                    cbOutQue: { type: 'u32' },
-                }
+                '#': 'struct',
+                fCtsHold: bit('u32', 1),
+                fDsrHold: bit('u32', 1),
+                fRlsdHold: bit('u32', 1),
+                fXoffHold: bit('u32', 1),
+                fXoffSent: bit('u32', 1),
+                fEof: bit('u32', 1),
+                fTxim: bit('u32', 1),
+                fReserved: bit('u32', 25),
+                cbInQue: 'u32',
+                cbOutQue: 'u32',
             }
             const r = computeStructLayout(s)
             t.check('COMSTAT.size == 12', 12, r.size)
@@ -475,11 +439,9 @@ export const suite = {
         t.section('Bitfield: union 位域按 struct 打包（不别名）')
         {
             const u: C_Union = {
-                tag: 'union',
-                member: {
-                    a: { type: bit('u32', 1) },
-                    b: { type: bit('u32', 1) },
-                }
+                '#': 'union',
+                a: bit('u32', 1),
+                b: bit('u32', 1),
             }
             const r = computeStructLayout(u)
             t.check('sizeof == 4', 4, r.size)
@@ -494,19 +456,43 @@ export const suite = {
                 try { computeStructLayout(s); return false } catch { return true }
             }
             t.check('width 0 rejected (v1 不支持 :0 填充)', true,
-                rejected({ tag: 'struct', member: {x: { type: bit('u32', 0) }} }))
+                rejected({ '#': 'struct', x: bit('u32', 0) }))
             t.check('width > unit bits rejected', true,
-                rejected({ tag: 'struct', member: {x: { type: bit('u32', 33) }} }))
+                rejected({ '#': 'struct', x: bit('u32', 33) }))
             t.check('width > u8 bits rejected', true,
-                rejected({ tag: 'struct', member: {x: { type: bit('u8', 9) }} }))
-            t.check('negative width rejected', true,
-                rejected({ tag: 'struct', member: {x: { type: bit('u32', -1) }} }))
+                rejected({ '#': 'struct', x: bit('u8', 9) }))
+            t.check('negative width rejected（非 \\d+ → 落 token 分支抛）', true,
+                rejected({ '#': 'struct', x: bit('u32', -1) }))
             t.check('non-integer width rejected', true,
-                rejected({ tag: 'struct', member: {x: { type: bit('u32', 2.5) }} }))
-            t.check('array of bitfields rejected', true,
-                rejected({ tag: 'struct', member: {x: { type: { tag: 'array', ctype: bit('u32', 1) as any, length: 2 } }} }))
+                rejected({ '#': 'struct', x: bit('u32', 2.5) }))
+            t.check('array of bitfields rejected（# 形式）', true,
+                rejected({ '#': 'struct', x: { '#': 'array', element: bit('u32', 1), length: 2 } }))
+            t.check('array of bitfields rejected（数组糖，类型层拒绝故 as any）', true,
+                rejected({ '#': 'struct', x: 'u32:1[2]' as any }))
             t.check('anonymous bitfield rejected', true,
-                rejected({ tag: 'struct', member: {$anon1: { type: bit('u32', 1) } as any} }))
+                rejected({ '#': 'struct', $anon1: bit('u32', 1) } as any))
+            t.check('float bitfield unit rejected（归一后非整数档）', true,
+                rejected({ '#': 'struct', x: 'float:3' as any }))
+            t.check('unknown bitfield unit rejected', true,
+                rejected({ '#': 'struct', x: 'i3z:3' as any }))
+            t.check('array with #pack rejected（#pack 仅 struct/union）', true,
+                rejected({ '#': 'struct', x: { '#': 'array', element: 'u8', length: 2, '#pack': 4 } as any }))
+        }
+
+        t.section('# declaration validation')
+        {
+            const rejected = (s: C_Struct): boolean => {
+                try { computeStructLayout(s); return false } catch { return true }
+            }
+            // '#' 必填：裸嵌套 map（漏写 '#'）不再默认 struct，直接报错
+            t.check('bare nested map rejected（漏写 #）', true,
+                rejected({ '#': 'struct', x: { mask: 'u32' } } as any))
+            t.check('unknown # tag rejected', true,
+                rejected({ '#': 'struct', x: { '#': 'oops' } } as any))
+            t.check('void token rejected（无大小）', true,
+                rejected({ '#': 'struct', x: 'void' } as any))
+            t.check('bare ptr token rejected', true,
+                rejected({ '#': 'struct', x: 'ptr' } as any))
         }
     }
 }

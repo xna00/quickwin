@@ -60,19 +60,19 @@ const LV_WS = gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle
 
 // ListView 通知结构（嵌套 NMHDR 以复现 MSVC 尾 padding 传染，offsetOf 保证 ia32/x64 均正确）。
 const NMCUSTOMDRAW = struct({
-  hdr: { type: NMHDR.__struct },
+  hdr: NMHDR.__struct,
   dwDrawStage: 'u32',
   hdc: '<>ptr',
-  rc: { type: { tag: 'array', ctype: 'i32', length: 4 } },
+  rc: 'i32[4]',
   dwItemSpec: '<>ptr',
   uItemState: 'u32',
   lItemlParam: '<>ptr',
 })
 const NMLVCUSTOMDRAW = struct({
-  hdr: { type: NMHDR.__struct },
+  hdr: NMHDR.__struct,
   dwDrawStage: 'u32',
   hdc: '<>ptr',
-  rc: { type: { tag: 'array', ctype: 'i32', length: 4 } },
+  rc: 'i32[4]',
   dwItemSpec: '<>ptr',
   uItemState: 'u32',
   lItemlParam: '<>ptr',
@@ -83,13 +83,13 @@ const NMLVCUSTOMDRAW = struct({
 })
 // NMLISTVIEW / NMITEMACTIVATE 前缀字段布局一致（iItem..uChanged）
 const NMLISTVIEW = struct({
-  hdr: { type: NMHDR.__struct },
+  hdr: NMHDR.__struct,
   iItem: 'i32',
   iSubItem: 'i32',
   uNewState: 'u32',
   uOldState: 'u32',
   uChanged: 'u32',
-  ptAction: { type: { tag: 'array', ctype: 'i32', length: 2 } },
+  ptAction: 'i32[2]',
   lParam: '<>ptr',
 })
 const CD_STAGE = NMCUSTOMDRAW.offsetOf('dwDrawStage')
