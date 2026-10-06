@@ -5,7 +5,7 @@ import {
     GetWindowTextLength, GetClassName, FindWindow, SetTimer, KillTimer,
     GetKeyState, LoadCursor, SetCursor, GetMenu, DestroyMenu, GetForegroundWindow,
     GetDC, ReleaseDC, EnumWindows,
-} from '../lib/user32.js'
+} from '../lib/windows/user32.js'
 
 export const suite = {
     run(t: Tester) {

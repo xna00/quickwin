@@ -16,7 +16,7 @@
 //     （命令 ID 或子菜单句柄）、MAKEINTRESOURCE 光标名，以及 HINSTANCE / HGLOBAL /
 //     HBRUSH / 回调等非清单句柄
 import * as os from 'os'
-import { bind } from './ffi/bind.js'
+import { bind } from '../ffi/bind.js'
 
 // dll 名部分应用：85 个绑定共用，签名字符串不再重复 'user32.dll'。
 // 不能用 bind.bind(null, dll)——泛型在部分应用点坍缩（返回 never）；工厂转调让
@@ -118,6 +118,9 @@ export const SendMessage = /*@__PURE__*/ b('SendMessageW', '<HWND>ptr u32 <>ptr 
 export const PostQuitMessage = /*@__PURE__*/ b('PostQuitMessage', 'i32 -> void')
 /** 默认窗口过程（未处理消息的兜底）；返回处理结果（0 → null，按无符号读） */
 export const DefWindowProc = /*@__PURE__*/ b('DefWindowProcW', '<HWND>ptr u32 <>ptr <>ptr -> <>ptr')
+/** 调用窗口过程（wndProc = GetWindowLongPtr(GWLP_WNDPROC) 读回的过程指针——无品牌混合位 <>ptr，
+ *  仅对本线程窗口调用）；返回处理结果（0 → null，按无符号读） */
+export const CallWindowProc = /*@__PURE__*/ b('CallWindowProcW', '<>ptr <HWND>ptr u32 <>ptr <>ptr -> <>ptr')
 /** 注册系统级唯一消息 ID（按字符串比较）；失败 → 0 */
 export const RegisterWindowMessage = /*@__PURE__*/ b('RegisterWindowMessageW', '<WCHAR>ptr -> u32')
 
@@ -223,11 +226,35 @@ export const EnableMenuItem = /*@__PURE__*/ b('EnableMenuItem', '<HMENU>ptr u32 
 export const GetSubMenu = /*@__PURE__*/ b('GetSubMenu', '<HMENU>ptr i32 -> <HMENU>ptr')
 /** 弹出跟踪菜单（首参收品牌 HMENU；x,y 屏幕坐标；prcRect 可 null）；返回菜单项命令 ID 或 0 */
 export const TrackPopupMenu = /*@__PURE__*/ b('TrackPopupMenu', '<HMENU>ptr u32 i32 i32 i32 <>ptr <BYTE>ptr -> i32')
+/** 创建弹出菜单；失败 → null（返回品牌 HMENU，配对 DestroyMenu） */
+export const CreatePopupMenu = /*@__PURE__*/ b('CreatePopupMenu', ' -> <HMENU>ptr')
+
+// ============ 滚动条 ============
+
+/** 设滚动参数（SCROLLINFO 28 字节 buffer，布局 ia32/x64 相同：cbSize@0 fMask@4 nMin@8 nMax@12
+ *  nPage@16 nPos@20 nTrackPos@24——先填 cbSize 与 fMask=SIF_* 再按 mask 填字段；
+ *  redraw 非 0 立即重画）；返回滑块位置 */
+export const SetScrollInfo = /*@__PURE__*/ b('SetScrollInfo', '<HWND>ptr u32 <BYTE>ptr i32 -> i32')
+/** 取滚动参数（buffer 同上，fMask = SIF_* 决定读取项，读回各字段）；成功 → 非 0 */
+export const GetScrollInfo = /*@__PURE__*/ b('GetScrollInfo', '<HWND>ptr u32 <BYTE>ptr -> i32')
+/** 显示/隐藏滚动条（bar = SB_*，0=HORZ 1=VERT 3=BOTH；show 非 0 显示）；成功 → 非 0 */
+export const ShowScrollBar = /*@__PURE__*/ b('ShowScrollBar', '<HWND>ptr u32 i32 -> i32')
 
 // ============ 对话框 ============
 
 /** 消息框（首参收品牌 HWND 可 null；仅在确实要弹窗时调用；MB_* 常量见 MSDN）；返回按钮 ID */
 export const MessageBox = /*@__PURE__*/ b('MessageBoxW', '<HWND>ptr <WCHAR>ptr <WCHAR>ptr u32 -> i32')
+
+// ============ 图像 ============
+
+/** LoadImage——name 传 string（hinst=null 系统 IDI 图标或 .ico 文件路径；hinst=模块句柄则为资源名），
+ *  <WCHAR>ptr 自动编码；uType = Win32 IMAGE_* 真值（BITMAP=0、CURSOR=1、ICON=2——与 gui.ImageType
+ *  枚举当前值不同），fuLoad = Win32 LR_*（LOADFROMFILE=0x10、SHARED=0x8000，系统 IDI 需 SHARED）；
+ *  失败 → null */
+export const LoadImage = /*@__PURE__*/ b('LoadImageW', '<>ptr <WCHAR>ptr u32 i32 i32 u32 -> <>ptr')
+/** LoadImage——name 传资源 ID 序数（MAKEINTRESOURCE 位 <>ptr 直传 number，如 IDI_APPLICATION=32512）；
+ *  其余参数同 LoadImage */
+export const LoadImageOrdinal = /*@__PURE__*/ b('LoadImageW', '<>ptr <>ptr u32 i32 i32 u32 -> <>ptr')
 
 // ============ 杂项高频 ============
 
