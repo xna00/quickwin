@@ -1,7 +1,7 @@
 // user32.dll 精选高频 API（85 个），逐函数独立导出：
 //   - 签名对照 mingw winuser.h 原型手写；未被 import 的绑定经 esbuild 摇树不进产物
 //   - WPARAM / LPARAM / LRESULT / UINT_PTR / LONG_PTR 及句柄混合值一律 <>ptr（指针宽度跨
-//     架构正确；返回值 0 归一为 null、按无符号读——如 GetWindowLongPtrW 的 -1 哨兵会读成大正数）
+//     架构正确；返回值 0 归一为 null、有符号读对齐 C 版 JS_NewInt64——-1 哨兵等负值保真）
 //   - 入参字符串用 <WCHAR>ptr（string 编码为 UTF-16 + NUL，null → NULL 指针）；文本出参缓冲
 //     用 <BYTE>ptr（宽字符串出参配 WCHAR.alloc(n).buf 当 buffer、WCHAR.decode(buf) 读回）；
 //     回调参数用 <>ptr 接 closure() 的 ptr
@@ -81,9 +81,9 @@ export const GetWindowTextLength = /*@__PURE__*/ b('GetWindowTextLengthW', '<HWN
 /** 取窗口类名（宽字符写入 out buffer，返回字符数）；
  *  out 传 WCHAR.alloc(n).buf（n = 字符数），读回 WCHAR.decode(buf) */
 export const GetClassName = /*@__PURE__*/ b('GetClassNameW', '<HWND>ptr <BYTE>ptr i32 -> i32')
-/** 取窗口附加数据（GWLP_* / GWL_* 索引）；0 → null（值按无符号读；ia32 走 GetWindowLongW） */
+/** 取窗口附加数据（GWLP_* / GWL_* 索引）；0 → null（值有符号读；ia32 走 GetWindowLongW） */
 export const GetWindowLongPtr = /*@__PURE__*/ b('GetWindowLong' + LONG_PTR_SYM, '<HWND>ptr i32 -> <>ptr')
-/** 设窗口附加数据；返回先前值（0 → null，值按无符号读） */
+/** 设窗口附加数据；返回先前值（0 → null，值有符号读） */
 export const SetWindowLongPtr = /*@__PURE__*/ b('SetWindowLong' + LONG_PTR_SYM, '<HWND>ptr i32 <>ptr -> <>ptr')
 /** 取窗口所属进程 ID 到 buffer（可传 null）；返回线程 ID */
 export const GetWindowThreadProcessId = /*@__PURE__*/ b('GetWindowThreadProcessId', '<HWND>ptr <BYTE>ptr -> u32')
@@ -117,18 +117,18 @@ export const GetMessage = /*@__PURE__*/ b('GetMessageW', '<BYTE>ptr <HWND>ptr u3
 export const PeekMessage = /*@__PURE__*/ b('PeekMessageW', '<BYTE>ptr <HWND>ptr u32 u32 u32 -> i32')
 /** 把 WM_KEYDOWN/UP 转成字符消息（翻译结果留在队列）；可翻译 → 非 0 */
 export const TranslateMessage = /*@__PURE__*/ b('TranslateMessage', '<BYTE>ptr -> i32')
-/** 分发 MSG 给窗口过程；返回处理结果（0 → null，按无符号读） */
+/** 分发 MSG 给窗口过程；返回处理结果（0 → null，有符号读） */
 export const DispatchMessage = /*@__PURE__*/ b('DispatchMessageW', '<BYTE>ptr -> <>ptr')
 /** 异步投递消息到窗口线程队列；成功 → 非 0 */
 export const PostMessage = /*@__PURE__*/ b('PostMessageW', '<HWND>ptr u32 <>ptr <>ptr -> i32')
-/** 同步发送消息并等窗口过程处理；返回处理结果（0 → null，按无符号读） */
+/** 同步发送消息并等窗口过程处理；返回处理结果（0 → null，有符号读） */
 export const SendMessage = /*@__PURE__*/ b('SendMessageW', '<HWND>ptr u32 <>ptr <>ptr -> <>ptr')
 /** 退出消息循环（投递 WM_QUIT，wParam = 退出码） */
 export const PostQuitMessage = /*@__PURE__*/ b('PostQuitMessage', 'i32 -> void')
-/** 默认窗口过程（未处理消息的兜底）；返回处理结果（0 → null，按无符号读） */
+/** 默认窗口过程（未处理消息的兜底）；返回处理结果（0 → null，有符号读） */
 export const DefWindowProc = /*@__PURE__*/ b('DefWindowProcW', '<HWND>ptr u32 <>ptr <>ptr -> <>ptr')
 /** 调用窗口过程（wndProc = GetWindowLongPtr(GWLP_WNDPROC) 读回的过程指针——无品牌混合位 <>ptr，
- *  仅对本线程窗口调用）；返回处理结果（0 → null，按无符号读） */
+ *  仅对本线程窗口调用）；返回处理结果（0 → null，有符号读） */
 export const CallWindowProc = /*@__PURE__*/ b('CallWindowProcW', '<>ptr <HWND>ptr u32 <>ptr <>ptr -> <>ptr')
 /** 注册系统级唯一消息 ID（按字符串比较）；失败 → 0 */
 export const RegisterWindowMessage = /*@__PURE__*/ b('RegisterWindowMessageW', '<WCHAR>ptr -> u32')

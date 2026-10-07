@@ -200,7 +200,10 @@ export function readScalar(dv: DataView, off: number, k: C_BasicType_No_Void): n
         case 'f32': return dv.getFloat32(off, true)
         case 'f64': return dv.getFloat64(off, true)
         case 'ptr': {
-            const p = PTR_SIZE === 8 ? Number(dv.getBigUint64(off, true)) : dv.getUint32(off, true)
+            // 有符号读（对齐 C 版 JS_NewInt64）：LRESULT/LONG_PTR 的 -1 哨兵、负返回值
+            // 保真；用户态指针高位为 0，有符号读与无符号同值。负值回传的位模式写见
+            // writeScalar 的 ptr 分支。
+            const p = PTR_SIZE === 8 ? Number(dv.getBigInt64(off, true)) : dv.getInt32(off, true)
             // 0 归一为 null：类型层（ValOf / JsTypeOfToken）把指针一律声明为
             // NullablePtr，若此处返回裸 0，`p === null` 就永不成立 —— 类型允许、
             // 运行时永远走不到的分支比类型错误更隐蔽。
@@ -227,7 +230,9 @@ export function writeScalar(dv: DataView, off: number, { k, v }: Entry): void {
         case 'f32': dv.setFloat32(off, (v), true); break
         case 'f64': dv.setFloat64(off, (v), true); break
         case 'ptr': {
-            if (PTR_SIZE === 8) dv.setBigUint64(off, BigInt(v), true)
+            // 读回的负值（LRESULT/句柄）再作参数回传时按二补位位模式写：asUintN /
+            // >>> 0 取模保真，否则 x64 传负 setBigUint64 直接 RangeError。
+            if (PTR_SIZE === 8) dv.setBigUint64(off, BigInt.asUintN(64, BigInt(v)), true)
             else dv.setUint32(off, v >>> 0, true)
             break
         }

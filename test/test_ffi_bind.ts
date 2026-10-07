@@ -5,7 +5,7 @@ import * as os from 'os'
 import { Tester } from './test_helper.js'
 import { bind, bindLib, closure, WCHAR, BYTE, type CodecMap } from '../lib/ffi/bind.js'
 import { struct } from '../lib/ffi/struct.js'
-import { Ptr } from '../lib/ffi/ctype.js'
+import { Ptr, readScalar, writeScalar, PTR_SIZE } from '../lib/ffi/ctype.js'
 
 // 编译期断言工具（仅类型层，运行时无开销）
 type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends (<G>() => G extends B ? 1 : 2) ? true : false
@@ -457,5 +457,16 @@ export const suite = {
         t.check('qsort [2]', 5, arr[2])
         t.check('qsort [3]', 8, arr[3])
         cmp.dispose()
+
+        t.section('ptr 位有符号读写（对齐 C 版 JS_NewInt64）')
+        const pdv = new DataView(new ArrayBuffer(8))
+        writeScalar(pdv, 0, { k: 'ptr', v: -1 })
+        if (PTR_SIZE === 8) t.check('-1 写入位模式（x64 二补位）', 18446744073709551615n, pdv.getBigUint64(0, true))
+        else t.check('-1 写入位模式（ia32 二补位）', 0xFFFFFFFF, pdv.getUint32(0, true))
+        t.check('负值往返 write(-1) → read = -1', -1, readScalar(pdv, 0, 'ptr'))
+        writeScalar(pdv, 0, { k: 'ptr', v: 0 })
+        t.check('0 归一为 null', null, readScalar(pdv, 0, 'ptr'))
+        writeScalar(pdv, 0, { k: 'ptr', v: 0x7FFFFFFF })
+        t.check('正哨兵往返', 0x7FFFFFFF, readScalar(pdv, 0, 'ptr'))
     },
 }

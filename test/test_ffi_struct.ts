@@ -119,7 +119,9 @@ export const suite = {
         const m = M.decode(mb)
         t.check('int -5', -5, m.n)
         t.check('DWORD', 0xFFFFFFFF, m.d)
-        t.check('LPARAM', 0xAABBCCDD, m.w)
+        // ptr 位有符号读（对齐 C 版 JS_NewInt64）：0xAABBCCDD 在 ia32 按 4 字节
+        // 存取 → 符号扩展读成负；x64 8 字节高位 0 → 仍为正
+        t.check('LPARAM', is64 ? 0xAABBCCDD : -1430532899, m.w)
         t.check('short -7', -7, m.s)
         t.check('LONG_PTR', 0x11223344, m.q)
 
