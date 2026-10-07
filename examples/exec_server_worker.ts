@@ -2,14 +2,14 @@ import * as os from 'os'
 import * as std from 'std'
 import * as ffi from 'ffi'
 import '../lib/text-codec.js'
-import { bind } from '../lib/ffi/bind.js'
+import { bind, closure } from '../lib/ffi/bind.js'
 import { NULL, type Ptr } from '../lib/ffi/ctype.js'
 import {
     CloseHandle, CreatePipe, CreateProcess, GetExitCodeProcess, GetLastError, GetSystemDirectory,
     GetSystemInfo, ReadFile, SetHandleInformation, WaitForSingleObject,
 } from '../lib/windows/kernel32.js'
 import {
-    ClientToScreen, FindWindowEx, GetClassName, GetClientRect, GetDC, GetSystemMetrics, GetWindowRect,
+    ClientToScreen, EnumWindows, GetClassName, GetClientRect, GetDC, GetSystemMetrics, GetWindowRect,
     GetWindowText, IsIconic, IsWindowVisible, PrintWindow, ReleaseDC,
 } from '../lib/windows/user32.js'
 import {
@@ -390,9 +390,19 @@ function readWide(p: number, nChars: number): string {
     return new TextDecoder('utf-16le').decode(bytes)
 }
 
-// 顶层窗口列表（不递归子控件）。用 FindWindowExW 链式遍历
-//（lib/ffi/bind.ts 的 closure() 已支持 EnumWindows 类回调，此处沿用既有实现）。
+// 顶层窗口列表（不递归子控件）。EnumWindows 先拍窗口快照再回调：不像 FindWindowEx 链式遍历
+// 那样，在「下一个窗口恰好被销毁」时拿到失效句柄，下一轮返回 NULL 把列表悄悄截断。
+// 回调只收集句柄：回调内抛异常会被 closure 吞成返回 0（枚举静默提前结束），所以不在回调里查属性。
+// 快照里的窗口在逐个查询时可能已销毁，GetWindowRect 返回 0 即跳过。
+// 输出顺序是 EnumWindows 的顺序（与 FindWindowEx 链的顺序不同，集合相同；API 未承诺顺序）。
 function listWindows(id: number): void {
+    const handles: Ptr<'HWND'>[] = []
+    const collect = closure('<HWND>ptr <>ptr -> i32', (h) => {
+        if (h) handles.push(h)
+        return handles.length < MAX_WINDOWS ? 1 : 0   // 返回 0 = 停止枚举（到上限）
+    })
+    try { EnumWindows(collect.ptr, NULL) } finally { collect.dispose() }
+
     const wRect = RECT.encode()
     const tb = zeroBuf(WIDE_BUF_CHARS * 2)
     const cb = zeroBuf(WIDE_BUF_CHARS * 2)
@@ -400,11 +410,7 @@ function listWindows(id: number): void {
     const cp = ffi.bufferPtr(cb)
 
     const out: Array<Record<string, unknown>> = []
-    let hwnd = FindWindowEx(NULL, NULL, NULL, NULL)
-    while (hwnd && out.length < MAX_WINDOWS) {
-        // 先取下一个句柄，避免本次查询期间窗口关闭导致当前句柄失效
-        const next = FindWindowEx(NULL, hwnd, NULL, NULL)
-
+    for (const hwnd of handles) {
         if (GetWindowRect(hwnd, wRect.ptr)) {
             const rc = RECT.decode(wRect)
             const tl = GetWindowText(hwnd, tb, WIDE_BUF_CHARS)
@@ -418,7 +424,6 @@ function listWindows(id: number): void {
                 minimized: IsIconic(hwnd) !== 0
             })
         }
-        hwnd = next
     }
     parent.postMessage({ type: 'result', id, code: 0, error: null, windows: out })
 }
