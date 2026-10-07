@@ -2,13 +2,13 @@ import { forwardRef, useRef, useEffect, type ForwardedRef } from 'react'
 import * as gui from 'gui'
 import { LvItemFlag, LvItemState, LvColumnMask } from 'gui'
 import * as ffi from 'ffi'
-import { bind } from '../../ffi/bind.js'
-import type { MaybePtr } from '../../ffi/ctype.js'
+import { WCHAR } from '../../ffi/bind.js'
+import type { Ptr } from '../../ffi/ctype.js'
 import { struct } from '../../ffi/struct.js'
 import { NMHDR, PTR_SIZE, nmCode } from '../nmhdr.js'
 import { LoadCursor, SetCursor, ScreenToClient, GetCursorPos } from '../../windows/user32.js'
-import { DeleteObject } from '../../windows/gdi32.js'
-import { POINT } from '../../windows/structs.js'
+import { CreateFontIndirect, DeleteObject, GetObject, SelectObject } from '../../windows/gdi32.js'
+import { LOGFONTW, POINT } from '../../windows/structs.js'
 import type { WStyle } from '../jsx.d.ts'
 
 export function makeColorBlock(size: number, bgra: number): ArrayBuffer {
@@ -21,14 +21,6 @@ export function makeColorBlock(size: number, bgra: number): ArrayBuffer {
     b[i * 4 + 2] = (bgra >> 16) & 0xFF
     b[i * 4 + 3] = 0xFF
   }
-  return buf
-}
-
-function textToUtf16(s: string): ArrayBuffer {
-  const buf = new ArrayBuffer((s.length + 1) * 2)
-  const dv = new DataView(buf)
-  for (let i = 0; i < s.length; i++)
-    dv.setUint16(i * 2, s.charCodeAt(i), true)
   return buf
 }
 
@@ -141,48 +133,27 @@ const LVCOLUMNW = struct({
 
 const fontCache = new Map<string, number>()
 
-type GdiFns = {
-  createFontIndirectW: (lf: ArrayBuffer | MaybePtr<'BYTE'>) => number
-  selectObjectFn: (hdc: number, hfont: number) => number
-  getObjectW: (h: number, n: number, buf: ArrayBuffer | MaybePtr<'BYTE'>) => number
-}
-let gdiFns: GdiFns | null = null
-
-function ensureGdi(): GdiFns | null {
-  if (gdiFns) return gdiFns
-  try {
-    gdiFns = {
-      createFontIndirectW: bind('gdi32.dll', 'CreateFontIndirectW', '<BYTE>ptr -> <>ptr'),
-      selectObjectFn: bind('gdi32.dll', 'SelectObject', '<>ptr <>ptr -> <>ptr'),
-      getObjectW: bind('gdi32.dll', 'GetObjectW', '<>ptr i32 <BYTE>ptr -> i32'),
-    }
-  } catch {
-    return null
-  }
-  return gdiFns
-}
-
 function getCellFont(hwnd: gui.HWND, style: CellStyle): number | null {
   const key = (style.bold ? 'b' : '') + (style.italic ? 'i' : '') + (style.underline ? 'u' : '')
   if (key === '') return null
   const cached = fontCache.get(key)
   if (cached !== undefined) return cached === 0 ? null : cached
 
-  const gdi = ensureGdi()
-  if (!gdi || !hwnd) return null
-  const lf = new ArrayBuffer(92)
-  const dv = new DataView(lf)
+  if (!hwnd) return null
+  // 以控件当前字体为底（取不到则用 -13 高度的默认字体），再叠加粗 / 斜 / 下划线
+  let base: Parameters<typeof CreateFontIndirect>[0] = { lfHeight: -13 }
   const cur = gui.SendMessage(hwnd, gui.WmMsg.GETFONT, 0, 0)
   if (cur) {
-    const got = gdi.getObjectW(cur, 92, lf)
-    if (!got) return null
-  } else {
-    dv.setInt32(0, -13, true)
+    const lf = LOGFONTW.encode()
+    if (!GetObject(cur, LOGFONTW.size, lf)) return null
+    base = LOGFONTW.decode(lf)
   }
-  if (style.bold) dv.setInt32(16, gui.FontWeight.BOLD, true)
-  if (style.italic) dv.setUint8(20, 1)
-  if (style.underline) dv.setUint8(21, 1)
-  const h = gdi.createFontIndirectW(lf)
+  const h = CreateFontIndirect({
+    ...base,
+    ...(style.bold ? { lfWeight: gui.FontWeight.BOLD } : {}),
+    ...(style.italic ? { lfItalic: 1 } : {}),
+    ...(style.underline ? { lfUnderline: 1 } : {}),
+  })
   fontCache.set(key, h ? h : 0)
   return h ? h : null
 }
@@ -201,10 +172,10 @@ function handleCustomDraw<D>(lParam: number, columns: Column<D>[], data: D[], hw
     if (style.background !== undefined) writeU32(lParam, CD_CLRTEXTBK, style.background)
 
     const hfont = getCellFont(hwnd!, style)
-    if (hfont && gdiFns) {
+    if (hfont) {
       const hdc = PTR_SIZE === 8 ? readU64(lParam, CD_HDC) : readU32(lParam, CD_HDC)
       if (hdc) {
-        gdiFns.selectObjectFn(hdc, hfont)
+        SelectObject(hdc as Ptr<'HDC'>, hfont)
         return gui.CustomDrawFlag.NEWFONT
       }
     }
@@ -268,7 +239,7 @@ function resolveCellStyle<D>(columns: Column<D>[], data: D[], row: number, colIn
 }
 
 function makeLVItem(i: number, sub: number, text: string, image?: number): ArrayBuffer {
-  const textBuf = textToUtf16(text)
+  const textBuf = WCHAR.encode(text)
   const b: ArrayBuffer & { __textBuf?: ArrayBuffer } = LVITEMW.encode({
     mask: LvItemFlag.TEXT | (image !== undefined ? LvItemFlag.IMAGE : 0),
     iItem: i,
@@ -338,7 +309,7 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
 
     const n = columns.length
     for (let j = 0; j < n; j++) {
-      const titleBuf = textToUtf16(columns[j]!.name)
+      const titleBuf = WCHAR.encode(columns[j]!.name)
       const lvc: ArrayBuffer & { __titleBuf?: ArrayBuffer } = LVCOLUMNW.encode({
         mask: LvColumnMask.TEXT | LvColumnMask.WIDTH | LvColumnMask.FORMAT,
         fmt: alignToFmt(columns[j]!.align),

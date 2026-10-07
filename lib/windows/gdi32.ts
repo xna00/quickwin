@@ -36,5 +36,8 @@ export const BitBlt = /*@__PURE__*/ b('BitBlt', '<HDC>ptr i32 i32 i32 i32 <HDC>p
  *  传 BITMAPINFOHEADER.encode({...}).ptr；有颜色表的格式由调用方自备更大的缓冲）；
  *  uUsage = DIB_RGB_COLORS(0)；返回成功取到的扫描行数，失败 → 0 */
 export const GetDIBits = /*@__PURE__*/ b('GetDIBits', '<HDC>ptr <>ptr u32 u32 <BYTE>ptr <>ptr u32 -> i32')
+/** 取 GDI 对象信息到 lpv（hFont → LOGFONTW 等；cb = 缓冲字节数，如 LOGFONTW.size；
+ *  out 传 LOGFONTW.encode()）；返回写入的字节数，失败 → 0 */
+export const GetObject = /*@__PURE__*/ b('GetObjectW', '<>ptr i32 <BYTE>ptr -> i32')
 /** 删除内存 DC（CreateCompatibleDC 建的）；成功 → 非 0 */
 export const DeleteDC = /*@__PURE__*/ b('DeleteDC', '<HDC>ptr -> i32')
