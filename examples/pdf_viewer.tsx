@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { render, Button, Input, ScrollView } from '../lib/react-qw/index.js'
 import { bind, WCHAR } from '../lib/ffi/bind.js'
 import { PdfCanvas } from './PdfCanvas.js'
-import { OPENFILENAMEW } from '../lib/win-common-structs.js'
+import { OPENFILENAMEW } from '../lib/windows/structs.js'
 
 type MuPdf = typeof import('../vendor/mupdf-wasm/mupdf.js')
 

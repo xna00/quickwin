@@ -2,7 +2,7 @@ import { PtrArrayBuffer } from '../../ffi/ctype.js'
 import { forwardRef, useState, useRef } from 'react'
 import * as gui from 'gui'
 import { bind, WCHAR } from '../../ffi/bind.js'
-import { OPENFILENAMEW, BROWSEINFOW } from '../../win-common-structs.js'
+import { OPENFILENAMEW, BROWSEINFOW } from '../../windows/structs.js'
 import type { WStyle } from '../jsx.d.ts'
 
 function makeBindings() {

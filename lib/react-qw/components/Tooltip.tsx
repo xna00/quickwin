@@ -1,7 +1,7 @@
 import { useRef, useEffect, Children, cloneElement } from 'react'
 import * as gui from 'gui'
 import { PtrArrayBuffer } from '../../ffi/ctype.js'
-import { struct } from '../../ffi/struct.js'
+import { TTTOOLINFOW } from '../../windows/structs.js'
 import { SetWindowPos } from '../../windows/user32.js'
 
 export interface TooltipProps {
@@ -9,18 +9,6 @@ export interface TooltipProps {
   children: React.ReactElement
   balloon?: boolean
 }
-
-const TTTOOLINFOW = struct({
-  cbSize: 'u32',
-  uFlags: 'u32',
-  hwnd: '<>ptr',
-  uId: '<>ptr',
-  rect: 'i32[4]',
-  hinst: '<>ptr',
-  lpszText: '<>ptr',
-  lParam: '<>ptr',
-  lpReserved: '<>ptr', // WinXP+ 追加字段（系统 sizeof 含之）
-})
 
 function buildToolInfo(hTarget: number, text: string): PtrArrayBuffer<any> {
   const size = TTTOOLINFOW.size

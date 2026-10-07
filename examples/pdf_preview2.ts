@@ -6,7 +6,7 @@ import * as win from 'win'
 import type { Document, Page, Pixmap } from '../vendor/mupdf-wasm/mupdf.js'
 import { assertNonNullable } from '../lib/assert.js'
 import { bind, WCHAR } from '../lib/ffi/bind.js'
-import { OPENFILENAMEW } from '../lib/win-common-structs.js'
+import { OPENFILENAMEW } from '../lib/windows/structs.js'
 
 const _user32 = win.LoadLibrary('user32.dll')
 const _gdi32 = win.LoadLibrary('gdi32.dll')

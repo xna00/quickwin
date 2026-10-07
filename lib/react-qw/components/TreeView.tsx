@@ -1,27 +1,9 @@
 import { forwardRef, useRef, useEffect, useState } from 'react'
 import * as gui from 'gui'
 import { WCHAR } from '../../ffi/bind.js'
-import { struct } from '../../ffi/struct.js'
+import { TVITEM, TVINSERTSTRUCT } from '../../windows/structs.js'
 import { nmCode } from '../nmhdr.js'
 import type { WStyle } from '../jsx.d.ts'
-
-const TVITEM = struct({
-    mask: 'u32',
-    hItem: '<>ptr',
-    state: 'u32',
-    stateMask: 'u32',
-    pszText: '<>ptr',
-    cchTextMax: 'i32',
-    iImage: 'i32',
-    iSelectedImage: 'i32',
-    cChildren: 'i32',
-    lParam: '<>ptr',
-})
-const TVINSERTSTRUCT = struct({
-    hParent: '<>ptr',
-    hInsertAfter: '<>ptr',
-    item: TVITEM.__struct,
-})
 
 export interface TreeNode<D = unknown> {
   key?: string

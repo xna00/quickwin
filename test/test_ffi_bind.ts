@@ -211,7 +211,7 @@ export const suite = {
         t.section('struct layout <NAME>ptr (explicit layouts; param encode + branded ptr return)')
         // 内建 <BYTE>ptr/<WCHAR>ptr 无需 layouts；用户 struct 由 ffi-struct 的
         // struct() 定义、显式传入（import 谁传谁，未用布局可被 tree-shake）。
-        const LOGBRUSH = struct({
+        const LOGBRUSH = struct('LOGBRUSH', {
             lbStyle: 'u32',
             lbColor: 'u32',
             lbHatch: '<>ptr',
@@ -233,11 +233,11 @@ export const suite = {
         if (brushL) t.checkTrue('bindLib DeleteObject succeeds', gdi32Lib.DeleteObject(brushL) !== 0)
 
         // 嵌套 struct（LOGPEN 内含 POINT）验证 ShapeOf 递归 + 子结构写入
-        const POINT = struct({
+        const POINT = struct('POINT', {
             x: 'i32',
             y: 'i32',
         })
-        const LOGPEN = struct({
+        const LOGPEN = struct('LOGPEN', {
             lopnStyle: 'u32',
             lopnWidth: POINT.__struct,
             lopnColor: 'u32',
@@ -283,7 +283,7 @@ export const suite = {
         t.checkTrue('RECT.decode(encode()) decodes out-param', rectV.right > rectV.left && rectV.bottom > rectV.top)
 
         // 成员 '<RECT>ptr'：decode 得到 Ptr<'RECT'>，可直接喂 <RECT>ptr 形参（品牌在类型层流动）。
-        const RECTPTR = struct({r: '<RECT>ptr'})
+        const RECTPTR = struct('RECTPTR', {r: '<RECT>ptr'})
         const box = RECTPTR.decode(RECTPTR.encode({ r: rectOut.ptr }))
         t.checkTrue('GetWindowRect(hwnd, member RECT*) succeeds', box.r !== 0 && getWindowRect(desktop, box.r) !== 0)
         const rectThroughMember = RECT.decode(rectOut)
@@ -293,7 +293,7 @@ export const suite = {
         // 返回位 <NAME>ptr → MaybePtr<NAME>（NULL|Ptr，0 保真，只读指针，品牌在类型层）。
         // 该品牌指针可直接喂给另一函数的 <NAME>ptr 形参（裸地址透传，不重编码）。
         // 链条：localtime(&t) 返回 struct tm* → asctime(tm*) 消费之。
-        const TM = struct({
+        const TM = struct('TM', {
             tm_sec: 'i32',
             tm_min: 'i32',
             tm_hour: 'i32',

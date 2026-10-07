@@ -55,7 +55,7 @@ try {
 // 版本信息缓冲按 148 字节分配并把 dwOSVersionInfoSize 填成同值（尾部 128 字节 = szCSDVersion 区），
 // 否则 RtlGetVersion 会越界写坏 worker 堆导致子进程挂起。注意这不是标准 OSVERSIONINFOW
 // （宽字符 szCSDVersion[128] 应为 276B）；148 是 win11 上实测过的值，保持不变，故用本地结构而非标准定义。
-const OSVERSIONINFO_148 = struct({
+const OSVERSIONINFO_148 = /* @__PURE__ */ struct('OSVERSIONINFO_148', {
     dwOSVersionInfoSize: 'u32',
     dwMajorVersion: 'u32',
     dwMinorVersion: 'u32',
@@ -82,7 +82,7 @@ try {
 // 编码：无统一代码页转换，各程序输出原生字节（qwin= UTF-8、系统命令= GBK）。
 // 同步阻塞读循环（worker 线程自转），主线程事件循环不受影响。
 // CreatePipe 的两个 HANDLE 出参槽：一个结构两个指针字段，读回走 decode
-const PIPE_HANDLES = struct({ hRead: '<>ptr', hWrite: '<>ptr' })
+const PIPE_HANDLES = /* @__PURE__ */ struct('PIPE_HANDLES', { hRead: '<>ptr', hWrite: '<>ptr' })
 
 function runCmd(id: number, cmd: string): number {
     // —— 管道 + 继承设置（读端不可继承，否则 EOF 永不触发）——

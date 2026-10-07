@@ -1,19 +1,9 @@
 import { forwardRef, useRef, useEffect, useState, type ReactNode } from 'react'
 import * as gui from 'gui'
 import { WCHAR } from '../../ffi/bind.js'
-import { struct } from '../../ffi/struct.js'
+import { TCITEMW } from '../../windows/structs.js'
 import { nmCode } from '../nmhdr.js'
 import type { WStyle } from '../jsx.d.ts'
-
-const TCITEMW = struct({
-  mask: 'u32',
-  dwState: 'u32',
-  dwStateMask: 'u32',
-  pszText: '<>ptr',
-  cchTextMax: 'i32',
-  iImage: 'i32',
-  lParam: '<>ptr',
-})
 
 export interface TabProps {
   tabs: { title: string; content: ReactNode }[]
