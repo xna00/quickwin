@@ -3,9 +3,8 @@ import * as gui from 'gui'
 import { LvItemFlag, LvItemState, LvColumnMask } from 'gui'
 import * as ffi from 'ffi'
 import { WCHAR } from '../../ffi/bind.js'
-import type { Ptr } from '../../ffi/ctype.js'
 import { struct } from '../../ffi/struct.js'
-import { NMHDR, PTR_SIZE, nmCode } from '../nmhdr.js'
+import { NMHDR, nmCode } from '../nmhdr.js'
 import { LoadCursor, SetCursor, ScreenToClient, GetCursorPos } from '../../windows/user32.js'
 import { CreateFontIndirect, DeleteObject, GetObject, SelectObject } from '../../windows/gdi32.js'
 import { LOGFONTW, POINT } from '../../windows/structs.js'
@@ -24,22 +23,8 @@ export function makeColorBlock(size: number, bgra: number): ArrayBuffer {
   return buf
 }
 
-function readI32(ptr: number, offset: number): number {
-  return ffi.readByte(ptr + offset) | (ffi.readByte(ptr + offset + 1) << 8) |
-    (ffi.readByte(ptr + offset + 2) << 16) | (ffi.readByte(ptr + offset + 3) << 24)
-}
-
-function readU32(ptr: number, offset: number): number {
-  return ffi.readByte(ptr + offset) | (ffi.readByte(ptr + offset + 1) << 8) |
-    (ffi.readByte(ptr + offset + 2) << 16) | (ffi.readByte(ptr + offset + 3) << 24) >>> 0
-}
-
-function readU64(ptr: number, offset: number): number {
-  const lo = readU32(ptr, offset)
-  const hi = readU32(ptr, offset + 4)
-  return lo + hi * 0x100000000
-}
-
+// 自绘时要把颜色写回通知结构指向的原生内存；struct 的 decode 能读原生指针、encode 只写 ArrayBuffer，
+// 所以这两处写入保留逐字节写（偏移由 struct 的 offsetOf 给出）。
 function writeU32(ptr: number, offset: number, v: number): void {
   ffi.writeByte(ptr + offset, v & 0xFF)
   ffi.writeByte(ptr + offset + 1, (v >> 8) & 0xFF)
@@ -58,7 +43,7 @@ const LV_WS = gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle
 const NMCUSTOMDRAW = struct({
   hdr: NMHDR.__struct,
   dwDrawStage: 'u32',
-  hdc: '<>ptr',
+  hdc: '<HDC>ptr',
   rc: 'i32[4]',
   dwItemSpec: '<>ptr',
   uItemState: 'u32',
@@ -67,7 +52,7 @@ const NMCUSTOMDRAW = struct({
 const NMLVCUSTOMDRAW = struct({
   hdr: NMHDR.__struct,
   dwDrawStage: 'u32',
-  hdc: '<>ptr',
+  hdc: '<HDC>ptr',
   rc: 'i32[4]',
   dwItemSpec: '<>ptr',
   uItemState: 'u32',
@@ -88,16 +73,16 @@ const NMLISTVIEW = struct({
   ptAction: 'i32[2]',
   lParam: '<>ptr',
 })
-const CD_STAGE = NMCUSTOMDRAW.offsetOf('dwDrawStage')
-const CD_HDC = NMCUSTOMDRAW.offsetOf('hdc')
-const CD_ITEM = NMCUSTOMDRAW.offsetOf('dwItemSpec')
 const CD_CLRTEXT = NMLVCUSTOMDRAW.offsetOf('clrText')
 const CD_CLRTEXTBK = NMLVCUSTOMDRAW.offsetOf('clrTextBk')
-const CD_SUBITEM = NMLVCUSTOMDRAW.offsetOf('iSubItem')
-const NMIA_ITEM = NMLISTVIEW.offsetOf('iItem')
-const NMIA_SUBITEM = NMLISTVIEW.offsetOf('iSubItem')
-const NMLV_UNEW = NMLISTVIEW.offsetOf('uNewState')
-const NMLV_UOLD = NMLISTVIEW.offsetOf('uOldState')
+// LVM_SUBITEMHITTEST 的 LVHITTESTINFO（24B）：pt 是入参，iItem/iSubItem 是出参（入参先置 -1）
+const LVHITTESTINFO = struct({
+  pt: 'i32[2]',
+  flags: 'u32',
+  iItem: 'i32',
+  iSubItem: 'i32',
+  iGroup: 'i32',
+})
 
 const LVITEMW = struct({
   mask: 'u32',
@@ -159,25 +144,22 @@ function getCellFont(hwnd: gui.HWND, style: CellStyle): number | null {
 }
 
 function handleCustomDraw<D>(lParam: number, columns: Column<D>[], data: D[], hwnd: gui.HWND | null): number {
-  const stage = readU32(lParam, CD_STAGE)
+  const { dwDrawStage: stage } = NMCUSTOMDRAW.decode(lParam)
   if (stage === gui.CustomDrawStage.PREPAINT) return gui.CustomDrawFlag.NOTIFYITEMDRAW
   if (stage === gui.CustomDrawStage.ITEMPREPAINT) return gui.CustomDrawFlag.NOTIFYSUBITEMDRAW
   if (stage === gui.CustomDrawStage.SUBITEMPREPAINT) {
-    const colIndex = readI32(lParam, CD_SUBITEM)
-    const row = readI32(lParam, CD_ITEM)
-    const style = resolveCellStyle(columns, data, row, colIndex)
+    // 只有子项阶段才按 NMLVCUSTOMDRAW（更大的结构）读，前面的阶段只读了 NMCUSTOMDRAW 的前缀
+    const cd = NMLVCUSTOMDRAW.decode(lParam)
+    const style = resolveCellStyle(columns, data, cd.dwItemSpec, cd.iSubItem)
     if (!style) return gui.CustomDrawFlag.DODEFAULT
 
     if (style.color !== undefined) writeU32(lParam, CD_CLRTEXT, style.color)
     if (style.background !== undefined) writeU32(lParam, CD_CLRTEXTBK, style.background)
 
     const hfont = getCellFont(hwnd!, style)
-    if (hfont) {
-      const hdc = PTR_SIZE === 8 ? readU64(lParam, CD_HDC) : readU32(lParam, CD_HDC)
-      if (hdc) {
-        SelectObject(hdc as Ptr<'HDC'>, hfont)
-        return gui.CustomDrawFlag.NEWFONT
-      }
+    if (hfont && cd.hdc) {
+      SelectObject(cd.hdc, hfont)
+      return gui.CustomDrawFlag.NEWFONT
     }
   }
   return gui.CustomDrawFlag.DODEFAULT
@@ -366,13 +348,11 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
             return handleCustomDraw(e.lParam, columns, data, lvRef.current)
           }
           if (code === gui.LvNotifyCode.ITEMCHANGING) {
-            const uNewState = readU32(e.lParam, NMLV_UNEW)
-            const uOldState = readU32(e.lParam, NMLV_UOLD)
+            const { uNewState, uOldState } = NMLISTVIEW.decode(e.lParam)
             if ((uNewState & LvItemState.SELECTED) !== (uOldState & LvItemState.SELECTED)) return 1
           }
           if (code === gui.LvNotifyCode.CLICK) {
-            const iItem = readI32(e.lParam, NMIA_ITEM)
-            const iSubItem = readI32(e.lParam, NMIA_SUBITEM)
+            const { iItem, iSubItem } = NMLISTVIEW.decode(e.lParam)
             const col = columns[iSubItem]
             const record = data[iItem]
             if (col?.onCellClick && record !== undefined) col.onCellClick(record, iItem)
@@ -398,16 +378,9 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
           ScreenToClient(h, pt.ptr)
           const { x: sx, y: sy } = POINT.decode(pt)
 
-          const lvhi = new ArrayBuffer(24)
-          const lvd = new DataView(lvhi)
-          lvd.setInt32(0, sx, true)
-          lvd.setInt32(4, sy, true)
-          lvd.setInt32(12, -1, true)
-          lvd.setInt32(16, -1, true)
-          const lvhiPtr = bufPtr(lvhi)
-          gui.SendMessage(h, gui.LvMsg.SUBITEMHITTEST, 0, lvhiPtr)
-          const iItem = readI32(lvhiPtr, 12)
-          const iSubItem = readI32(lvhiPtr, 16)
+          const hit = LVHITTESTINFO.encode({ pt: [sx, sy], iItem: -1, iSubItem: -1 })
+          gui.SendMessage(h, gui.LvMsg.SUBITEMHITTEST, 0, hit.ptr)
+          const { iItem, iSubItem } = LVHITTESTINFO.decode(hit)
           const style = resolveCellStyle(columns, data, iItem, iSubItem)
           if (!style || style.cursor === undefined) return
           const hc = LoadCursor(0, style.cursor)
