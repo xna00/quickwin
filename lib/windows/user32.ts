@@ -3,7 +3,7 @@
 //   - WPARAM / LPARAM / LRESULT / UINT_PTR / LONG_PTR 及句柄混合值一律 <>ptr（指针宽度跨
 //     架构正确；返回值 0 归一为 null、有符号读对齐 C 版 JS_NewInt64——-1 哨兵等负值保真）
 //   - 入参字符串用 <WCHAR>ptr（string 编码为 UTF-16 + NUL，null → NULL 指针）；文本出参缓冲
-//     用 <BYTE>ptr（宽字符串出参配 WCHAR.alloc(n).buf 当 buffer、WCHAR.decode(buf) 读回）；
+//     用 <BYTE>ptr（宽字符串出参配 WCHAR.alloc(n) 当 buffer、WCHAR.decode(buf) 读回）；
 //     回调参数用 <>ptr 接 closure() 的 ptr
 //   - 结构位按方向分流（结构定义见 ./structs.ts）：
 //       纯入参位 <N>ptr + 注册 encoder → DeepPartial 对象直传（缺省字段 doEncode 跳过）、
@@ -77,14 +77,14 @@ export const FindWindow = /*@__PURE__*/ b('FindWindowW', '<WCHAR>ptr <WCHAR>ptr 
 export const FindWindowEx = /*@__PURE__*/ b('FindWindowExW',
     '<HWND>ptr <HWND>ptr <WCHAR>ptr <WCHAR>ptr -> <HWND>ptr')
 /** 取窗口标题（宽字符写入 out buffer，返回写入字符数，不含 NUL）；
- *  out 传 WCHAR.alloc(n).buf（n = 字符数），读回 WCHAR.decode(buf) */
+ *  out 传 WCHAR.alloc(n)（n = 字符数），读回 WCHAR.decode(buf) */
 export const GetWindowText = /*@__PURE__*/ b('GetWindowTextW', '<HWND>ptr <BYTE>ptr i32 -> i32')
 /** 设窗口标题（传 string 或 null 清空）；成功 → 非 0 */
 export const SetWindowText = /*@__PURE__*/ b('SetWindowTextW', '<HWND>ptr <WCHAR>ptr -> i32')
 /** 取窗口标题长度（字符数，不含 NUL） */
 export const GetWindowTextLength = /*@__PURE__*/ b('GetWindowTextLengthW', '<HWND>ptr -> i32')
 /** 取窗口类名（宽字符写入 out buffer，返回字符数）；
- *  out 传 WCHAR.alloc(n).buf（n = 字符数），读回 WCHAR.decode(buf) */
+ *  out 传 WCHAR.alloc(n)（n = 字符数），读回 WCHAR.decode(buf) */
 export const GetClassName = /*@__PURE__*/ b('GetClassNameW', '<HWND>ptr <BYTE>ptr i32 -> i32')
 /** 取窗口附加数据（GWLP_* / GWL_* 索引）；0 → null（值有符号读；ia32 走 GetWindowLongW） */
 export const GetWindowLongPtr = /*@__PURE__*/ b('GetWindowLong' + LONG_PTR_SYM, '<HWND>ptr i32 -> <>ptr')

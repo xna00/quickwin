@@ -1,3 +1,4 @@
+import type { PtrArrayBuffer } from '../../ffi/ctype.js'
 import { forwardRef, useRef, useEffect, type ForwardedRef } from 'react'
 import * as gui from 'gui'
 import { LvItemFlag, LvItemState, LvColumnMask } from 'gui'
@@ -32,9 +33,6 @@ function writeU32(ptr: number, offset: number, v: number): void {
   ffi.writeByte(ptr + offset + 3, (v >> 24) & 0xFF)
 }
 
-function bufPtr(buf: ArrayBuffer): number {
-  return ffi.bufferPtr(buf)
-}
 
 const LV_WS = gui.WindowStyle.VISIBLE | gui.WindowStyle.BORDER | gui.WindowStyle.VSCROLL | gui.WindowStyle.HSCROLL
   | gui.ListViewStyle.REPORT | gui.ListViewStyle.SINGLESEL
@@ -220,15 +218,15 @@ function resolveCellStyle<D>(columns: Column<D>[], data: D[], row: number, colIn
   return style || undefined
 }
 
-function makeLVItem(i: number, sub: number, text: string, image?: number): ArrayBuffer {
+function makeLVItem(i: number, sub: number, text: string, image?: number): PtrArrayBuffer<any> & { __textBuf?: ArrayBuffer } {
   const textBuf = WCHAR.encode(text)
-  const b: ArrayBuffer & { __textBuf?: ArrayBuffer } = LVITEMW.encode({
+  const b: PtrArrayBuffer<any> & { __textBuf?: ArrayBuffer } = LVITEMW.encode({
     mask: LvItemFlag.TEXT | (image !== undefined ? LvItemFlag.IMAGE : 0),
     iItem: i,
     iSubItem: sub,
     state: 0,
     stateMask: 0,
-    pszText: bufPtr(textBuf),
+    pszText: textBuf.ptr,
     cchTextMax: 0,
     iImage: image ?? 0,
     lParam: 0,
@@ -292,11 +290,11 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
     const n = columns.length
     for (let j = 0; j < n; j++) {
       const titleBuf = WCHAR.encode(columns[j]!.name)
-      const lvc: ArrayBuffer & { __titleBuf?: ArrayBuffer } = LVCOLUMNW.encode({
+      const lvc: PtrArrayBuffer<any> & { __titleBuf?: ArrayBuffer } = LVCOLUMNW.encode({
         mask: LvColumnMask.TEXT | LvColumnMask.WIDTH | LvColumnMask.FORMAT,
         fmt: alignToFmt(columns[j]!.align),
         cx: columns[j]!.width ?? 100,
-        pszText: bufPtr(titleBuf),
+        pszText: titleBuf.ptr,
         cchTextMax: 0,
         iSubItem: j,
         iImage: 0,
@@ -306,7 +304,7 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
         cxIdeal: 0,
       })
       lvc.__titleBuf = titleBuf
-      gui.SendMessage(h, gui.LvMsg.INSERTCOLUMNW, j, bufPtr(lvc))
+      gui.SendMessage(h, gui.LvMsg.INSERTCOLUMNW, j, lvc.ptr)
     }
   }, [columns])
 
@@ -321,11 +319,11 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
       const record = data[i]!
       const img = getIcon ? getIcon(record, i) : undefined
       const itemBuf = makeLVItem(i, 0, cellText(record, columns[0]!, i), img)
-      gui.SendMessage(h, gui.LvMsg.INSERTITEMW, 0, bufPtr(itemBuf))
+      gui.SendMessage(h, gui.LvMsg.INSERTITEMW, 0, itemBuf.ptr)
 
       for (let j = 1; j < nCols; j++) {
         const subBuf = makeLVItem(i, j, cellText(record, columns[j]!, i))
-        gui.SendMessage(h, gui.LvMsg.SETITEMW, 0, bufPtr(subBuf))
+        gui.SendMessage(h, gui.LvMsg.SETITEMW, 0, subBuf.ptr)
       }
     }
 

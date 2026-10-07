@@ -2,7 +2,7 @@ import * as os from 'os'
 import { Tester } from './test_helper.js'
 import { struct, union } from '../lib/ffi/struct.js'
 import { bind, } from '../lib/ffi/bind.js'
-import { type MaybePtr, Ptr } from '../lib/ffi/ctype.js'
+import { type MaybePtr, Ptr, PtrArrayBuffer } from '../lib/ffi/ctype.js'
 import type { C_Union } from '../lib/ffi/ctype.js'
 
 // 编译期断言工具（仅类型层，运行时无开销）
@@ -69,7 +69,7 @@ export const suite = {
         const getWindowRectLayout = bind('user32.dll', 'GetWindowRect', '<>ptr <RECT>ptr -> int', { RECT })
         const getDesktopWindow = bind('user32.dll', 'GetDesktopWindow', ' -> <>ptr')
         const hwnd = getDesktopWindow()
-        const wrect = new ArrayBuffer(16)
+        const wrect = new PtrArrayBuffer(16)
         const ok = getWindowRect(hwnd, wrect)
         t.checkTrue('GetWindowRect succeeds', ok !== 0)
         const wr = RECT.decode(wrect)

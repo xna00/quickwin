@@ -1,7 +1,7 @@
 import * as os from 'os'
 import * as std from 'std'
 import { bind, closure, WCHAR } from '../lib/ffi/bind.js'
-import { NULL, type Ptr } from '../lib/ffi/ctype.js'
+import { NULL, type Ptr, PtrArrayBuffer } from '../lib/ffi/ctype.js'
 import { struct } from '../lib/ffi/struct.js'
 import {
     CloseHandle, CreatePipe, CreateProcess, GetExitCodeProcess, GetLastError, GetSystemDirectory,
@@ -43,8 +43,8 @@ const parent = os.Worker.parent
 let sysDir = 'C:\\Windows\\System32'
 try {
     const out = WCHAR.alloc(256)
-    const n = GetSystemDirectory(out.buf, 256)
-    const s = n > 0 ? WCHAR.decode(out.buf) : ''
+    const n = GetSystemDirectory(out, 256)
+    const s = n > 0 ? WCHAR.decode(out) : ''
     if (s) sysDir = s
 } catch (ex) {
     diagFile('SYS-DIR-FAIL: ' + String(ex))
@@ -110,19 +110,22 @@ function runCmd(id: number, cmd: string): number {
     parent.postMessage({ type: 'info', id, pid: dwProcessId })
 
     // —— 同步阻塞读循环（子进程树全退出、写端全关 -> EOF -> 收尾）——
-    const buf = new Uint8Array(4096)
-    const nRead = new Uint32Array(1)
+    const bufB = new PtrArrayBuffer(4096)
+    const buf = new Uint8Array(bufB)
+    const nReadB = new PtrArrayBuffer(4)
+    const nRead = new Uint32Array(nReadB)
     for (;;) {
         nRead[0] = 0
-        if (!ReadFile(hRead, buf.buffer as ArrayBuffer, 4096, nRead.buffer as ArrayBuffer, NULL)) break
+        if (!ReadFile(hRead, bufB, 4096, nReadB, NULL)) break
         const n = nRead[0]!
         if (n === 0) break
         parent.postMessage({ type: 'data', id, chunk: buf.slice(0, n) })
     }
 
     WaitForSingleObject(hProcess, WAIT_INFINITE)
-    const ec = new Int32Array(1)
-    GetExitCodeProcess(hProcess, ec.buffer as ArrayBuffer)
+    const ecB = new PtrArrayBuffer(4)
+    const ec = new Int32Array(ecB)
+    GetExitCodeProcess(hProcess, ecB)
     const code = ec[0]!
     CloseHandle(hRead)
     CloseHandle(hProcess)
@@ -170,7 +173,8 @@ function bmpHeader(size: number, w: number, h: number): Uint8Array {
 
 // 取 hdc 当前选中位图的全部像素，按 BMP 分块发出。返回 GetDIBits 是否全量成功。
 function emitDib(id: number, hdc: Ptr<'HDC'>, hbm: number, w: number, h: number): boolean {
-    const px = new Uint8Array(w * h * 4)
+    const pxB = new PtrArrayBuffer(w * h * 4)
+    const px = new Uint8Array(pxB)
     const bmi = BITMAPINFOHEADER.encode({
         biSize: BITMAPINFOHEADER.size,
         biWidth: w,
@@ -180,7 +184,7 @@ function emitDib(id: number, hdc: Ptr<'HDC'>, hbm: number, w: number, h: number)
         biSizeImage: w * h * 4,
     })
 
-    const got = GetDIBits(hdc, hbm, 0, h, px.buffer as ArrayBuffer, bmi.ptr, DIB_RGB_COLORS)
+    const got = GetDIBits(hdc, hbm, 0, h, pxB, bmi.ptr, DIB_RGB_COLORS)
     if (got !== h) return false
 
     const size = px.byteLength
@@ -348,8 +352,8 @@ function listWindows(id: number): void {
     try { EnumWindows(collect.ptr, NULL) } finally { collect.dispose() }
 
     const wRect = RECT.encode()
-    const tb = WCHAR.alloc(WIDE_BUF_CHARS).buf
-    const cb = WCHAR.alloc(WIDE_BUF_CHARS).buf
+    const tb = WCHAR.alloc(WIDE_BUF_CHARS)
+    const cb = WCHAR.alloc(WIDE_BUF_CHARS)
 
     const out: Array<Record<string, unknown>> = []
     for (const hwnd of handles) {

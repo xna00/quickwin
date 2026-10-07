@@ -1,6 +1,6 @@
+import type { PtrArrayBuffer } from '../../ffi/ctype.js'
 import { forwardRef, useRef, useEffect, useState, type Ref } from 'react'
 import * as gui from 'gui'
-import * as ffi from 'ffi'
 import { struct } from '../../ffi/struct.js'
 import { InvalidateRect } from '../../windows/user32.js'
 import { NULL } from '../../ffi/ctype.js'
@@ -33,11 +33,8 @@ export interface DateTimePickerProps {
   style?: WStyle
 }
 
-function bufPtr(buf: ArrayBuffer): number {
-  return ffi.bufferPtr(buf)
-}
 
-function dateToSysTimeBuf(d: Date): ArrayBuffer {
+function dateToSysTimeBuf(d: Date): PtrArrayBuffer<any> {
   // wDayOfWeek 设置时被忽略，缺省跳过 = 0
   return SYSTEMTIME.encode({
     wYear: d.getFullYear(),
@@ -73,7 +70,7 @@ const DateTimePicker = forwardRef(function DateTimePicker(
     const d = effectiveDate
     if (d) {
       const buf = dateToSysTimeBuf(d)
-      gui.SendMessage(h, gui.DtMsg.SETSYSTEMTIME, gui.DtFlag.GDT_VALID, bufPtr(buf))
+      gui.SendMessage(h, gui.DtMsg.SETSYSTEMTIME, gui.DtFlag.GDT_VALID, buf.ptr)
     } else {
       gui.SendMessage(h, gui.DtMsg.SETSYSTEMTIME, gui.DtFlag.GDT_NONE, 0)
     }

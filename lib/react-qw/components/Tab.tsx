@@ -1,6 +1,5 @@
 import { forwardRef, useRef, useEffect, useState, type ReactNode } from 'react'
 import * as gui from 'gui'
-import * as ffi from 'ffi'
 import { WCHAR } from '../../ffi/bind.js'
 import { struct } from '../../ffi/struct.js'
 import { nmCode } from '../nmhdr.js'
@@ -41,12 +40,12 @@ export const Tab = forwardRef<gui.HWND, TabProps>(
           mask: gui.TcItemFlag.TEXT,
           dwState: 0,
           dwStateMask: 0,
-          pszText: ffi.bufferPtr(titleBuf),
+          pszText: titleBuf.ptr,
           cchTextMax: tabs[i]!.title.length + 1,
           iImage: 0,
           lParam: 0,
         })
-        const tciPtr = ffi.bufferPtr(tci)
+        const tciPtr = tci.ptr
         gui.SendMessage(h, gui.TcMsg.INSERTITEMW, i, tciPtr)
       }
       gui.SendMessage(h, gui.TcMsg.SETCURSEL, sel, 0)
