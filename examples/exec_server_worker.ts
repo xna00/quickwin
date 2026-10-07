@@ -3,11 +3,19 @@ import * as std from 'std'
 import * as ffi from 'ffi'
 import '../lib/text-codec.js'
 import { bind } from '../lib/ffi/bind.js'
-import { NULL } from '../lib/ffi/ctype.js'
+import { NULL, type Ptr } from '../lib/ffi/ctype.js'
 import {
     CloseHandle, CreatePipe, CreateProcess, GetExitCodeProcess, GetLastError, GetSystemDirectory,
     GetSystemInfo, ReadFile, SetHandleInformation, WaitForSingleObject,
 } from '../lib/windows/kernel32.js'
+import {
+    ClientToScreen, FindWindowEx, GetClassName, GetClientRect, GetDC, GetSystemMetrics, GetWindowRect,
+    GetWindowText, IsIconic, IsWindowVisible, PrintWindow, ReleaseDC,
+} from '../lib/windows/user32.js'
+import {
+    BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, SelectObject,
+} from '../lib/windows/gdi32.js'
+import { POINT, RECT } from '../lib/windows/structs.js'
 
 // worker 没有可观测的输出通道：绑定失败会静默中断 worker 脚本，主线程永远等不到消息。
 // 失败原因落盘 diag.log 以便定位（典型：DLL 位数与进程不匹配 -> ERROR_BAD_EXE_FORMAT 193）。
@@ -188,46 +196,6 @@ const MAX_CAPTURE_PX = 40000000
 const WIDE_BUF_CHARS = 512
 const MAX_WINDOWS = 20000
 
-let GDI: { u: any; g: any } | null = null
-
-// 惰性绑定 + 失败落 diag：worker 没有可观测输出通道，绑定失败会静默中断脚本，
-// 主线程永远等不到消息（与 kernel32 那组绑定同样的处理方式）。
-function gdi(): { u: any; g: any } {
-    if (GDI !== null) return GDI
-    try {
-        const u = {
-            getSystemMetrics: bind('user32.dll', 'GetSystemMetrics', 'i32 -> i32'),
-            getDC: bind('user32.dll', 'GetDC', '<>ptr -> <>ptr'),
-            releaseDC: bind('user32.dll', 'ReleaseDC', '<>ptr <>ptr -> i32'),
-            getWindowRect: bind('user32.dll', 'GetWindowRect', 'HWND <>ptr -> BOOL'),
-            getClientRect: bind('user32.dll', 'GetClientRect', 'HWND <>ptr -> BOOL'),
-            clientToScreen: bind('user32.dll', 'ClientToScreen', 'HWND <>ptr -> BOOL'),
-            isWindowVisible: bind('user32.dll', 'IsWindowVisible', 'HWND -> BOOL'),
-            isIconic: bind('user32.dll', 'IsIconic', 'HWND -> BOOL'),
-            getWindowTextW: bind('user32.dll', 'GetWindowTextW', 'HWND <>ptr u32 -> i32'),
-            getClassNameW: bind('user32.dll', 'GetClassNameW', 'HWND <>ptr u32 -> i32'),
-            findWindowExW: bind('user32.dll', 'FindWindowExW', 'HWND HWND <WCHAR>ptr <WCHAR>ptr -> HWND'),
-            // PrintWindow 第 4 参是 Windows 8.1+ 的 PW_* flags；XP/Win7 忽略之。
-            // 多传一个参数在 __cdecl 下无害（调用者清栈），且在 8.1+ 上传 0 即普通行为。
-            printWindow: bind('user32.dll', 'PrintWindow', 'HWND HDC i32 u32 -> BOOL'),
-        }
-        const g = {
-            createCompatibleDC: bind('gdi32.dll', 'CreateCompatibleDC', 'HDC -> HDC'),
-            createCompatibleBitmap: bind('gdi32.dll', 'CreateCompatibleBitmap', 'HDC i32 i32 -> HBITMAP'),
-            selectObject: bind('gdi32.dll', 'SelectObject', 'HDC HBITMAP -> <>ptr'),
-            bitBlt: bind('gdi32.dll', 'BitBlt', 'HDC i32 i32 i32 i32 HDC i32 i32 UINT -> BOOL'),
-            getDIBits: bind('gdi32.dll', 'GetDIBits', 'HDC HBITMAP u32 u32 <>ptr <>ptr UINT -> i32'),
-            deleteObject: bind('gdi32.dll', 'DeleteObject', 'HBITMAP -> i32'),
-            deleteDC: bind('gdi32.dll', 'DeleteDC', 'HDC -> i32'),
-        }
-        GDI = { u, g }
-        return GDI
-    } catch (ex) {
-        diagFile('GDI-BIND-FAIL: ' + String(ex))
-        throw ex
-    }
-}
-
 function bmpHeader(size: number, w: number, h: number): Uint8Array {
     const b = new Uint8Array(54)
     const dv = new DataView(b.buffer)
@@ -249,8 +217,7 @@ function bmpHeader(size: number, w: number, h: number): Uint8Array {
 }
 
 // 取 hdc 当前选中位图的全部像素，按 BMP 分块发出。返回 GetDIBits 是否全量成功。
-function emitDib(id: number, hdc: number, hbm: number, w: number, h: number): boolean {
-    const { g } = gdi()
+function emitDib(id: number, hdc: Ptr<'HDC'>, hbm: number, w: number, h: number): boolean {
     const px = new Uint8Array(w * h * 4)
     const bmi = zeroBuf(40)
     const bp = ffi.bufferPtr(bmi)
@@ -261,7 +228,7 @@ function emitDib(id: number, hdc: number, hbm: number, w: number, h: number): bo
     u32At(bp, 14, 32)           // biBitCount（biCompression 落 0 = BI_RGB）
     u32At(bp, 20, w * h * 4)    // biSizeImage
 
-    const got = g.getDIBits(hdc, hbm, 0, h, ffi.bufferPtr(px.buffer), bp, DIB_RGB_COLORS)
+    const got = GetDIBits(hdc, hbm, 0, h, ffi.bufferPtr(px.buffer), bp, DIB_RGB_COLORS)
     if (got !== h) return false
 
     const size = px.byteLength
@@ -275,22 +242,21 @@ function emitDib(id: number, hdc: number, hbm: number, w: number, h: number): bo
 // PrintWindow 到整窗临时 DC，再用 BitBlt 裁出子矩形到 hdcOut。临时 DC 用完立即归还。
 // 裁切在 GDI 里做（第二块 DC + BitBlt），不在 JS 里逐像素拷：既省一份整帧缓冲，
 // 也不会把客户区偏移和 BitBlt 的源坐标重复应用。
-function printAndCrop(hdcScreen: number, hwnd: number, frameW: number, frameH: number,
-    hdcOut: number, cropX: number, cropY: number, outW: number, outH: number): boolean {
-    const { u, g } = gdi()
-    const hdcTmp = g.createCompatibleDC(hdcScreen)
-    const hbmTmp = hdcTmp ? g.createCompatibleBitmap(hdcScreen, frameW, frameH) : 0
+function printAndCrop(hdcScreen: Ptr<'HDC'>, hwnd: Ptr<'HWND'>, frameW: number, frameH: number,
+    hdcOut: Ptr<'HDC'>, cropX: number, cropY: number, outW: number, outH: number): boolean {
+    const hdcTmp = CreateCompatibleDC(hdcScreen)
+    const hbmTmp = hdcTmp ? CreateCompatibleBitmap(hdcScreen, frameW, frameH) : 0
     if (!hdcTmp || !hbmTmp) {
-        if (hdcTmp) g.deleteDC(hdcTmp)
+        if (hdcTmp) DeleteDC(hdcTmp)
         return false
     }
-    const oldTmp = g.selectObject(hdcTmp, hbmTmp)
-    // PrintWindow 从 (0,0) 填整张位图，所以必须给整窗尺寸
-    const printed = u.printWindow(hwnd, hdcTmp, 0, 0) !== 0
-    const cropped = printed && g.bitBlt(hdcOut, 0, 0, outW, outH, hdcTmp, cropX, cropY, SRCCOPY) !== 0
-    g.selectObject(hdcTmp, oldTmp)
-    g.deleteObject(hbmTmp)
-    g.deleteDC(hdcTmp)
+    const oldTmp = SelectObject(hdcTmp, hbmTmp)
+    // PrintWindow 从 (0,0) 填整张位图，所以必须给整窗尺寸；nFlags 传 0（XP/Win7 无 PW_* 语义）
+    const printed = PrintWindow(hwnd, hdcTmp, 0) !== 0
+    const cropped = printed && BitBlt(hdcOut, 0, 0, outW, outH, hdcTmp, cropX, cropY, SRCCOPY) !== 0
+    SelectObject(hdcTmp, oldTmp)
+    DeleteObject(hbmTmp)
+    DeleteDC(hdcTmp)
     return cropped
 }
 
@@ -302,9 +268,8 @@ function printAndCrop(hdcScreen: number, hwnd: number, frameW: number, frameH: n
 // 注意：BitBlt 自 GetDC(NULL) 截的是「调用线程所在 session 的输入桌面」，
 // 在 sshd / service（session 0）里跑会得到全黑图且**不报错**——调用方要校验像素内容。
 function captureRect(id: number, frameW: number, frameH: number, srcX: number, srcY: number,
-    cropX: number, cropY: number, outW: number, outH: number, hwnd: number | null):
+    cropX: number, cropY: number, outW: number, outH: number, hwnd: Ptr<'HWND'> | null):
     { width: number; height: number } {
-    const { u, g } = gdi()
     // 用否定式判断：NaN 会让 `> 0` 与 `> 上限` 同时为假，正写会漏过
     if (!(outW > 0 && outH > 0 && outW * outH <= MAX_CAPTURE_PX)) {
         throw new Error('capture size invalid w=' + outW + ' h=' + outH)
@@ -315,29 +280,29 @@ function captureRect(id: number, frameW: number, frameH: number, srcX: number, s
             + ') frame=' + frameW + 'x' + frameH)
     }
 
-    const hdcScreen = u.getDC(NULL)
+    const hdcScreen = GetDC(NULL)
     if (!hdcScreen) {
         throw new Error('GetDC(NULL)=0：无输入桌面（确认在交互 session 启动，而非 sshd/service）')
     }
     // 必须传屏幕 DC 建位图：CreateCompatibleBitmap 按「当前选中对象」决定位图格式，
     // 传 hdcOut 时它选中的是 1×1 单色图 → 建出 1×1 位图，BitBlt 被裁剪到 1 像素
     // （症状：blit=1、getdibits=h 都成功，但缓冲区几乎全 0）。
-    const hdcOut = g.createCompatibleDC(hdcScreen)
-    const hbmOut = hdcOut ? g.createCompatibleBitmap(hdcScreen, outW, outH) : 0
+    const hdcOut = CreateCompatibleDC(hdcScreen)
+    const hbmOut = hdcOut ? CreateCompatibleBitmap(hdcScreen, outW, outH) : 0
     if (!hdcOut || !hbmOut) {
-        if (hdcOut) g.deleteDC(hdcOut)
-        u.releaseDC(NULL, hdcScreen)
+        if (hdcOut) DeleteDC(hdcOut)
+        ReleaseDC(NULL, hdcScreen)
         throw new Error('CreateCompatibleDC/Bitmap failed')
     }
-    const oldOut = g.selectObject(hdcOut, hbmOut)
+    const oldOut = SelectObject(hdcOut, hbmOut)
     const ok = hwnd === null
-        ? g.bitBlt(hdcOut, 0, 0, outW, outH, hdcScreen, srcX, srcY, SRCCOPY) !== 0
+        ? BitBlt(hdcOut, 0, 0, outW, outH, hdcScreen, srcX, srcY, SRCCOPY) !== 0
         : printAndCrop(hdcScreen, hwnd, frameW, frameH, hdcOut, cropX, cropY, outW, outH)
-    g.selectObject(hdcOut, oldOut)
+    SelectObject(hdcOut, oldOut)
     const complete = ok && emitDib(id, hdcOut, hbmOut, outW, outH)
-    g.deleteObject(hbmOut)
-    g.deleteDC(hdcOut)
-    u.releaseDC(NULL, hdcScreen)
+    DeleteObject(hbmOut)
+    DeleteDC(hdcOut)
+    ReleaseDC(NULL, hdcScreen)
 
     if (!ok) {
         throw new Error('capture failed out=' + outW + 'x' + outH
@@ -350,31 +315,24 @@ function captureRect(id: number, frameW: number, frameH: number, srcX: number, s
 
 // 抓主屏全屏
 function captureScreen(id: number): { width: number; height: number } {
-    const { u } = gdi()
-    const w = u.getSystemMetrics(0)
-    const h = u.getSystemMetrics(1)
+    const w = GetSystemMetrics(0)
+    const h = GetSystemMetrics(1)
     if (w <= 0 || h <= 0) throw new Error('GetSystemMetrics w=' + w + ' h=' + h)
     return captureRect(id, w, h, 0, 0, 0, 0, w, h, null)
 }
 
 // 抓单个窗口。area=client 只抓客户区；mode=print 让窗口自行重绘（窗口可被遮挡、可最小化）。
-function captureWindow(id: number, hwnd: number, area: 'window' | 'client', mode: 'screen' | 'print'):
+function captureWindow(id: number, hwnd: Ptr<'HWND'>, area: 'window' | 'client', mode: 'screen' | 'print'):
     { width: number; height: number } {
-    const { u } = gdi()
-    if (mode === 'screen' && u.isIconic(hwnd) !== 0) {
+    if (mode === 'screen' && IsIconic(hwnd) !== 0) {
         throw new Error('window minimized：mode=screen 只会截到它下方的桌面，改用 mode=print')
     }
 
-    const wb = zeroBuf(16)
-    const wp = ffi.bufferPtr(wb)
-    if (!u.getWindowRect(hwnd, wp)) {
+    const wRect = RECT.encode()
+    if (!GetWindowRect(hwnd, wRect.ptr)) {
         throw new Error('GetWindowRect(hwnd=' + hwnd + ')=0：窗口不存在或已销毁')
     }
-    const wdv = new DataView(wb)
-    const wl = wdv.getInt32(0, true)
-    const wt = wdv.getInt32(4, true)
-    const wr = wdv.getInt32(8, true)
-    const wbot = wdv.getInt32(12, true)
+    const { left: wl, top: wt, right: wr, bottom: wbot } = RECT.decode(wRect)
     const ww = wr - wl
     const wh = wbot - wt
 
@@ -383,23 +341,18 @@ function captureWindow(id: number, hwnd: number, area: 'window' | 'client', mode
     let cw = ww
     let ch = wh
     if (area === 'client') {
-        const cb = zeroBuf(16)
-        const cp = ffi.bufferPtr(cb)
-        if (!u.getClientRect(hwnd, cp)) throw new Error('GetClientRect(hwnd=' + hwnd + ')=0')
-        const cdv = new DataView(cb)
+        const cRect = RECT.encode()
+        if (!GetClientRect(hwnd, cRect.ptr)) throw new Error('GetClientRect(hwnd=' + hwnd + ')=0')
         // 客户区坐标以客户区左上角为原点，left/top 恒为 0，不是窗口→客户的偏移；
         // 边框和标题栏的位移必须用 ClientToScreen(0,0) 单独查。尺寸取差值（同理不假设 left/top）。
-        const cl = cdv.getInt32(0, true)
-        const ct = cdv.getInt32(4, true)
-        const cr = cdv.getInt32(8, true)
-        const cbot = cdv.getInt32(12, true)
+        const { left: cl, top: ct, right: cr, bottom: cbot } = RECT.decode(cRect)
         cw = cr - cl
         ch = cbot - ct
-        u32At(cp, 0, 0)
-        u32At(cp, 4, 0)
-        if (!u.clientToScreen(hwnd, cp)) throw new Error('ClientToScreen(hwnd=' + hwnd + ')=0')
-        cropX = rdI32(cp) - wl
-        cropY = rdI32(cp + 4) - wt
+        const origin = POINT.encode({ x: 0, y: 0 })
+        if (!ClientToScreen(hwnd, origin.ptr)) throw new Error('ClientToScreen(hwnd=' + hwnd + ')=0')
+        const org = POINT.decode(origin)
+        cropX = org.x - wl
+        cropY = org.y - wt
     }
     // screen：srcX/srcY 给绝对屏幕坐标，截出的就是输出本身，crop 无意义（传 0 即可，反正被忽略）；
     // print：PrintWindow 只能从 (0,0) 画整窗，客户区靠 crop 从整窗位图里裁出来。
@@ -409,10 +362,10 @@ function captureWindow(id: number, hwnd: number, area: 'window' | 'client', mode
     if (mode === 'screen') {
         // clamp 捕获区域到虚拟屏幕内：窗口超出屏幕时 BitBlt 从屏幕外只能截到黑区，
         // 直接把发出的 BMP 裁到窗口在屏幕内的可见部分（dims 也随之收缩）。
-        const vsX = u.getSystemMetrics(76) // SM_XVIRTUALSCREEN
-        const vsY = u.getSystemMetrics(77) // SM_YVIRTUALSCREEN
-        const vsW = u.getSystemMetrics(78) // SM_CXVIRTUALSCREEN
-        const vsH = u.getSystemMetrics(79) // SM_CYVIRTUALSCREEN
+        const vsX = GetSystemMetrics(76) // SM_XVIRTUALSCREEN
+        const vsY = GetSystemMetrics(77) // SM_YVIRTUALSCREEN
+        const vsW = GetSystemMetrics(78) // SM_CXVIRTUALSCREEN
+        const vsH = GetSystemMetrics(79) // SM_CYVIRTUALSCREEN
         const ax = Math.max(sx, vsX)
         const ay = Math.max(sy, vsY)
         const ax2 = Math.min(sx + cw, vsX + vsW)
@@ -440,36 +393,29 @@ function readWide(p: number, nChars: number): string {
 // 顶层窗口列表（不递归子控件）。用 FindWindowExW 链式遍历
 //（lib/ffi/bind.ts 的 closure() 已支持 EnumWindows 类回调，此处沿用既有实现）。
 function listWindows(id: number): void {
-    const { u } = gdi()
-    const wb = zeroBuf(16)
+    const wRect = RECT.encode()
     const tb = zeroBuf(WIDE_BUF_CHARS * 2)
     const cb = zeroBuf(WIDE_BUF_CHARS * 2)
-    const wp = ffi.bufferPtr(wb)
     const tp = ffi.bufferPtr(tb)
     const cp = ffi.bufferPtr(cb)
 
     const out: Array<Record<string, unknown>> = []
-    let hwnd = u.findWindowExW(NULL, 0, NULL, NULL)
+    let hwnd = FindWindowEx(NULL, NULL, NULL, NULL)
     while (hwnd && out.length < MAX_WINDOWS) {
         // 先取下一个句柄，避免本次查询期间窗口关闭导致当前句柄失效
-        const next = u.findWindowExW(NULL, hwnd, NULL, NULL)
+        const next = FindWindowEx(NULL, hwnd, NULL, NULL)
 
-        if (u.getWindowRect(hwnd, wp)) {
-            const dv = new DataView(wb)
-            const tl = u.getWindowTextW(hwnd, tp, WIDE_BUF_CHARS)
-            const cl = u.getClassNameW(hwnd, cp, WIDE_BUF_CHARS)
+        if (GetWindowRect(hwnd, wRect.ptr)) {
+            const rc = RECT.decode(wRect)
+            const tl = GetWindowText(hwnd, tb, WIDE_BUF_CHARS)
+            const cl = GetClassName(hwnd, cb, WIDE_BUF_CHARS)
             out.push({
                 hwnd,
                 title: readWide(tp, tl),
                 className: readWide(cp, cl),
-                rect: {
-                    left: dv.getInt32(0, true),
-                    top: dv.getInt32(4, true),
-                    right: dv.getInt32(8, true),
-                    bottom: dv.getInt32(12, true)
-                },
-                visible: u.isWindowVisible(hwnd) !== 0,
-                minimized: u.isIconic(hwnd) !== 0
+                rect: { left: rc.left, top: rc.top, right: rc.right, bottom: rc.bottom },
+                visible: IsWindowVisible(hwnd) !== 0,
+                minimized: IsIconic(hwnd) !== 0
             })
         }
         hwnd = next
@@ -503,7 +449,8 @@ function handleRequest(msg: {
     }
     if (msg.type === 'screenshot') {
         try {
-            const hwnd = msg.hwnd ?? null
+            // JSON 来的句柄是普通 number，在消息边界一次性标 HWND 品牌（有效性由 Win32 判定）
+            const hwnd = (msg.hwnd ?? null) as Ptr<'HWND'> | null
             const { width, height } = hwnd === null
                 ? captureScreen(msg.id)
                 : captureWindow(msg.id, hwnd, msg.area ?? 'window', msg.mode ?? 'screen')
