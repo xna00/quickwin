@@ -3,6 +3,7 @@ import * as gui from 'gui'
 import * as ffi from 'ffi'
 import { struct } from '../../ffi/struct.js'
 import { InvalidateRect } from '../../windows/user32.js'
+import { NULL } from '../../ffi/ctype.js'
 import { NMHDR, nmCode, readI32At, readU16At } from '../nmhdr.js'
 import type { WStyle } from '../jsx.d.ts'
 
@@ -82,7 +83,7 @@ const DateTimePicker = forwardRef(function DateTimePicker(
   useEffect(() => {
     const h = dpRef.current
     if (!h) return
-    InvalidateRect(h, null, 1)
+    InvalidateRect(h, NULL, 1)
     // 发送 WM_SIZE 让控件（尤其是 DTS_UPDOWN）重新布局内部子窗口
     const cr = gui.GetClientRect(h)
     if (cr) {

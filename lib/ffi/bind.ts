@@ -3,7 +3,7 @@ import * as os from 'os'
 import * as std from 'std'
 import * as win from 'win'
 import '../text-codec.js'
-import { type C_BasicType, C_BasicType_No_Void, C_BasicType_Token, C_BasicType_Token_No_Void, cTokenToType, isCPtrToken, JsTypeOfToken, normToken, type Norm, NullablePtr, PTR_SIZE, ptrName, type Ptr, readScalar, TokenArgJsTypeMap, TokenReturnJsTypeMap, writeSlot } from './ctype.js'
+import { type C_BasicType, C_BasicType_No_Void, C_BasicType_Token, C_BasicType_Token_No_Void, cTokenToType, isCPtrToken, ArgJsTypeOfToken, RetJsTypeOfToken, normToken, PTR_SIZE, ptrName, type Ptr, readScalar, writeSlot } from './ctype.js'
 
 // 形状刻意是「方法」而非裸函数：ffi-struct 的 struct()/union() 结果（StructDef）
 // 结构上即满足 encode 重载（无 buf 新建带品牌 .ptr 的 PtrArrayBuffer / 带 buf 写入既有
@@ -100,18 +100,21 @@ function callPacked(proc: number, argTokens: C_BasicType_Token_No_Void[], retTok
         const arg = args[i]
         if (isCPtrToken(argToken)) {
             const name = ptrName(argToken)   // '' = <>ptr 裸地址档
-            if (arg === null) {
-                writeSlot(dv, off, { k: 'ptr', v: 0 })
-            } else if (typeof arg === 'number') {
-                // 裸地址 / 品牌指针（Ptr<'NAME'> 是 number）透传，不重编码。
-                // 合法值形态由类型层约束（如 <BYTE>ptr 只收 ArrayBuffer|null），此处不重复校验。
+            if (typeof arg === 'number') {
+                // 裸地址 / NULL / 品牌指针（都是 number）透传，不重编码。
+                // 合法值形态由类型层约束（MaybePtr | codec 形，如 <BYTE>ptr 另收 ArrayBuffer）。
                 writeSlot(dv, off, { k: 'ptr', v: arg })
             } else {
+                if (arg === null || arg === undefined) {
+                    // JS null/undefined 不是指针词汇（空位只写 NULL）——fail-loud，不静默当 0。
+                    throw new Error(`ffi-bind: <${name}>ptr got ${String(arg)}; ` +
+                        `pass the imported NULL constant for an empty pointer`)
+                }
                 const codec = encoders[name]
                 if (!codec) {
-                    // undefined / 未知布局落到这：指针只收 null 或有效地址，不静默当 0。
+                    // 未知布局落到这：只收 NULL / 有效地址 / codec 值，不静默当 0。
                     throw new Error(name === ''
-                        ? `ffi-bind: <>ptr expects number|null, got ${typeof arg}; use <BYTE>ptr to pass an ArrayBuffer, or ffi.bufferPtr(buf)`
+                        ? `ffi-bind: <>ptr expects number (NULL | Ptr), got ${typeof arg}; use <BYTE>ptr to pass an ArrayBuffer, or ffi.bufferPtr(buf)`
                         : `ffi-bind: unknown layout "<${name}>ptr" (available: ${Object.keys(encoders).join(', ') || 'none'})`)
                 }
                 if (!codec.encode) {
@@ -133,9 +136,9 @@ function callPacked(proc: number, argTokens: C_BasicType_Token_No_Void[], retTok
     const retIsFp = retToken === 'f32' || retToken === 'f64'
     ffi.ffiCall(proc, argFrame, retBuf, retIsFp ? 1 : 0)
     const raw = readRet(cTokenToType(retToken), retBuf)
-    // 返回位自动解码：非空品牌指针且该键声明了 decode → 交还 JS 值；
-    // NULL 恒原样 null（无可读内容），裸 <>ptr / 无 decode 的键原样返回。
-    if (raw !== null && isCPtrToken(retToken)) {
+    // 返回位自动解码：品牌指针且该键声明了 decode → 交还 JS 值；
+    // 空指针 0 恒原样返回（无可读内容，不进 decode），裸 <>ptr / 无 decode 的键原样返回。
+    if (isCPtrToken(retToken) && raw !== 0) {
         const name = ptrName(retToken)
         if (name !== '') {
             const codec = decoders[name]
@@ -153,9 +156,9 @@ function readRet(ret: C_BasicType, retBuf: ArrayBuffer): unknown {
 
 type ParseArgStr<S extends string, L, Acc extends unknown[] = []> =
     S extends `${infer F} ${infer R}`
-    ? ParseArgStr<R, L, [...Acc, JsTypeOfToken<F, TokenArgJsTypeMap, L, never>]>
+    ? ParseArgStr<R, L, [...Acc, ArgJsTypeOfToken<F, L>]>
     : S extends ''
-    ? Acc : [...Acc, JsTypeOfToken<S, TokenArgJsTypeMap, L, never>]
+    ? Acc : [...Acc, ArgJsTypeOfToken<S, L>]
 
 // 按键存在性提取 codec 值域（方法全可选后，`extends Encoder<infer V>` 会整体塌 never）。
 type EncodeValue<T> = 'encode' extends keyof T
@@ -175,19 +178,11 @@ type BindEncoders<M> = {
 }
 // 返回位布局表：只含 decode 值域。内建 WCHAR 注入与运行时（builtinCodecs.WCHAR
 // 无条件合并进 decoders）对齐——<WCHAR>ptr 返回直接拿 string；BYTE 无 decode，
-// 不注入，返回保持 Ptr<'BYTE'> | null。
+// 不注入，返回保持 MaybePtr<'BYTE'>（NULL | Ptr<'BYTE'>）。
 type BindDecoders<M> = { [K in keyof M]: DecodeValue<M[K]> } & { WCHAR: string }
 
-// 返回位 token → JS 类型：该键有 decode → V | null（品牌指针被解码结果替换，
-// 可直接访问字段）；否则 Ptr<N> | null。入参路径不动（仍是 Ptr | V | null 并集）。
-type RetOfToken<K extends string, M, D> = Norm<K> extends infer S ?
-    S extends `<${infer N}>ptr`
-        ? (D[N & keyof D] extends never ? NullablePtr<N> : D[N & keyof D] | null)
-        : M[S & keyof M] extends never ? unknown : M[S & keyof M]
-    : never
-
 type BindFn<S extends string, E, D> =
-    S extends `${infer ArgStr} -> ${infer RetStr}` ? ((...args: ParseArgStr<ArgStr, E>) => RetOfToken<RetStr, TokenReturnJsTypeMap, D>) : never
+    S extends `${infer ArgStr} -> ${infer RetStr}` ? ((...args: ParseArgStr<ArgStr, E>) => RetJsTypeOfToken<RetStr, D>) : never
 
 // 内建 codec：类型校验放在这里，与「用户布局 codec」同一分派点。
 // BYTE/WCHAR 拒绝裸 number（无句柄可 pin），提示改用 <>ptr。
@@ -333,7 +328,7 @@ function dispatchClosure(args: C_BasicType_No_Void[], ret: C_BasicType, fn: (...
 }
 
 /** 把 JS 函数变成可传给 Win32 API 的函数指针（同步同线程回调）。
- *  sig 为回调签名：实参只许 BasicKind（ptr 读回 number|null），
+ *  sig 为回调签名：实参只许 BasicKind（ptr 槽 0 保真读回 NULL | Ptr），
  *  返回只许 void|u8..u64|i8..i64|f32|f64|ptr（u64/i64 走 EDX:EAX，x64 走 RAX）。
  *  opts.stdcall 仅 ia32 有效（默认 true，Win32 回调标准 CALLBACK）；msvcrt 等
  *  cdecl 库回调传 { stdcall: false }。x64 恒由调用方清栈，无需指定。

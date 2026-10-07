@@ -1,6 +1,7 @@
 import { forwardRef, useLayoutEffect, useRef } from 'react'
 import * as gui from 'gui'
 import { DefWindowProc, SetWindowPos, ShowScrollBar, GetDC, ReleaseDC } from '../../windows/user32.js'
+import { NULL } from '../../ffi/ctype.js'
 import { GetDeviceCaps } from '../../windows/gdi32.js'
 import type { WStyle } from '../jsx.d.ts'
 import { forceFlexLayout } from '../reconciler.js'
@@ -31,9 +32,9 @@ export const ScrollView = forwardRef<gui.HWND, ScrollViewProps>(
       const svH = svRect.bottom - svRect.top
 
       // GetScaleFactor 等价内联：GetDC → GetDeviceCaps(LOGPIXELSX=88) → ReleaseDC 配对
-      const hdc = GetDC(null)
-      const scale = (hdc !== null ? GetDeviceCaps(hdc, 88) : 96) / 96
-      if (hdc !== null) ReleaseDC(null, hdc)
+      const hdc = GetDC(NULL)
+      const scale = hdc ? GetDeviceCaps(hdc, 88) / 96 : 1
+      if (hdc) ReleaseDC(NULL, hdc)
       const natW = Math.round((contentWidth ?? (svW / scale)) * scale)
       const natH = Math.round((contentHeight ?? (svH / scale)) * scale)
 
@@ -136,7 +137,7 @@ export const ScrollView = forwardRef<gui.HWND, ScrollViewProps>(
           fn: (e) => {
             if (e.msg === gui.WmMsg.NCHITTEST ||
                 e.msg === gui.WmMsg.NCLBUTTONDOWN) {
-              return DefWindowProc(e.hwnd, e.msg, e.wParam, e.lParam) ?? 0
+              return DefWindowProc(e.hwnd, e.msg, e.wParam, e.lParam)
             }
             if (e.msg === gui.WmMsg.VSCROLL) { handleScroll(e, gui.ScrollBar.VERT); return 0 }
             if (e.msg === gui.WmMsg.HSCROLL) { handleScroll(e, gui.ScrollBar.HORZ); return 0 }

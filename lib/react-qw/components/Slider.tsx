@@ -49,7 +49,7 @@ export const Slider = forwardRef<gui.HWND, SliderProps>(
         onEvent={(e) => {
           if (e.msg === gui.WmMsg.NCHITTEST ||
               e.msg === gui.WmMsg.NCLBUTTONDOWN) {
-            return DefWindowProc(e.hwnd, e.msg, e.wParam, e.lParam) ?? 0
+            return DefWindowProc(e.hwnd, e.msg, e.wParam, e.lParam)
           }
           if (e.msg === gui.WmMsg.HSCROLL || e.msg === gui.WmMsg.VSCROLL) {
             const h = sliderRef.current

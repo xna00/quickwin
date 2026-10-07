@@ -5,6 +5,7 @@ import * as gui from 'gui'
 import * as os from 'os'
 import { GetDC, ReleaseDC, GetWindowLongPtr, CallWindowProc, SetWindowPos, InvalidateRect, SetParent, SetWindowText } from '../windows/user32.js'
 import { GetDeviceCaps } from '../windows/gdi32.js'
+import { NULL } from '../ffi/ctype.js'
 import { applyProps } from './props.js'
 import { calculateFlexLayout, type FlexStyle } from './layout.js'
 import { getButtonIdealSize, measureTextForHwnd } from '../text-measure.js'
@@ -16,9 +17,9 @@ declare const DEBUG: boolean
 const dpiFont = gui.CreateSystemDpiFont()
 // GetScaleFactor 等价内联：GetDC → GetDeviceCaps(LOGPIXELSX=88) → ReleaseDC 配对
 export const scaleFactor = (() => {
-    const hdc = GetDC(null)
-    const dpi = hdc !== null ? GetDeviceCaps(hdc, 88) : 96
-    if (hdc !== null) ReleaseDC(null, hdc)
+    const hdc = GetDC(NULL)
+    const dpi = hdc ? GetDeviceCaps(hdc, 88) : 96
+    if (hdc) ReleaseDC(NULL, hdc)
     return dpi / 96
 })()
 
@@ -45,11 +46,11 @@ function setupWindowProc(instance: Instance, hwnd: gui.HWND) {
   instancesByHwnd.set(hwnd, instance)
   gui.SetWindowProc(hwnd, (hwnd: gui.HWND, msg: number, wParam: number, lParam: number) => {
     const ev = instance.props.onEvent
-    if (!ev) return CallWindowProc(oldProc, hwnd, msg, wParam, lParam) ?? 0
+    if (!ev) return CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
     if (typeof ev === 'object') {
-      return ev.fn({ hwnd, msg, wParam, lParam, callOldWndProc: () => CallWindowProc(oldProc, hwnd, msg, wParam, lParam) ?? 0 })
+      return ev.fn({ hwnd, msg, wParam, lParam, callOldWndProc: () => CallWindowProc(oldProc, hwnd, msg, wParam, lParam) })
     }
-    const result = CallWindowProc(oldProc, hwnd, msg, wParam, lParam) ?? 0
+    const result = CallWindowProc(oldProc, hwnd, msg, wParam, lParam)
     const override = ev({ hwnd, msg, wParam, lParam })
     return typeof override === 'number' && Number.isInteger(override) ? override : result
   })
@@ -118,7 +119,7 @@ function runFlexLayout(inst: Instance) {
     if (lr && lr.x === r.x && lr.y === r.y && lr.w === r.width && lr.h === r.height) continue
     console.log('flex: set', child.type, child.hwnd, 'to', r.x, r.y, r.width, r.height)
     SetWindowPos(child.hwnd!, gui.SetWindowPosHwnd.TOP, (r.x + pl) * scaleFactor, (r.y + pt) * scaleFactor, r.width * scaleFactor, r.height * scaleFactor, gui.SetWindowPosFlag.SWP_SHOWWINDOW)
-    InvalidateRect(child.hwnd!, null, 1)
+    InvalidateRect(child.hwnd!, NULL, 1)
     child.lastRect = { x: r.x, y: r.y, w: r.width, h: r.height }
   }
   for (const c of children) runFlexLayout(c)
@@ -186,7 +187,7 @@ const hostConfig: QuickWinHostConfig = {
     if (child.hwnd === null) {
       ensureChildWindow(child, parent.hwnd!)
     } else {
-      SetParent(child.hwnd, parent.hwnd)
+      SetParent(child.hwnd, parent.hwnd ?? NULL)
     }
     if (DEBUG) console.log('[reconciler] appendInitialChild parent:', parent.hwnd, 'child:', child.hwnd)
     parent.children.push(child)
@@ -196,7 +197,7 @@ const hostConfig: QuickWinHostConfig = {
     if (child.hwnd === null) {
       ensureChildWindow(child, parent.hwnd!)
     } else {
-      SetParent(child.hwnd, parent.hwnd)
+      SetParent(child.hwnd, parent.hwnd ?? NULL)
     }
     if (DEBUG) console.log('[reconciler] appendChild parent:', parent.hwnd, 'child:', child.hwnd)
     parent.children.push(child)
@@ -217,7 +218,7 @@ const hostConfig: QuickWinHostConfig = {
     if (child.hwnd === null) {
       ensureChildWindow(child, parent.hwnd!)
     } else {
-      SetParent(child.hwnd, parent.hwnd)
+      SetParent(child.hwnd, parent.hwnd ?? NULL)
     }
     if (DEBUG) console.log('[reconciler] insertBefore parent:', parent.hwnd, 'child:', child.hwnd, 'before:', beforeChild.hwnd)
     const idx = parent.children.indexOf(beforeChild)

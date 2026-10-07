@@ -2,7 +2,7 @@ import * as os from 'os'
 import { Tester } from './test_helper.js'
 import { struct, union } from '../lib/ffi/struct.js'
 import { bind, } from '../lib/ffi/bind.js'
-import { Ptr } from '../lib/ffi/ctype.js'
+import { type MaybePtr, Ptr } from '../lib/ffi/ctype.js'
 import type { C_Union } from '../lib/ffi/ctype.js'
 
 // 编译期断言工具（仅类型层，运行时无开销）
@@ -310,10 +310,11 @@ export const suite = {
         t.check('raw roundtrip', rawOut.ptr, pd.raw)
         t.check('r roundtrip', rawOut.ptr, pd.r)
         t.check('tag', 7, pd.tag)
-        // 编译期：'<>ptr' → number|null（T='' 品牌退化 + 0 归一为 null）；
-        // '<RECT>ptr' → Ptr<'RECT'>|null（品牌）。
-        expectType<Equal<ReturnType<typeof PTR.decode>['raw'], number | null>>()
-        expectType<Equal<ReturnType<typeof PTR.decode>['r'], Ptr<'RECT'> | null>>()
+        // 编译期：'<>ptr' → MaybePtr<''>（NULL|number，与 number 双向可赋值，NULL 即 0 保真）；
+        // '<RECT>ptr' → MaybePtr<'RECT'>（NULL|Ptr，0 保真，传参前收窄）。
+        expectType<Equal<ReturnType<typeof PTR.decode>['raw'], MaybePtr<''>>>()
+        expectType<[ReturnType<typeof PTR.decode>['raw']] extends [number] ? true : false>()
+        expectType<Equal<ReturnType<typeof PTR.decode>['r'], MaybePtr<'RECT'>>>()
 
         t.section('f32/f64 layout (MSVC: f@0, double@8)')
         const FL = struct({

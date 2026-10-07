@@ -33,7 +33,7 @@ function ensureDefaultClass() {
     const result = entry?.onEvent?.({ hwnd, msg, wParam, lParam })
     if (typeof result === 'number') return result
     if (msg === gui.WmMsg.SIZE) forceFlexLayout(hwnd)
-    return DefWindowProc(hwnd, msg, wParam, lParam) ?? 0
+    return DefWindowProc(hwnd, msg, wParam, lParam)
   })
   defaultClassRegistered = true
   return DEFAULT_CLASS

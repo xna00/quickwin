@@ -3,6 +3,7 @@ import * as gui from 'gui'
 import { LvItemFlag, LvItemState, LvColumnMask } from 'gui'
 import * as ffi from 'ffi'
 import { bind } from '../../ffi/bind.js'
+import type { MaybePtr } from '../../ffi/ctype.js'
 import { struct } from '../../ffi/struct.js'
 import { NMHDR, PTR_SIZE, nmCode } from '../nmhdr.js'
 import { LoadCursor, SetCursor, ScreenToClient, GetCursorPos } from '../../windows/user32.js'
@@ -141,9 +142,9 @@ const LVCOLUMNW = struct({
 const fontCache = new Map<string, number>()
 
 type GdiFns = {
-  createFontIndirectW: (lf: ArrayBuffer | null) => number | null
-  selectObjectFn: (hdc: number | null, hfont: number | null) => number | null
-  getObjectW: (h: number | null, n: number, buf: ArrayBuffer | null) => number
+  createFontIndirectW: (lf: ArrayBuffer | MaybePtr<'BYTE'>) => number
+  selectObjectFn: (hdc: number, hfont: number) => number
+  getObjectW: (h: number, n: number, buf: ArrayBuffer | MaybePtr<'BYTE'>) => number
 }
 let gdiFns: GdiFns | null = null
 

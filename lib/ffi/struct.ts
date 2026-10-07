@@ -6,7 +6,7 @@ import {
     isCPtrToken,
     normToken,
     Norm,
-    NullablePtr,
+    MaybePtr,
     PTR_SIZE,
     PtrArrayBuffer,
     readScalar,
@@ -35,8 +35,8 @@ import {
 // 类型推导 — 值词汇 → decode/encode 形状
 // ============================================================
 
-// 指针成员：'<>ptr' → number（T='' 品牌退化）；'<NAME>ptr' → Ptr<NAME>（品牌 number）。
-// 该品牌 number 可直接喂 bind 的 <NAME>ptr 形参（裸地址透传）。
+// 指针成员：'<>ptr' → number（T='' 品牌退化）；'<NAME>ptr' → MaybePtr<NAME>（NULL | 品牌 number）。
+// 该品牌 number 可直接喂 bind 的 <NAME>ptr 形参（裸地址透传）；空位写 NULL。
 
 type N =
     | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
@@ -46,10 +46,10 @@ type N =
     | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49
     | 50 | 51 | 52 | 53;
 
-// 规范 token（Norm 后）→ JS 形状：'<T>ptr' → NullablePtr（0 归一为 null）；数字档 → JsType 映射。
+// 规范 token（Norm 后）→ JS 形状：'<T>ptr' → MaybePtr（0 保真，对齐 C 版）；数字档 → JsType 映射。
 // 归一后落不到两者的（'void'、裸 'ptr'、拼错 token）塌 never。
 type ValOf<T> =
-    T extends `<${infer B}>ptr` ? NullablePtr<B>
+    T extends `<${infer B}>ptr` ? MaybePtr<B>
     : T extends C_Number ? C_TypeJsTypeMap[T]
     : never
 
@@ -85,7 +85,11 @@ type Lift<T> =
     {
         [K in keyof T as K extends `$${string}` ? never : K]:
         T[K] extends readonly unknown[] ? T[K] :
-        T[K] extends {} ? Lift<T[K]> : T[K];
+        // 品牌 number（NULL / Ptr = 0&{brand} 或 number&{brand}）经自己的对象半边
+        // extends object，会被误当嵌套对象递归，把 number 榨成方法集对象（丧失
+        // number 属性）——number 档先跳过。只递归进真正嵌套的结构体形状。
+        T[K] extends number ? T[K] :
+        T[K] extends object ? Lift<T[K]> : T[K];
     } & UnionToIntersection<
         { [K in DollarKeys<T>]: Lift<T[K]> }[DollarKeys<T>]
     >;
