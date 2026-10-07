@@ -32,8 +32,9 @@ export const CreateCompatibleBitmap = /*@__PURE__*/ b('CreateCompatibleBitmap', 
 export const SelectObject = /*@__PURE__*/ b('SelectObject', '<HDC>ptr <>ptr -> <>ptr')
 /** 位块传送（dwRop 如 SRCCOPY = 0x00CC0020）；成功 → 非 0 */
 export const BitBlt = /*@__PURE__*/ b('BitBlt', '<HDC>ptr i32 i32 i32 i32 <HDC>ptr i32 i32 u32 -> i32')
-/** 取位图像素到 lpvBits（BITMAPINFO 缓冲 lpbmi 由调用方按格式手写，传 ffi.bufferPtr；
- *  uUsage = DIB_RGB_COLORS(0)）；返回成功取到的扫描行数，失败 → 0 */
-export const GetDIBits = /*@__PURE__*/ b('GetDIBits', '<HDC>ptr <>ptr u32 u32 <>ptr <>ptr u32 -> i32')
+/** 取位图像素到 lpvBits（直接收 ArrayBuffer；lpbmi 为 BITMAPINFO，32bpp BI_RGB 无颜色表时头部即全部：
+ *  传 BITMAPINFOHEADER.encode({...}).ptr；有颜色表的格式由调用方自备更大的缓冲）；
+ *  uUsage = DIB_RGB_COLORS(0)；返回成功取到的扫描行数，失败 → 0 */
+export const GetDIBits = /*@__PURE__*/ b('GetDIBits', '<HDC>ptr <>ptr u32 u32 <BYTE>ptr <>ptr u32 -> i32')
 /** 删除内存 DC（CreateCompatibleDC 建的）；成功 → 非 0 */
 export const DeleteDC = /*@__PURE__*/ b('DeleteDC', '<HDC>ptr -> i32')
