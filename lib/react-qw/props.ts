@@ -1,4 +1,5 @@
 import * as gui from 'gui'
+import { SetWindowText, EnableWindow } from '../windows/user32.js'
 import type { Instance, Props } from './reconciler.js'
 
 export function applyProps(
@@ -19,13 +20,13 @@ export function applyProps(
       const sel = gui.SendMessage(hwnd, gui.EditMsg.GETSEL, 0, 0)
       cursor = sel >>> 16
     }
-    gui.SetWindowText(hwnd, textVal)
+    SetWindowText(hwnd, textVal)
     if (instance.type === 'EDIT' && cursor >= 0) {
       gui.SendMessage(hwnd, gui.EditMsg.SETSEL, cursor, cursor)
     }
   }
   if ('disabled' in newProps) {
-    gui.EnableWindow(hwnd, !newProps.disabled)
+    EnableWindow(hwnd, !newProps.disabled ? 1 : 0)
   }
   if ('hidden' in newProps) {
     gui.ShowWindow(hwnd, newProps.hidden ? gui.ShowWindowCmd.HIDE : gui.ShowWindowCmd.SHOW)

@@ -5,7 +5,8 @@ import * as ffi from 'ffi'
 import { bind } from '../../ffi/bind.js'
 import { struct } from '../../ffi/struct.js'
 import { NMHDR, PTR_SIZE, nmCode } from '../nmhdr.js'
-import { LoadCursor, SetCursor, ScreenToClient } from '../../windows/user32.js'
+import { LoadCursor, SetCursor, ScreenToClient, GetCursorPos } from '../../windows/user32.js'
+import { DeleteObject } from '../../windows/gdi32.js'
 import { POINT } from '../../windows/structs.js'
 import type { WStyle } from '../jsx.d.ts'
 
@@ -312,7 +313,7 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
       const hbm = gui.CreateBitmapFromPixels(size, size, p)
       if (hbm) {
         gui.ImageListAdd(img, hbm)
-        gui.DeleteObject(hbm)
+        DeleteObject(hbm)
       }
     }
     gui.SendMessage(h, gui.LvMsg.SETIMAGELIST, gui.LvImageList.SMALL, img)
@@ -419,10 +420,9 @@ const ListView = forwardRef(function ListViewInner<D extends object>(
           const h = lvRef.current
           if (!h) return
 
-          const sp = gui.GetCursorPos()
-          if (!sp) return
-          // POINT 就地更新位不注册 encoder：encode() 新建 + 初值一步 → 传 .ptr → decode 读回
-          const pt = POINT.encode({ x: sp[0], y: sp[1] })
+          // GetCursorPos 出参写入初值 → ScreenToClient 就地更新 → decode 读回
+          const pt = POINT.encode()
+          if (!GetCursorPos(pt.ptr)) return
           ScreenToClient(h, pt.ptr)
           const { x: sx, y: sy } = POINT.decode(pt)
 
