@@ -3,6 +3,11 @@ import * as std from 'std'
 import * as ffi from 'ffi'
 import '../lib/text-codec.js'
 import { bind } from '../lib/ffi/bind.js'
+import { NULL } from '../lib/ffi/ctype.js'
+import {
+    CloseHandle, CreatePipe, CreateProcess, GetExitCodeProcess, GetLastError, GetSystemDirectory,
+    GetSystemInfo, ReadFile, SetHandleInformation, WaitForSingleObject,
+} from '../lib/windows/kernel32.js'
 
 // worker 没有可观测的输出通道：绑定失败会静默中断 worker 脚本，主线程永远等不到消息。
 // 失败原因落盘 diag.log 以便定位（典型：DLL 位数与进程不匹配 -> ERROR_BAD_EXE_FORMAT 193）。
@@ -13,35 +18,13 @@ const diagFile = (stage: string): void => {
     } catch (ex) { /* best effort */ }
 }
 
-// 绑定放 try/catch：任一步 LoadLibrary/GetProcAddress 失败都会中断 worker 脚本
-// （主线程将永远等不到消息）——捕获并记下具体原因。
-let K: any
-try {
-    K = {
-        createPipe: bind('kernel32.dll', 'CreatePipe', '<>ptr <>ptr <>ptr u32 -> i32'),
-        setHandleInformation: bind('kernel32.dll', 'SetHandleInformation', '<>ptr u32 u32 -> i32'),
-        createProcessW: bind('kernel32.dll', 'CreateProcessW', '<WCHAR>ptr <WCHAR>ptr <>ptr <>ptr i32 u32 <>ptr <WCHAR>ptr <>ptr <>ptr -> i32'),
-        waitForSingleObject: bind('kernel32.dll', 'WaitForSingleObject', '<>ptr u32 -> u32'),
-        getExitCodeProcess: bind('kernel32.dll', 'GetExitCodeProcess', '<>ptr <>ptr -> i32'),
-        readFile: bind('kernel32.dll', 'ReadFile', '<>ptr <>ptr u32 <>ptr <>ptr -> i32'),
-        closeHandle: bind('kernel32.dll', 'CloseHandle', '<>ptr -> i32'),
-        getLastError: bind('kernel32.dll', 'GetLastError', ' -> u32'),
-        getSystemDirectoryW: bind('kernel32.dll', 'GetSystemDirectoryW', '<>ptr u32 -> u32'),
-        getSystemInfo: bind('kernel32.dll', 'GetSystemInfo', '<>ptr -> void'),
-        rtlGetVersion: bind('ntdll.dll', 'RtlGetVersion', '<>ptr -> i32'),
-    }
-} catch (ex) {
-    diagFile('K-BIND-FAIL: ' + String(ex))
-    throw ex
-}
-
 // 布局长度由「调用进程位数」决定（CreateProcessW 以调用进程位数解析 STARTUPINFO）。
 // 不能用 os.arch：它报告的是系统原生架构，64 位 Win7 上运行 32 位 exec_server 时
 // os.arch='x64'，会误选 64 位布局，使 hStdOutput/hStdError 落在错误偏移，
 // 子进程全部 stdout/stderr 丢失（现象：exit code 0 但 body 全空）。
 // GetSystemInfo 报告进程视角架构（WOW64 下返回 INTEL=0），用它判定。
 const sysinfoBuf = new ArrayBuffer(64)
-K.getSystemInfo(ffi.bufferPtr(sysinfoBuf))
+GetSystemInfo(ffi.bufferPtr(sysinfoBuf))
 const sysinfoPtr = ffi.bufferPtr(sysinfoBuf)
 const wArch = ffi.readByte(sysinfoPtr) | (ffi.readByte(sysinfoPtr + 1) << 8)
 const IS_PROC_64 = wArch === 9 /* PROCESSOR_ARCHITECTURE_AMD64 */
@@ -56,11 +39,6 @@ const L = IS_PROC_64 ? { flags: 60, hOut: 88, hErr: 96, siSize: 104, piSize: 24,
 const parent = os.Worker.parent
 const nRead = new ArrayBuffer(4)
 const nReadPtr = ffi.bufferPtr(nRead)
-
-if (K.setHandleInformation === undefined) {
-    diagFile('SetHandleInformation missing')
-    throw new Error('SetHandleInformation not available')
-}
 
 function u32At(p: number, off: number, v: number): void {
     ffi.writeByte(p + off, v & 0xff)
@@ -109,7 +87,7 @@ function zeroBuf(n: number): ArrayBuffer {
 let sysDir = 'C:\\Windows\\System32'
 try {
     const b = zeroBuf(512)
-    const n = K.getSystemDirectoryW(ffi.bufferPtr(b), 256)
+    const n = GetSystemDirectory(ffi.bufferPtr(b), 256)
     let s = ''
     for (let i = 0; i < n * 2; i += 2) {
         const u = ffi.readByte(ffi.bufferPtr(b) + i) | (ffi.readByte(ffi.bufferPtr(b) + i + 1) << 8)
@@ -126,9 +104,11 @@ try {
 // 分配同样 148 字节缓冲区，否则 RtlGetVersion 会越界写坏 worker 堆导致子进程挂起。
 let IS_WIN11 = false
 try {
+    // ntdll 仅此一个函数，不单开文件；绑定失败落 VER-FAIL 诊断（见 diagFile）
+    const rtlGetVersion = bind('ntdll.dll', 'RtlGetVersion', '<>ptr -> i32')
     const vb = zeroBuf(148)
     u32At(ffi.bufferPtr(vb), 0, 148)
-    if (K.rtlGetVersion(ffi.bufferPtr(vb)) === 0) {
+    if (rtlGetVersion(ffi.bufferPtr(vb)) === 0) {
         const maj = rdU32(ffi.bufferPtr(vb) + 4)
         IS_WIN11 = maj >= 10
     }
@@ -145,13 +125,13 @@ try {
 function runCmd(id: number, cmd: string): number {
     // —— 管道 + 继承设置（读端不可继承，否则 EOF 永不触发）——
     const pipes = zeroBuf(PTR * 2)
-    if (!K.createPipe(ffi.bufferPtr(pipes), ffi.bufferPtr(pipes) + PTR, 0, 0)) {
-        throw new Error('CreatePipe err=' + K.getLastError())
+    if (!CreatePipe(ffi.bufferPtr(pipes), ffi.bufferPtr(pipes) + PTR, 0, 0)) {
+        throw new Error('CreatePipe err=' + GetLastError())
     }
     const hRead = rdPtr(ffi.bufferPtr(pipes), 0)
     const hWrite = rdPtr(ffi.bufferPtr(pipes), PTR)
-    K.setHandleInformation(hWrite, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)
-    K.setHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0)
+    SetHandleInformation(hWrite, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)
+    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0)
 
     // —— STARTUPINFO（写端作为子进程 stdout/stderr）——
     const si = zeroBuf(L.siSize)
@@ -163,16 +143,16 @@ function runCmd(id: number, cmd: string): number {
     const pi = zeroBuf(L.piSize)
     const u = IS_WIN11 ? '/u ' : ''
     const cmdline = `${sysDir}\\cmd.exe ${u}/c ${cmd}`
-    if (!K.createProcessW(null, cmdline, 0, 0, 1, 0, 0, null, ffi.bufferPtr(si), ffi.bufferPtr(pi))) {
-        K.closeHandle(hRead)
-        K.closeHandle(hWrite)
-        throw new Error('CreateProcessW err=' + K.getLastError() + ' cmd=' + cmdline)
+    if (!CreateProcess(NULL, cmdline, 0, 0, 1, 0, 0, NULL, ffi.bufferPtr(si), ffi.bufferPtr(pi))) {
+        CloseHandle(hRead)
+        CloseHandle(hWrite)
+        throw new Error('CreateProcessW err=' + GetLastError() + ' cmd=' + cmdline)
     }
     const hProc = rdPtr(ffi.bufferPtr(pi), 0)
     const hThread = rdPtr(ffi.bufferPtr(pi), PTR)
     const pid = rdU32(ffi.bufferPtr(pi) + L.pidAt)
-    K.closeHandle(hThread)
-    K.closeHandle(hWrite)
+    CloseHandle(hThread)
+    CloseHandle(hWrite)
     parent.postMessage({ type: 'info', id, pid })
 
     // —— 同步阻塞读循环（子进程树全退出、写端全关 -> EOF -> 收尾）——
@@ -180,18 +160,18 @@ function runCmd(id: number, cmd: string): number {
     const bufPtr = ffi.bufferPtr(buf.buffer)
     for (;;) {
         u32At(nReadPtr, 0, 0)
-        if (!K.readFile(hRead, bufPtr, 4096, nReadPtr, 0)) break
+        if (!ReadFile(hRead, bufPtr, 4096, nReadPtr, 0)) break
         const n = rdU32(nReadPtr)
         if (n === 0) break
         parent.postMessage({ type: 'data', id, chunk: buf.slice(0, n) })
     }
 
-    K.waitForSingleObject(hProc, WAIT_INFINITE)
+    WaitForSingleObject(hProc, WAIT_INFINITE)
     const ec = zeroBuf(4)
-    K.getExitCodeProcess(hProc, ffi.bufferPtr(ec))
+    GetExitCodeProcess(hProc, ffi.bufferPtr(ec))
     const code = rdI32(ffi.bufferPtr(ec))
-    K.closeHandle(hRead)
-    K.closeHandle(hProc)
+    CloseHandle(hRead)
+    CloseHandle(hProc)
     return code
 }
 
@@ -335,9 +315,9 @@ function captureRect(id: number, frameW: number, frameH: number, srcX: number, s
             + ') frame=' + frameW + 'x' + frameH)
     }
 
-    const hdcScreen = u.getDC(null)
+    const hdcScreen = u.getDC(NULL)
     if (!hdcScreen) {
-        throw new Error('GetDC(null)=0：无输入桌面（确认在交互 session 启动，而非 sshd/service）')
+        throw new Error('GetDC(NULL)=0：无输入桌面（确认在交互 session 启动，而非 sshd/service）')
     }
     // 必须传屏幕 DC 建位图：CreateCompatibleBitmap 按「当前选中对象」决定位图格式，
     // 传 hdcOut 时它选中的是 1×1 单色图 → 建出 1×1 位图，BitBlt 被裁剪到 1 像素
@@ -346,7 +326,7 @@ function captureRect(id: number, frameW: number, frameH: number, srcX: number, s
     const hbmOut = hdcOut ? g.createCompatibleBitmap(hdcScreen, outW, outH) : 0
     if (!hdcOut || !hbmOut) {
         if (hdcOut) g.deleteDC(hdcOut)
-        u.releaseDC(null, hdcScreen)
+        u.releaseDC(NULL, hdcScreen)
         throw new Error('CreateCompatibleDC/Bitmap failed')
     }
     const oldOut = g.selectObject(hdcOut, hbmOut)
@@ -357,7 +337,7 @@ function captureRect(id: number, frameW: number, frameH: number, srcX: number, s
     const complete = ok && emitDib(id, hdcOut, hbmOut, outW, outH)
     g.deleteObject(hbmOut)
     g.deleteDC(hdcOut)
-    u.releaseDC(null, hdcScreen)
+    u.releaseDC(NULL, hdcScreen)
 
     if (!ok) {
         throw new Error('capture failed out=' + outW + 'x' + outH
@@ -469,10 +449,10 @@ function listWindows(id: number): void {
     const cp = ffi.bufferPtr(cb)
 
     const out: Array<Record<string, unknown>> = []
-    let hwnd = u.findWindowExW(null, 0, null, null)
+    let hwnd = u.findWindowExW(NULL, 0, NULL, NULL)
     while (hwnd && out.length < MAX_WINDOWS) {
         // 先取下一个句柄，避免本次查询期间窗口关闭导致当前句柄失效
-        const next = u.findWindowExW(null, hwnd, null, null)
+        const next = u.findWindowExW(NULL, hwnd, NULL, NULL)
 
         if (u.getWindowRect(hwnd, wp)) {
             const dv = new DataView(wb)
